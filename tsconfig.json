@@ -13,6 +13,10 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "esModuleInterop": true,
+    "types": [
+      "node",
+      "vscode"
+    ],
     "skipLibCheck": true
   },
   "include": [
