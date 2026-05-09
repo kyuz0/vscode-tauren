@@ -30,8 +30,10 @@ class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Disposabl
   private client: PiRpcClient | undefined;
   private activeAssistantIndex: number | undefined;
   private busy = false;
+  private sessionGeneration = 0;
   private readonly transcript: ChatMessage[] = [];
   private readonly disposables: vscode.Disposable[] = [];
+  private readonly clientDisposables: vscode.Disposable[] = [];
 
   public constructor(private readonly extensionUri: vscode.Uri) {}
 
@@ -40,8 +42,7 @@ class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Disposabl
       disposable.dispose();
     }
 
-    this.client?.dispose();
-    this.client = undefined;
+    this.disposeClient();
   }
 
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -67,6 +68,11 @@ class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Disposabl
       return;
     }
 
+    if (message.type === 'newSession') {
+      this.startNewSession();
+      return;
+    }
+
     if (message.type !== 'submit') {
       return;
     }
@@ -77,6 +83,7 @@ class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Disposabl
       return;
     }
 
+    const sessionGeneration = this.sessionGeneration;
     this.transcript.push({ role: 'user', text });
     this.activeAssistantIndex = this.transcript.push({ role: 'assistant', text: '' }) - 1;
     this.busy = true;
@@ -85,11 +92,33 @@ class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Disposabl
     try {
       await this.getClient().prompt(text);
     } catch (error) {
+      if (sessionGeneration !== this.sessionGeneration) {
+        return;
+      }
+
       this.markActiveAssistantError(getErrorMessage(error));
       this.busy = false;
       this.activeAssistantIndex = undefined;
       this.postState();
     }
+  }
+
+  private startNewSession(): void {
+    this.sessionGeneration += 1;
+    this.disposeClient();
+    this.transcript.length = 0;
+    this.activeAssistantIndex = undefined;
+    this.busy = false;
+    this.postState();
+  }
+
+  private disposeClient(): void {
+    for (const disposable of this.clientDisposables.splice(0)) {
+      disposable.dispose();
+    }
+
+    this.client?.dispose();
+    this.client = undefined;
   }
 
   private getClient(): PiRpcClient {
@@ -99,10 +128,19 @@ class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Disposabl
 
     const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     const client = new PiRpcClient({ cwd });
+    const sessionGeneration = this.sessionGeneration;
     this.client = client;
-    this.disposables.push(
-      { dispose: client.onEvent((event) => this.handleRpcEvent(event)) },
-      { dispose: client.onError((message) => this.handleClientError(message)) }
+    this.clientDisposables.push(
+      { dispose: client.onEvent((event) => {
+        if (sessionGeneration === this.sessionGeneration) {
+          this.handleRpcEvent(event);
+        }
+      }) },
+      { dispose: client.onError((message) => {
+        if (sessionGeneration === this.sessionGeneration) {
+          this.handleClientError(message);
+        }
+      }) }
     );
 
     return client;
@@ -449,7 +487,7 @@ class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Disposabl
     </section>
     <form class="composer" aria-label="Pi message input">
       <textarea class="composer__input" rows="1" aria-label="Message"></textarea>
-      <button class="composer__button composer__add" type="button" aria-label="Add context" title="Add context">
+      <button class="composer__button composer__add" type="button" aria-label="New session" title="New session">
         <svg aria-hidden="true" width="19" height="19" viewBox="0 0 19 19" fill="none">
           <path d="M9.5 3.5V15.5M3.5 9.5H15.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
         </svg>
@@ -468,6 +506,7 @@ class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Disposabl
     const messagesElement = document.querySelector('.messages');
     const form = document.querySelector('.composer');
     const textarea = document.querySelector('textarea');
+    const newSessionButton = document.querySelector('.composer__add');
     const submitButton = document.querySelector('.composer__submit');
     const messagesBottomThreshold = 4;
     const maxTextareaHeight = 180;
@@ -497,6 +536,12 @@ class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Disposabl
       vscode.postMessage({ type: 'submit', text });
       textarea.value = '';
       syncComposer({ preserveBottom: true });
+      focusPromptInput();
+    });
+
+    newSessionButton?.addEventListener('click', () => {
+      vscode.postMessage({ type: 'newSession' });
+      focusPromptInput();
     });
 
     textarea?.addEventListener('keydown', (event) => {
@@ -619,6 +664,10 @@ class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Disposabl
       if (shouldPreserveBottom) {
         scrollMessagesToBottom();
       }
+    }
+
+    function focusPromptInput() {
+      textarea.focus({ preventScroll: true });
     }
 
     vscode.postMessage({ type: 'ready' });
