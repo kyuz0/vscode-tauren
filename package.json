@@ -1,0 +1,45 @@
+{
+  "name": "piui",
+  "displayName": "Pi UI",
+  "description": "A VS Code sidebar UI for the Pi agent.",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.118.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:piui.chatView"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "piui",
+          "title": "Pi",
+          "icon": "resources/pi.svg"
+        }
+      ]
+    },
+    "views": {
+      "piui": [
+        {
+          "id": "piui.chatView",
+          "name": "Pi",
+          "type": "webview"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/vscode": "^1.118.0",
+    "typescript": "^6.0.3"
+  }
+}
