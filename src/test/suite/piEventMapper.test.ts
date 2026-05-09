@@ -201,6 +201,25 @@ suite('Pi event mapper', () => {
         }
       }
     );
+
+    assert.deepStrictEqual(
+      mapMessageUpdate({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'thinking_end', contentIndex: 0, content: 'final thinking' }
+      }, 2),
+      {
+        type: 'activity_update',
+        sourceId: 'thinking:2:0',
+        activity: {
+          kind: 'thinking',
+          title: 'Thinking',
+          status: 'completed',
+          summary: 'Completed',
+          body: 'final thinking',
+          code: false
+        }
+      }
+    );
   });
 
   test('mapMessageUpdate maps tool call construction activity', () => {

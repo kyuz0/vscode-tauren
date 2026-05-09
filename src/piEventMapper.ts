@@ -116,13 +116,18 @@ export function mapMessageUpdate(
         },
         'append'
       );
-    case 'thinking_end':
+    case 'thinking_end': {
+      const content = getRecordString(assistantMessageEvent, 'content')
+        ?? getPartialThinkingContent(assistantMessageEvent);
+
       return updateActivity(`thinking:${streamId}:${getContentIndex(assistantMessageEvent)}`, {
         kind: 'thinking',
         title: 'Thinking',
         status: 'completed',
-        summary: 'Completed'
+        summary: 'Completed',
+        ...(content ? { body: content, code: false } : {})
       });
+    }
     case 'toolcall_start':
       return updateActivity(`toolcall:${streamId}:${getContentIndex(assistantMessageEvent)}`, {
         kind: 'tool_call',
@@ -509,6 +514,23 @@ function getContentIndex(record: Record<string, unknown>): string {
   }
 
   return 'current';
+}
+
+function getPartialThinkingContent(record: Record<string, unknown>): string | undefined {
+  const partial = record.partial;
+  const contentIndex = Number(getContentIndex(record));
+
+  if (!isRecord(partial) || !Array.isArray(partial.content) || !Number.isInteger(contentIndex)) {
+    return undefined;
+  }
+
+  const content = partial.content[contentIndex];
+
+  if (!isRecord(content) || content.type !== 'thinking') {
+    return undefined;
+  }
+
+  return getRecordString(content, 'thinking');
 }
 
 function getToolExecutionSourceId(event: RpcEvent): string {
