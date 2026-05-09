@@ -12,6 +12,7 @@ import {
   mapMessageUpdate,
   mapRpcActivity,
   type ActivityAddAction,
+  type ActivityRemoveAction,
   type ActivityUpdateAction
 } from './piEventMapper';
 import { PiRpcClient, type PiSessionState, type RpcEvent } from './piRpcClient';
@@ -25,11 +26,24 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
   private webviewReady = false;
   private assistantStreamId = 0;
   private modelLabel = '';
+  private fullRpcAgentCommunication = false;
   private readonly session = new ChatSession();
   private readonly disposables: vscode.Disposable[] = [];
   private readonly clientDisposables: vscode.Disposable[] = [];
 
-  public constructor(private readonly extensionUri: vscode.Uri) {}
+  public constructor(private readonly extensionUri: vscode.Uri) {
+    this.fullRpcAgentCommunication = getFullRpcAgentCommunicationSetting();
+    this.disposables.push(
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (!event.affectsConfiguration('piui.fullRpcAgentCommunication')) {
+          return;
+        }
+
+        this.fullRpcAgentCommunication = getFullRpcAgentCommunicationSetting();
+        this.postState();
+      })
+    );
+  }
 
   public dispose(): void {
     for (const disposable of this.disposables.splice(0)) {
@@ -62,6 +76,8 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
       domPurifyScriptUri: domPurifyUri.toString(),
       highlightScriptUri: highlightUri.toString()
     });
+    this.fullRpcAgentCommunication = getFullRpcAgentCommunicationSetting();
+
     this.disposables.push(
       webviewView.onDidDispose(() => {
         if (this.webviewView === webviewView) {
@@ -249,7 +265,9 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
   }
 
   private handleMessageUpdate(event: RpcEvent): void {
-    const action = mapMessageUpdate(event, this.getMessageUpdateStreamId(event));
+    const action = mapMessageUpdate(event, this.getMessageUpdateStreamId(event), {
+      fullCommunication: this.fullRpcAgentCommunication
+    });
 
     if (action.type === 'text_delta') {
       if (this.session.appendAssistantDelta(action.delta)) {
@@ -264,7 +282,7 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
       this.postState();
     }
 
-    if (action.type === 'activity_update' || action.type === 'activity_add') {
+    if (action.type === 'activity_update' || action.type === 'activity_add' || action.type === 'activity_remove') {
       this.applyActivityAction(action);
       this.postState();
     }
@@ -275,16 +293,23 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
       return;
     }
 
-    const action = mapRpcActivity(event);
+    const action = mapRpcActivity(event, {
+      fullCommunication: this.fullRpcAgentCommunication
+    });
 
-    if (action.type === 'activity_update' || action.type === 'activity_add') {
+    if (action.type === 'activity_update' || action.type === 'activity_add' || action.type === 'activity_remove') {
       this.applyActivityAction(action);
     }
   }
 
-  private applyActivityAction(action: ActivityUpdateAction | ActivityAddAction): void {
+  private applyActivityAction(action: ActivityUpdateAction | ActivityAddAction | ActivityRemoveAction): void {
     if (action.type === 'activity_update') {
       this.session.upsertActivity(action.sourceId, action.activity, action.bodyMode);
+      return;
+    }
+
+    if (action.type === 'activity_remove') {
+      this.session.removeActivity(action.sourceId);
       return;
     }
 
@@ -348,7 +373,10 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
 
   private postState(): void {
     void this.webviewView?.webview.postMessage(
-      createWebviewStateMessage(this.session.snapshot(), this.modelLabel)
+      createWebviewStateMessage(
+        this.session.snapshot(),
+        this.modelLabel
+      )
     );
   }
 
@@ -364,6 +392,13 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
   private postInputFocusSoon(): void {
     setTimeout(() => this.postInputFocus(), 0);
   }
+}
+
+function getFullRpcAgentCommunicationSetting(): boolean {
+  return vscode.workspace.getConfiguration('piui').get<boolean>(
+    'fullRpcAgentCommunication',
+    false
+  );
 }
 
 function formatModelLabel(state: PiSessionState): string {

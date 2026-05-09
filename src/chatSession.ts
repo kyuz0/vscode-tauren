@@ -165,6 +165,26 @@ export class ChatSession {
     return id;
   }
 
+  public removeActivity(sourceId: string): void {
+    const id = this.activeActivityIds.get(sourceId);
+
+    if (!id || this.activeAssistantIndex === undefined) {
+      return;
+    }
+
+    const message = this.transcript[this.activeAssistantIndex];
+
+    if (message.activities) {
+      message.activities = message.activities.filter((activity) => activity.id !== id);
+
+      if (message.activities.length === 0) {
+        delete message.activities;
+      }
+    }
+
+    this.activeActivityIds.delete(sourceId);
+  }
+
   public failActivePrompt(message: string): void {
     this.markActiveAssistantError(message);
     this.busy = false;

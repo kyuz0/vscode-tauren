@@ -9,6 +9,7 @@ export type MessageUpdateAction =
   | { type: 'assistant_error'; message: string }
   | ActivityUpdateAction
   | ActivityAddAction
+  | ActivityRemoveAction
   | { type: 'ignore' };
 
 export type ActivityUpdateAction = {
@@ -23,9 +24,15 @@ export type ActivityAddAction = {
   activity: ChatActivityInput;
 };
 
+export type ActivityRemoveAction = {
+  type: 'activity_remove';
+  sourceId: string;
+};
+
 export type RpcActivityAction =
   | ActivityUpdateAction
   | ActivityAddAction
+  | ActivityRemoveAction
   | { type: 'ignore' };
 
 export type ExtensionUiRequestAction =
@@ -33,7 +40,16 @@ export type ExtensionUiRequestAction =
   | { type: 'cancel'; id: string }
   | { type: 'ignore' };
 
-export function mapMessageUpdate(event: RpcEvent, streamId = 0): MessageUpdateAction {
+export type RpcMappingOptions = {
+  fullCommunication?: boolean;
+};
+
+export function mapMessageUpdate(
+  event: RpcEvent,
+  streamId = 0,
+  options: RpcMappingOptions = { fullCommunication: true }
+): MessageUpdateAction {
+  const fullCommunication = options.fullCommunication !== false;
   const assistantMessageEvent = event.assistantMessageEvent;
 
   if (!isRecord(assistantMessageEvent)) {
@@ -44,6 +60,10 @@ export function mapMessageUpdate(event: RpcEvent, streamId = 0): MessageUpdateAc
 
   switch (updateType) {
     case 'start':
+      if (!fullCommunication) {
+        return { type: 'ignore' };
+      }
+
       return updateActivity(`assistant:${streamId}`, {
         kind: 'message',
         title: 'Assistant response',
@@ -51,6 +71,10 @@ export function mapMessageUpdate(event: RpcEvent, streamId = 0): MessageUpdateAc
         summary: 'Started'
       });
     case 'text_start':
+      if (!fullCommunication) {
+        return { type: 'ignore' };
+      }
+
       return updateActivity(`assistant-text:${streamId}:${getContentIndex(assistantMessageEvent)}`, {
         kind: 'message',
         title: 'Writing response',
@@ -62,6 +86,10 @@ export function mapMessageUpdate(event: RpcEvent, streamId = 0): MessageUpdateAc
         delta: typeof assistantMessageEvent.delta === 'string' ? assistantMessageEvent.delta : ''
       };
     case 'text_end':
+      if (!fullCommunication) {
+        return { type: 'ignore' };
+      }
+
       return updateActivity(`assistant-text:${streamId}:${getContentIndex(assistantMessageEvent)}`, {
         kind: 'message',
         title: 'Response text',
@@ -104,6 +132,10 @@ export function mapMessageUpdate(event: RpcEvent, streamId = 0): MessageUpdateAc
         code: true
       });
     case 'toolcall_delta':
+      if (!fullCommunication) {
+        return { type: 'ignore' };
+      }
+
       return updateActivity(
         `toolcall:${streamId}:${getContentIndex(assistantMessageEvent)}`,
         {
@@ -116,8 +148,12 @@ export function mapMessageUpdate(event: RpcEvent, streamId = 0): MessageUpdateAc
         'append'
       );
     case 'toolcall_end':
-      return mapToolCallEnd(assistantMessageEvent, streamId);
+      return mapToolCallEnd(assistantMessageEvent, streamId, fullCommunication);
     case 'done':
+      if (!fullCommunication) {
+        return { type: 'ignore' };
+      }
+
       return updateActivity(`assistant:${streamId}`, {
         kind: 'message',
         title: 'Assistant response',
@@ -132,6 +168,10 @@ export function mapMessageUpdate(event: RpcEvent, streamId = 0): MessageUpdateAc
           ?? 'Pi reported an error while responding.'
       };
     default:
+      if (!fullCommunication) {
+        return { type: 'ignore' };
+      }
+
       return addActivity({
         kind: 'rpc',
         title: updateType ? `Message update: ${updateType}` : 'Message update',
@@ -142,9 +182,18 @@ export function mapMessageUpdate(event: RpcEvent, streamId = 0): MessageUpdateAc
   }
 }
 
-export function mapRpcActivity(event: RpcEvent): RpcActivityAction {
+export function mapRpcActivity(
+  event: RpcEvent,
+  options: RpcMappingOptions = { fullCommunication: true }
+): RpcActivityAction {
+  const fullCommunication = options.fullCommunication !== false;
+
   switch (event.type) {
     case 'agent_start':
+      if (!fullCommunication) {
+        return { type: 'ignore' };
+      }
+
       return updateActivity('agent', {
         kind: 'agent',
         title: 'Agent processing',
@@ -152,6 +201,10 @@ export function mapRpcActivity(event: RpcEvent): RpcActivityAction {
         summary: 'Started'
       });
     case 'agent_end':
+      if (!fullCommunication) {
+        return { type: 'ignore' };
+      }
+
       return updateActivity('agent', {
         kind: 'agent',
         title: 'Agent processing',
@@ -159,12 +212,20 @@ export function mapRpcActivity(event: RpcEvent): RpcActivityAction {
         summary: summarizeMessageCount(event.messages)
       });
     case 'turn_start':
+      if (!fullCommunication) {
+        return { type: 'ignore' };
+      }
+
       return addActivity({
         kind: 'turn',
         title: 'Turn started',
         status: 'info'
       });
     case 'turn_end':
+      if (!fullCommunication) {
+        return { type: 'ignore' };
+      }
+
       return addActivity({
         kind: 'turn',
         title: 'Turn completed',
@@ -174,6 +235,10 @@ export function mapRpcActivity(event: RpcEvent): RpcActivityAction {
         code: true
       });
     case 'message_start':
+      if (!fullCommunication) {
+        return { type: 'ignore' };
+      }
+
       return addActivity({
         kind: 'message',
         title: `${formatMessageRole(event.message)} message started`,
@@ -182,6 +247,10 @@ export function mapRpcActivity(event: RpcEvent): RpcActivityAction {
         code: true
       });
     case 'message_end':
+      if (!fullCommunication) {
+        return { type: 'ignore' };
+      }
+
       return addActivity({
         kind: 'message',
         title: `${formatMessageRole(event.message)} message completed`,
@@ -190,12 +259,16 @@ export function mapRpcActivity(event: RpcEvent): RpcActivityAction {
         code: true
       });
     case 'tool_execution_start':
-      return mapToolExecutionStart(event);
+      return mapToolExecutionStart(event, fullCommunication);
     case 'tool_execution_update':
-      return mapToolExecutionUpdate(event);
+      return mapToolExecutionUpdate(event, fullCommunication);
     case 'tool_execution_end':
-      return mapToolExecutionEnd(event);
+      return mapToolExecutionEnd(event, fullCommunication);
     case 'queue_update':
+      if (!fullCommunication) {
+        return { type: 'ignore' };
+      }
+
       return addActivity({
         kind: 'queue',
         title: 'Queue updated',
@@ -204,39 +277,43 @@ export function mapRpcActivity(event: RpcEvent): RpcActivityAction {
         code: true
       });
     case 'compaction_start':
-      return updateActivity('compaction', {
+      return updateActivity('compaction', compactActivity({
         kind: 'compaction',
         title: 'Compacting context',
         status: 'running',
         body: formatKnownEventBody(event, ['type']),
         code: true
-      });
+      }, fullCommunication));
     case 'compaction_end':
-      return updateActivity('compaction', {
+      return updateActivity('compaction', compactActivity({
         kind: 'compaction',
         title: 'Compacting context',
         status: 'completed',
         summary: 'Completed',
         body: formatKnownEventBody(event, ['type']),
         code: true
-      });
+      }, fullCommunication));
     case 'auto_retry_start':
-      return updateActivity('auto-retry', {
+      return updateActivity('auto-retry', compactActivity({
         kind: 'retry',
         title: 'Auto retry',
         status: 'running',
         body: formatKnownEventBody(event, ['type']),
         code: true
-      });
+      }, fullCommunication));
     case 'auto_retry_end':
-      return updateActivity('auto-retry', {
+      return updateActivity('auto-retry', compactActivity({
         kind: 'retry',
         title: 'Auto retry',
         status: event.success === false ? 'error' : 'completed',
         body: formatKnownEventBody(event, ['type']),
         code: true
-      });
+      }, fullCommunication));
     case 'extension_ui_request':
+      if (!fullCommunication) {
+        return { type: 'ignore' };
+      }
+
       return addActivity({
         kind: 'extension_ui',
         title: `Extension UI: ${getRecordString(event, 'method') ?? 'request'}`,
@@ -246,18 +323,22 @@ export function mapRpcActivity(event: RpcEvent): RpcActivityAction {
         code: true
       });
     case 'extension_error':
-      return addActivity({
+      return addActivity(compactActivity({
         kind: 'extension_error',
         title: 'Extension error',
         status: 'error',
         summary: getRecordString(event, 'error') ?? 'Unknown extension error.',
         body: formatKnownEventBody(event, ['type']),
         code: true
-      });
+      }, fullCommunication));
     case 'message_update':
     case 'response':
       return { type: 'ignore' };
     default:
+      if (!fullCommunication) {
+        return { type: 'ignore' };
+      }
+
       return addActivity({
         kind: 'rpc',
         title: `RPC event: ${event.type}`,
@@ -307,61 +388,76 @@ export function formatExtensionError(event: RpcEvent): string {
 
 function mapToolCallEnd(
   assistantMessageEvent: Record<string, unknown>,
-  streamId: number
+  streamId: number,
+  fullCommunication: boolean
 ): ActivityUpdateAction {
   const toolCall = isRecord(assistantMessageEvent.toolCall) ? assistantMessageEvent.toolCall : {};
   const toolName = getRecordString(toolCall, 'name') ?? getRecordString(assistantMessageEvent, 'name');
   const toolArguments = toolCall.arguments ?? toolCall.args ?? assistantMessageEvent.arguments;
 
-  return updateActivity(`toolcall:${streamId}:${getContentIndex(assistantMessageEvent)}`, {
+  return updateActivity(`toolcall:${streamId}:${getContentIndex(assistantMessageEvent)}`, compactActivity({
     kind: 'tool_call',
     title: toolName ? `Prepared tool call: ${toolName}` : 'Prepared tool call',
     status: 'completed',
     summary: summarizeValue(toolArguments),
     body: formatBodyValue(toolArguments ?? toolCall),
     code: true
-  });
+  }, fullCommunication));
 }
 
-function mapToolExecutionStart(event: RpcEvent): ActivityUpdateAction {
+function mapToolExecutionStart(event: RpcEvent, fullCommunication: boolean): ActivityUpdateAction {
   const toolName = getToolName(event);
   const args = event.args;
 
-  return updateActivity(getToolExecutionSourceId(event), {
+  return updateActivity(getToolExecutionSourceId(event), compactActivity({
     kind: 'tool_execution',
     title: `Running ${toolName}`,
     status: 'running',
     summary: summarizeToolArgs(args),
     body: formatBodyValue(args),
     code: true
-  });
+  }, fullCommunication));
 }
 
-function mapToolExecutionUpdate(event: RpcEvent): ActivityUpdateAction {
+function mapToolExecutionUpdate(event: RpcEvent, fullCommunication: boolean): ActivityUpdateAction {
   const toolName = getToolName(event);
 
-  return updateActivity(getToolExecutionSourceId(event), {
+  return updateActivity(getToolExecutionSourceId(event), compactActivity({
     kind: 'tool_execution',
     title: `Running ${toolName}`,
     status: 'running',
     summary: summarizeToolArgs(event.args),
     body: formatToolResult(event.partialResult),
     code: true
-  });
+  }, fullCommunication));
 }
 
-function mapToolExecutionEnd(event: RpcEvent): ActivityUpdateAction {
+function mapToolExecutionEnd(event: RpcEvent, fullCommunication: boolean): ActivityUpdateAction | ActivityRemoveAction {
   const toolName = getToolName(event);
   const isError = event.isError === true;
+  const sourceId = getToolExecutionSourceId(event);
 
-  return updateActivity(getToolExecutionSourceId(event), {
+  if (!fullCommunication && !isError) {
+    return removeActivity(sourceId);
+  }
+
+  return updateActivity(sourceId, compactActivity({
     kind: 'tool_execution',
     title: isError ? `${toolName} failed` : `${toolName} completed`,
     status: isError ? 'error' : 'completed',
     summary: summarizeToolArgs(event.args),
     body: formatToolResult(event.result),
     code: true
-  });
+  }, fullCommunication));
+}
+
+function compactActivity(activity: ChatActivityInput, fullCommunication: boolean): ChatActivityInput {
+  if (fullCommunication) {
+    return activity;
+  }
+
+  const { body: _body, code: _code, ...compact } = activity;
+  return compact;
 }
 
 function updateActivity(
@@ -386,6 +482,13 @@ function addActivity(activity: ChatActivityInput): ActivityAddAction {
   return {
     type: 'activity_add',
     activity
+  };
+}
+
+function removeActivity(sourceId: string): ActivityRemoveAction {
+  return {
+    type: 'activity_remove',
+    sourceId
   };
 }
 

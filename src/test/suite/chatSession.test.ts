@@ -202,6 +202,35 @@ suite('ChatSession', () => {
     });
   });
 
+  test('removeActivity removes an upserted activity and source mapping', () => {
+    const session = new ChatSession();
+
+    session.beginSubmit('show activity');
+    session.upsertActivity('tool:call-1', {
+      kind: 'tool_execution',
+      title: 'Running bash',
+      status: 'running'
+    });
+
+    session.removeActivity('tool:call-1');
+
+    assert.deepStrictEqual(session.snapshot(), {
+      messages: [
+        { role: 'user', text: 'show activity' },
+        { role: 'assistant', text: '' }
+      ],
+      busy: true
+    });
+
+    const nextId = session.upsertActivity('tool:call-1', {
+      kind: 'tool_execution',
+      title: 'Running bash again',
+      status: 'running'
+    });
+
+    assert.strictEqual(nextId, 'activity-0-2');
+  });
+
   test('message and activity snapshots are copied before returning', () => {
     const session = new ChatSession();
 

@@ -10,7 +10,10 @@ export type WebviewStateMessage = ChatState & {
   modelLabel: string;
 };
 
-export function createWebviewStateMessage(state: ChatState, modelLabel = ''): WebviewStateMessage {
+export function createWebviewStateMessage(
+  state: ChatState,
+  modelLabel = ''
+): WebviewStateMessage {
   return {
     type: 'state',
     messages: state.messages,
@@ -60,7 +63,7 @@ export function createWebviewHtml(scriptUris: WebviewScriptUris): string {
 
     .pi-view {
       display: grid;
-      grid-template-rows: minmax(0, 1fr) auto;
+      grid-template-rows: minmax(0, 1fr) auto auto;
       height: 100vh;
       min-height: 0;
       overflow: hidden;
@@ -319,10 +322,29 @@ export function createWebviewHtml(scriptUris: WebviewScriptUris): string {
     }
 
     .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
       margin-top: 8px;
       color: var(--vscode-descriptionForeground);
       font-size: 12px;
       overflow-wrap: anywhere;
+    }
+
+    .status__spinner {
+      width: 10px;
+      height: 10px;
+      flex: 0 0 auto;
+      border: 1.5px solid color-mix(in srgb, var(--vscode-descriptionForeground) 35%, transparent);
+      border-top-color: var(--vscode-progressBar-background, var(--vscode-focusBorder));
+      border-radius: 999px;
+      animation: pi-spin 0.8s linear infinite;
+    }
+
+    @keyframes pi-spin {
+      to {
+        transform: rotate(360deg);
+      }
     }
 
     .composer {
@@ -545,7 +567,12 @@ export function createWebviewHtml(scriptUris: WebviewScriptUris): string {
       if (state.busy) {
         const status = document.createElement('div');
         status.className = 'status';
-        status.textContent = getBusyStatusText();
+        const spinner = document.createElement('span');
+        spinner.className = 'status__spinner';
+        spinner.setAttribute('aria-hidden', 'true');
+        const text = document.createElement('span');
+        text.textContent = getBusyStatusText();
+        status.append(spinner, text);
         messagesElement.append(status);
       }
 

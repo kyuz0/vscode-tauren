@@ -53,6 +53,16 @@
           "type": "webview"
         }
       ]
+    },
+    "configuration": {
+      "title": "Pi UI",
+      "properties": {
+        "piui.fullRpcAgentCommunication": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show full RPC agent communication in the Pi sidebar transcript. When disabled, only assistant text, thinking, tool progress, and errors are shown."
+        }
+      }
     }
   },
   "scripts": {

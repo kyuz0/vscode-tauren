@@ -53,6 +53,8 @@ suite('Chat webview helpers', () => {
     assert.ok(html.includes('<script nonce="' + nonce + '" src="vscode-resource://dompurify.js"></script>'));
     assert.ok(html.includes('class="messages" aria-live="polite" aria-label="Pi conversation"'));
     assert.ok(html.includes('<form class="composer" aria-label="Pi message input">'));
+    assert.ok(!html.includes('Full RPC Agent communication'));
+    assert.ok(!html.includes('setFullRpcAgentCommunication'));
     assert.ok(html.includes('class="composer__button composer__add"'));
     assert.ok(html.includes('class="composer__button composer__submit"'));
     assert.ok(html.includes("vscode.postMessage({ type: 'ready' });"));

@@ -356,6 +356,35 @@ suite('Pi event mapper', () => {
     );
   });
 
+  test('mapMessageUpdate hides verbose message events when full communication is disabled', () => {
+    assert.deepStrictEqual(
+      mapMessageUpdate({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'text_start', contentIndex: 1 }
+      }, 4, { fullCommunication: false }),
+      { type: 'ignore' }
+    );
+
+    assert.deepStrictEqual(
+      mapMessageUpdate({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'thinking_delta', contentIndex: 0, delta: 'step' }
+      }, 2, { fullCommunication: false }),
+      {
+        type: 'activity_update',
+        sourceId: 'thinking:2:0',
+        activity: {
+          kind: 'thinking',
+          title: 'Thinking',
+          status: 'running',
+          body: 'step',
+          code: false
+        },
+        bodyMode: 'append'
+      }
+    );
+  });
+
   test('mapRpcActivity maps tool execution lifecycle', () => {
     assert.deepStrictEqual(
       mapRpcActivity({
@@ -421,6 +450,66 @@ suite('Pi event mapper', () => {
           code: true
         }
       }
+    );
+  });
+
+  test('mapRpcActivity compacts tool execution when full communication is disabled', () => {
+    assert.deepStrictEqual(
+      mapRpcActivity({
+        type: 'tool_execution_start',
+        toolCallId: 'call-1',
+        toolName: 'bash',
+        args: { command: 'npm test' }
+      }, { fullCommunication: false }),
+      {
+        type: 'activity_update',
+        sourceId: 'tool:call-1',
+        activity: {
+          kind: 'tool_execution',
+          title: 'Running bash',
+          status: 'running',
+          summary: 'npm test'
+        }
+      }
+    );
+
+    assert.deepStrictEqual(
+      mapRpcActivity({
+        type: 'tool_execution_end',
+        toolCallId: 'call-1',
+        toolName: 'bash',
+        args: { command: 'npm test' }
+      }, { fullCommunication: false }),
+      {
+        type: 'activity_remove',
+        sourceId: 'tool:call-1'
+      }
+    );
+
+    assert.deepStrictEqual(
+      mapRpcActivity({
+        type: 'tool_execution_end',
+        toolCallId: 'call-1',
+        toolName: 'bash',
+        args: { command: 'npm test' },
+        result: { content: [{ type: 'text', text: 'failed' }] },
+        isError: true
+      }, { fullCommunication: false }),
+      {
+        type: 'activity_update',
+        sourceId: 'tool:call-1',
+        activity: {
+          kind: 'tool_execution',
+          title: 'bash failed',
+          status: 'error',
+          summary: 'npm test'
+        }
+      }
+    );
+
+    assert.deepStrictEqual(
+      mapRpcActivity({ type: 'turn_start' }, { fullCommunication: false }),
+      { type: 'ignore' }
     );
   });
 
