@@ -71,7 +71,7 @@ export function createWebviewHtml(scriptUris: WebviewScriptUris): string {
 
     .messages {
       min-height: 0;
-      padding: 12px 12px 8px;
+      padding: 12px 12px calc(8px + 2lh);
       overflow-y: auto;
     }
 
@@ -340,7 +340,7 @@ export function createWebviewHtml(scriptUris: WebviewScriptUris): string {
       height: 10px;
       flex: 0 0 auto;
       border: 1.5px solid color-mix(in srgb, var(--vscode-descriptionForeground) 35%, transparent);
-      border-top-color: var(--vscode-progressBar-background, var(--vscode-focusBorder));
+      border-top-color: #ffffff;
       border-radius: 999px;
       animation: pi-spin 0.8s linear infinite;
     }
