@@ -47,7 +47,21 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
       localResourceRoots: [this.extensionUri]
     };
 
-    webviewView.webview.html = createWebviewHtml();
+    const markdownItUri = webviewView.webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, 'node_modules', 'markdown-it', 'dist', 'markdown-it.min.js')
+    );
+    const domPurifyUri = webviewView.webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, 'node_modules', 'dompurify', 'dist', 'purify.min.js')
+    );
+    const highlightUri = webviewView.webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, 'node_modules', '@highlightjs', 'cdn-assets', 'highlight.min.js')
+    );
+
+    webviewView.webview.html = createWebviewHtml({
+      markdownItScriptUri: markdownItUri.toString(),
+      domPurifyScriptUri: domPurifyUri.toString(),
+      highlightScriptUri: highlightUri.toString()
+    });
     this.disposables.push(
       webviewView.onDidDispose(() => {
         if (this.webviewView === webviewView) {

@@ -68,5 +68,10 @@
     "@vscode/test-electron": "^2.5.2",
     "mocha": "^11.7.5",
     "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "@highlightjs/cdn-assets": "^11.11.1",
+    "dompurify": "^3.4.2",
+    "markdown-it": "^14.1.1"
   }
 }

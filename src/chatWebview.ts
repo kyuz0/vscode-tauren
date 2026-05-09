@@ -19,7 +19,13 @@ export function createWebviewStateMessage(state: ChatState, modelLabel = ''): We
   };
 }
 
-export function createWebviewHtml(): string {
+export type WebviewScriptUris = {
+  markdownItScriptUri: string;
+  domPurifyScriptUri: string;
+  highlightScriptUri: string;
+};
+
+export function createWebviewHtml(scriptUris: WebviewScriptUris): string {
   const nonce = getNonce();
 
   return /* html */ `<!DOCTYPE html>
@@ -91,6 +97,137 @@ export function createWebviewHtml(): string {
       white-space: pre-wrap;
       overflow-wrap: anywhere;
       line-height: 1.45;
+    }
+
+    .message__body--markdown {
+      white-space: normal;
+    }
+
+    .message__body--markdown > :first-child {
+      margin-top: 0;
+    }
+
+    .message__body--markdown > :last-child {
+      margin-bottom: 0;
+    }
+
+    .message__body--markdown p,
+    .message__body--markdown ul,
+    .message__body--markdown ol,
+    .message__body--markdown blockquote,
+    .message__body--markdown pre,
+    .message__body--markdown table {
+      margin: 0 0 8px;
+    }
+
+    .message__body--markdown ul,
+    .message__body--markdown ol {
+      padding-left: 20px;
+    }
+
+    .message__body--markdown li + li {
+      margin-top: 3px;
+    }
+
+    .message__body--markdown code {
+      padding: 1px 3px;
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 0.92em;
+      background: color-mix(in srgb, var(--vscode-foreground) 10%, transparent);
+      border-radius: 3px;
+    }
+
+    .message__body--markdown pre {
+      max-width: 100%;
+      padding: 8px;
+      overflow: auto;
+      background: color-mix(in srgb, var(--vscode-foreground) 8%, transparent);
+      border-radius: 6px;
+      white-space: pre;
+    }
+
+    .message__body--markdown pre code {
+      padding: 0;
+      background: transparent;
+      border-radius: 0;
+    }
+
+    .message__body--markdown .hljs-comment,
+    .message__body--markdown .hljs-quote {
+      color: var(--vscode-descriptionForeground);
+    }
+
+    .message__body--markdown .hljs-keyword,
+    .message__body--markdown .hljs-selector-tag,
+    .message__body--markdown .hljs-subst {
+      color: var(--vscode-symbolIcon-keywordForeground, #569cd6);
+    }
+
+    .message__body--markdown .hljs-literal,
+    .message__body--markdown .hljs-number,
+    .message__body--markdown .hljs-doctag {
+      color: var(--vscode-symbolIcon-numberForeground, #b5cea8);
+    }
+
+    .message__body--markdown .hljs-string,
+    .message__body--markdown .hljs-regexp,
+    .message__body--markdown .hljs-addition {
+      color: var(--vscode-symbolIcon-stringForeground, #ce9178);
+    }
+
+    .message__body--markdown .hljs-title,
+    .message__body--markdown .hljs-section,
+    .message__body--markdown .hljs-selector-id {
+      color: var(--vscode-symbolIcon-functionForeground, #dcdcaa);
+    }
+
+    .message__body--markdown .hljs-class .hljs-title,
+    .message__body--markdown .hljs-type,
+    .message__body--markdown .hljs-built_in {
+      color: var(--vscode-symbolIcon-classForeground, #4ec9b0);
+    }
+
+    .message__body--markdown .hljs-attr,
+    .message__body--markdown .hljs-variable,
+    .message__body--markdown .hljs-template-variable,
+    .message__body--markdown .hljs-attribute {
+      color: var(--vscode-symbolIcon-variableForeground, #9cdcfe);
+    }
+
+    .message__body--markdown .hljs-deletion,
+    .message__body--markdown .hljs-meta {
+      color: var(--vscode-errorForeground, #f44747);
+    }
+
+    .message__body--markdown .hljs-emphasis {
+      font-style: italic;
+    }
+
+    .message__body--markdown .hljs-strong {
+      font-weight: 600;
+    }
+
+    .message__body--markdown blockquote {
+      padding-left: 9px;
+      color: var(--vscode-descriptionForeground);
+      border-left: 2px solid color-mix(in srgb, var(--vscode-foreground) 25%, transparent);
+    }
+
+    .message__body--markdown table {
+      display: block;
+      max-width: 100%;
+      overflow: auto;
+      border-collapse: collapse;
+    }
+
+    .message__body--markdown th,
+    .message__body--markdown td {
+      padding: 4px 6px;
+      border: 1px solid color-mix(in srgb, var(--vscode-foreground) 20%, transparent);
+    }
+
+    .message__body--markdown a {
+      color: var(--vscode-textLink-foreground);
     }
 
     .message__body--after-activities {
@@ -309,6 +446,9 @@ export function createWebviewHtml(): string {
     </form>
   </main>
 
+  <script nonce="${nonce}" src="${scriptUris.highlightScriptUri}"></script>
+  <script nonce="${nonce}" src="${scriptUris.markdownItScriptUri}"></script>
+  <script nonce="${nonce}" src="${scriptUris.domPurifyScriptUri}"></script>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const messagesElement = document.querySelector('.messages');
@@ -323,6 +463,14 @@ export function createWebviewHtml(): string {
     const isMac = navigator.platform.toUpperCase().includes('MAC');
     let state = { messages: [], busy: false, modelLabel: '' };
     const activityExpansion = new Map();
+    const markdownRenderer = window.markdownit
+      ? window.markdownit({
+        html: false,
+        linkify: true,
+        breaks: false,
+        highlight: highlightCode
+      })
+      : undefined;
 
     window.addEventListener('message', (event) => {
       if (event.data?.type === 'focusInput') {
@@ -418,7 +566,12 @@ export function createWebviewHtml(): string {
 
       const body = document.createElement('div');
       body.className = 'message__body';
-      body.textContent = message.text || '';
+
+      if (message.role === 'assistant' && !message.error) {
+        renderMarkdownInto(body, message.text || '');
+      } else {
+        body.textContent = message.text || '';
+      }
 
       article.append(role);
 
@@ -443,6 +596,66 @@ export function createWebviewHtml(): string {
       }
 
       return article;
+    }
+
+    function renderMarkdownInto(element, text) {
+      if (!markdownRenderer || !window.DOMPurify) {
+        element.textContent = text;
+        return;
+      }
+
+      element.classList.add('message__body--markdown');
+
+      const rendered = markdownRenderer.render(text);
+      element.innerHTML = window.DOMPurify.sanitize(rendered, {
+        USE_PROFILES: { html: true }
+      });
+    }
+
+    function highlightCode(code, language) {
+      if (!window.hljs || typeof language !== 'string' || language.length === 0) {
+        return escapeHtml(code);
+      }
+
+      const normalizedLanguage = normalizeCodeLanguage(language);
+
+      if (!window.hljs.getLanguage(normalizedLanguage)) {
+        return escapeHtml(code);
+      }
+
+      try {
+        return window.hljs.highlight(code, {
+          language: normalizedLanguage,
+          ignoreIllegals: true
+        }).value;
+      } catch {
+        return escapeHtml(code);
+      }
+    }
+
+    function normalizeCodeLanguage(language) {
+      const normalized = language.toLowerCase().trim();
+      const aliases = {
+        cjs: 'javascript',
+        js: 'javascript',
+        jsx: 'javascript',
+        mjs: 'javascript',
+        shell: 'bash',
+        sh: 'bash',
+        ts: 'typescript',
+        tsx: 'typescript',
+        yml: 'yaml'
+      };
+
+      return aliases[normalized] || normalized;
+    }
+
+    function escapeHtml(value) {
+      return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
     }
 
     function createActivityListElement(activities) {
