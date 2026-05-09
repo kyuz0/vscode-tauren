@@ -57,12 +57,16 @@
   },
   "scripts": {
     "compile": "tsc -p ./",
-    "test": "npm run compile -- --pretty false && node --test test/*.test.js",
+    "test": "npm run compile -- --pretty false && vscode-test",
     "watch": "tsc -watch -p ./"
   },
   "devDependencies": {
+    "@types/mocha": "^10.0.10",
     "@types/node": "^24.0.0",
     "@types/vscode": "^1.118.0",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
+    "mocha": "^11.7.5",
     "typescript": "^6.0.3"
   }
 }

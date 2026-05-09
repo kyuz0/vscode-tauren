@@ -1,0 +1,642 @@
+import * as assert from 'assert';
+import {
+  formatExtensionError,
+  getFailedResponseError,
+  mapExtensionUiRequest,
+  mapMessageUpdate,
+  mapRpcActivity
+} from '../../piEventMapper';
+
+suite('Pi event mapper', () => {
+  test('mapMessageUpdate maps assistant response lifecycle activity', () => {
+    assert.deepStrictEqual(
+      mapMessageUpdate({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'start' }
+      }, 4),
+      {
+        type: 'activity_update',
+        sourceId: 'assistant:4',
+        activity: {
+          kind: 'message',
+          title: 'Assistant response',
+          status: 'running',
+          summary: 'Started'
+        }
+      }
+    );
+
+    assert.deepStrictEqual(
+      mapMessageUpdate({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'text_start', contentIndex: 1 }
+      }, 4),
+      {
+        type: 'activity_update',
+        sourceId: 'assistant-text:4:1',
+        activity: {
+          kind: 'message',
+          title: 'Writing response',
+          status: 'running'
+        }
+      }
+    );
+
+    assert.deepStrictEqual(
+      mapMessageUpdate({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'text_end', contentIndex: 1, content: 'hello' }
+      }, 4),
+      {
+        type: 'activity_update',
+        sourceId: 'assistant-text:4:1',
+        activity: {
+          kind: 'message',
+          title: 'Response text',
+          status: 'completed',
+          summary: '5 characters'
+        }
+      }
+    );
+
+    assert.deepStrictEqual(
+      mapMessageUpdate({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'done', reason: 'stop' }
+      }, 4),
+      {
+        type: 'activity_update',
+        sourceId: 'assistant:4',
+        activity: {
+          kind: 'message',
+          title: 'Assistant response',
+          status: 'completed',
+          summary: 'Done: stop'
+        }
+      }
+    );
+  });
+
+  test('mapMessageUpdate extracts assistant text deltas', () => {
+    assert.deepStrictEqual(
+      mapMessageUpdate({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'text_delta', delta: 'hello' }
+      }),
+      { type: 'text_delta', delta: 'hello' }
+    );
+
+    assert.deepStrictEqual(
+      mapMessageUpdate({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'text_delta', delta: 42 }
+      }),
+      { type: 'text_delta', delta: '' }
+    );
+  });
+
+  test('mapMessageUpdate extracts assistant error messages', () => {
+    assert.deepStrictEqual(
+      mapMessageUpdate({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'error', reason: 'reason wins', error: 'fallback' }
+      }),
+      { type: 'assistant_error', message: 'reason wins' }
+    );
+
+    assert.deepStrictEqual(
+      mapMessageUpdate({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'error', error: 'fallback error' }
+      }),
+      { type: 'assistant_error', message: 'fallback error' }
+    );
+
+    assert.deepStrictEqual(
+      mapMessageUpdate({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'error' }
+      }),
+      { type: 'assistant_error', message: 'Pi reported an error while responding.' }
+    );
+  });
+
+  test('mapMessageUpdate ignores malformed updates', () => {
+    assert.deepStrictEqual(
+      mapMessageUpdate({ type: 'message_update' }),
+      { type: 'ignore' }
+    );
+  });
+
+  test('mapMessageUpdate exposes unknown updates as activity', () => {
+    assert.deepStrictEqual(
+      mapMessageUpdate({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'tool_call' }
+      }),
+      {
+        type: 'activity_add',
+        activity: {
+          kind: 'rpc',
+          title: 'Message update: tool_call',
+          status: 'info',
+          body: '{\n  "type": "tool_call"\n}',
+          code: true
+        }
+      }
+    );
+  });
+
+  test('mapMessageUpdate maps thinking stream activity', () => {
+    assert.deepStrictEqual(
+      mapMessageUpdate({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'thinking_start', contentIndex: 0 }
+      }, 2),
+      {
+        type: 'activity_update',
+        sourceId: 'thinking:2:0',
+        activity: {
+          kind: 'thinking',
+          title: 'Thinking',
+          status: 'running',
+          body: '',
+          code: false
+        }
+      }
+    );
+
+    assert.deepStrictEqual(
+      mapMessageUpdate({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'thinking_delta', contentIndex: 0, delta: 'step' }
+      }, 2),
+      {
+        type: 'activity_update',
+        sourceId: 'thinking:2:0',
+        activity: {
+          kind: 'thinking',
+          title: 'Thinking',
+          status: 'running',
+          body: 'step',
+          code: false
+        },
+        bodyMode: 'append'
+      }
+    );
+
+    assert.deepStrictEqual(
+      mapMessageUpdate({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'thinking_end', contentIndex: 0 }
+      }, 2),
+      {
+        type: 'activity_update',
+        sourceId: 'thinking:2:0',
+        activity: {
+          kind: 'thinking',
+          title: 'Thinking',
+          status: 'completed',
+          summary: 'Completed'
+        }
+      }
+    );
+  });
+
+  test('mapMessageUpdate maps tool call construction activity', () => {
+    assert.deepStrictEqual(
+      mapMessageUpdate({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'toolcall_start' }
+      }, 3),
+      {
+        type: 'activity_update',
+        sourceId: 'toolcall:3:current',
+        activity: {
+          kind: 'tool_call',
+          title: 'Preparing tool call',
+          status: 'running',
+          body: '',
+          code: true
+        }
+      }
+    );
+
+    assert.deepStrictEqual(
+      mapMessageUpdate({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'toolcall_delta', contentIndex: 1, delta: '{"command"' }
+      }, 3),
+      {
+        type: 'activity_update',
+        sourceId: 'toolcall:3:1',
+        activity: {
+          kind: 'tool_call',
+          title: 'Preparing tool call',
+          status: 'running',
+          body: '{"command"',
+          code: true
+        },
+        bodyMode: 'append'
+      }
+    );
+
+    assert.deepStrictEqual(
+      mapMessageUpdate({
+        type: 'message_update',
+        assistantMessageEvent: {
+          type: 'toolcall_end',
+          contentIndex: 1,
+          toolCall: {
+            id: 'call-1',
+            name: 'bash',
+            arguments: { command: 'npm test' }
+          }
+        }
+      }, 3),
+      {
+        type: 'activity_update',
+        sourceId: 'toolcall:3:1',
+        activity: {
+          kind: 'tool_call',
+          title: 'Prepared tool call: bash',
+          status: 'completed',
+          summary: '{ "command": "npm test" }',
+          body: '{\n  "command": "npm test"\n}',
+          code: true
+        }
+      }
+    );
+  });
+
+  test('mapRpcActivity maps agent lifecycle', () => {
+    assert.deepStrictEqual(
+      mapRpcActivity({ type: 'agent_start' }),
+      {
+        type: 'activity_update',
+        sourceId: 'agent',
+        activity: {
+          kind: 'agent',
+          title: 'Agent processing',
+          status: 'running',
+          summary: 'Started'
+        }
+      }
+    );
+
+    assert.deepStrictEqual(
+      mapRpcActivity({ type: 'agent_end', messages: [{}, {}] }),
+      {
+        type: 'activity_update',
+        sourceId: 'agent',
+        activity: {
+          kind: 'agent',
+          title: 'Agent processing',
+          status: 'completed',
+          summary: '2 messages'
+        }
+      }
+    );
+  });
+
+  test('mapRpcActivity maps turn and message events', () => {
+    assert.deepStrictEqual(
+      mapRpcActivity({ type: 'turn_start' }),
+      {
+        type: 'activity_add',
+        activity: {
+          kind: 'turn',
+          title: 'Turn started',
+          status: 'info'
+        }
+      }
+    );
+
+    assert.deepStrictEqual(
+      mapRpcActivity({ type: 'turn_end', toolResults: [{}] }),
+      {
+        type: 'activity_add',
+        activity: {
+          kind: 'turn',
+          title: 'Turn completed',
+          status: 'completed',
+          summary: '1 tool result',
+          body: '{\n  "toolResults": [\n    {}\n  ]\n}',
+          code: true
+        }
+      }
+    );
+
+    assert.deepStrictEqual(
+      mapRpcActivity({ type: 'message_start', message: { role: 'assistant', content: 'hi' } }),
+      {
+        type: 'activity_add',
+        activity: {
+          kind: 'message',
+          title: 'Assistant message started',
+          status: 'info',
+          body: '{\n  "message": {\n    "role": "assistant",\n    "content": "hi"\n  }\n}',
+          code: true
+        }
+      }
+    );
+
+    assert.deepStrictEqual(
+      mapRpcActivity({ type: 'message_end', message: { role: 'assistant' } }),
+      {
+        type: 'activity_add',
+        activity: {
+          kind: 'message',
+          title: 'Assistant message completed',
+          status: 'completed',
+          body: '{\n  "message": {\n    "role": "assistant"\n  }\n}',
+          code: true
+        }
+      }
+    );
+  });
+
+  test('mapRpcActivity maps tool execution lifecycle', () => {
+    assert.deepStrictEqual(
+      mapRpcActivity({
+        type: 'tool_execution_start',
+        toolCallId: 'call-1',
+        toolName: 'bash',
+        args: { command: 'npm test' }
+      }),
+      {
+        type: 'activity_update',
+        sourceId: 'tool:call-1',
+        activity: {
+          kind: 'tool_execution',
+          title: 'Running bash',
+          status: 'running',
+          summary: 'npm test',
+          body: '{\n  "command": "npm test"\n}',
+          code: true
+        }
+      }
+    );
+
+    assert.deepStrictEqual(
+      mapRpcActivity({
+        type: 'tool_execution_update',
+        toolCallId: 'call-1',
+        toolName: 'bash',
+        args: { command: 'npm test' },
+        partialResult: { content: [{ type: 'text', text: 'passing' }] }
+      }),
+      {
+        type: 'activity_update',
+        sourceId: 'tool:call-1',
+        activity: {
+          kind: 'tool_execution',
+          title: 'Running bash',
+          status: 'running',
+          summary: 'npm test',
+          body: 'passing',
+          code: true
+        }
+      }
+    );
+
+    assert.deepStrictEqual(
+      mapRpcActivity({
+        type: 'tool_execution_end',
+        toolCallId: 'call-1',
+        toolName: 'bash',
+        args: { command: 'npm test' },
+        result: { content: [{ type: 'text', text: 'failed' }] },
+        isError: true
+      }),
+      {
+        type: 'activity_update',
+        sourceId: 'tool:call-1',
+        activity: {
+          kind: 'tool_execution',
+          title: 'bash failed',
+          status: 'error',
+          summary: 'npm test',
+          body: 'failed',
+          code: true
+        }
+      }
+    );
+  });
+
+  test('mapRpcActivity maps queue, compaction, and retry events', () => {
+    assert.deepStrictEqual(
+      mapRpcActivity({ type: 'queue_update', queueLength: 2 }),
+      {
+        type: 'activity_add',
+        activity: {
+          kind: 'queue',
+          title: 'Queue updated',
+          status: 'info',
+          body: '{\n  "queueLength": 2\n}',
+          code: true
+        }
+      }
+    );
+
+    assert.deepStrictEqual(
+      mapRpcActivity({ type: 'compaction_start', remainingTokens: 4000 }),
+      {
+        type: 'activity_update',
+        sourceId: 'compaction',
+        activity: {
+          kind: 'compaction',
+          title: 'Compacting context',
+          status: 'running',
+          body: '{\n  "remainingTokens": 4000\n}',
+          code: true
+        }
+      }
+    );
+
+    assert.deepStrictEqual(
+      mapRpcActivity({ type: 'compaction_end', remainingTokens: 6000 }),
+      {
+        type: 'activity_update',
+        sourceId: 'compaction',
+        activity: {
+          kind: 'compaction',
+          title: 'Compacting context',
+          status: 'completed',
+          summary: 'Completed',
+          body: '{\n  "remainingTokens": 6000\n}',
+          code: true
+        }
+      }
+    );
+
+    assert.deepStrictEqual(
+      mapRpcActivity({ type: 'auto_retry_start', attempt: 2 }),
+      {
+        type: 'activity_update',
+        sourceId: 'auto-retry',
+        activity: {
+          kind: 'retry',
+          title: 'Auto retry',
+          status: 'running',
+          body: '{\n  "attempt": 2\n}',
+          code: true
+        }
+      }
+    );
+
+    assert.deepStrictEqual(
+      mapRpcActivity({ type: 'auto_retry_end', success: false }),
+      {
+        type: 'activity_update',
+        sourceId: 'auto-retry',
+        activity: {
+          kind: 'retry',
+          title: 'Auto retry',
+          status: 'error',
+          body: '{\n  "success": false\n}',
+          code: true
+        }
+      }
+    );
+  });
+
+  test('mapRpcActivity maps extension UI and unknown events', () => {
+    assert.deepStrictEqual(
+      mapRpcActivity({
+        type: 'extension_ui_request',
+        method: 'confirm',
+        title: 'Allow command?'
+      }),
+      {
+        type: 'activity_add',
+        activity: {
+          kind: 'extension_ui',
+          title: 'Extension UI: confirm',
+          status: 'info',
+          summary: 'Allow command?',
+          body: '{\n  "method": "confirm",\n  "title": "Allow command?"\n}',
+          code: true
+        }
+      }
+    );
+
+    assert.deepStrictEqual(
+      mapRpcActivity({
+        type: 'extension_error',
+        extensionPath: 'tool',
+        error: 'boom'
+      }),
+      {
+        type: 'activity_add',
+        activity: {
+          kind: 'extension_error',
+          title: 'Extension error',
+          status: 'error',
+          summary: 'boom',
+          body: '{\n  "extensionPath": "tool",\n  "error": "boom"\n}',
+          code: true
+        }
+      }
+    );
+
+    assert.deepStrictEqual(
+      mapRpcActivity({ type: 'future_event', value: 1 }),
+      {
+        type: 'activity_add',
+        activity: {
+          kind: 'rpc',
+          title: 'RPC event: future_event',
+          status: 'info',
+          body: '{\n  "type": "future_event",\n  "value": 1\n}',
+          code: true
+        }
+      }
+    );
+  });
+
+  test('mapRpcActivity ignores message updates and responses', () => {
+    assert.deepStrictEqual(mapRpcActivity({ type: 'message_update' }), { type: 'ignore' });
+    assert.deepStrictEqual(mapRpcActivity({ type: 'response' }), { type: 'ignore' });
+  });
+
+  test('mapExtensionUiRequest maps notifications and unsupported dialogs', () => {
+    assert.deepStrictEqual(
+      mapExtensionUiRequest({
+        type: 'extension_ui_request',
+        method: 'notify',
+        message: 'Saved',
+        notifyType: 'warning'
+      }),
+      { type: 'notify', message: 'Saved', notifyType: 'warning' }
+    );
+
+    assert.deepStrictEqual(
+      mapExtensionUiRequest({
+        type: 'extension_ui_request',
+        method: 'notify'
+      }),
+      { type: 'notify', message: 'Pi notification', notifyType: 'info' }
+    );
+
+    assert.deepStrictEqual(
+      mapExtensionUiRequest({
+        type: 'extension_ui_request',
+        method: 'confirm',
+        id: 'dialog-1'
+      }),
+      { type: 'cancel', id: 'dialog-1' }
+    );
+
+    assert.deepStrictEqual(
+      mapExtensionUiRequest({
+        type: 'extension_ui_request',
+        method: 'confirm'
+      }),
+      { type: 'ignore' }
+    );
+  });
+
+  test('getFailedResponseError maps failed unmatched responses only', () => {
+    assert.strictEqual(
+      getFailedResponseError({
+        type: 'response',
+        success: false,
+        error: 'failed'
+      }),
+      'failed'
+    );
+
+    assert.strictEqual(
+      getFailedResponseError({
+        type: 'response',
+        success: false
+      }),
+      'Pi command failed.'
+    );
+
+    assert.strictEqual(
+      getFailedResponseError({
+        type: 'response',
+        success: true
+      }),
+      undefined
+    );
+  });
+
+  test('formatExtensionError includes extension path and error fallback', () => {
+    assert.strictEqual(
+      formatExtensionError({
+        type: 'extension_error',
+        extensionPath: 'tool',
+        error: 'boom'
+      }),
+      'Pi tool error: boom'
+    );
+
+    assert.strictEqual(
+      formatExtensionError({ type: 'extension_error' }),
+      'Pi extension error: Unknown extension error.'
+    );
+  });
+});

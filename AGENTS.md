@@ -61,6 +61,8 @@ Do not add transient notes, guesses, one-off debugging observations, or broad ge
 
 ## Development Workflow
 
+- Tests live in `src/test/suite` as TypeScript Mocha tests and run through `vscode-test`.
+- Keep automated tests independent from the real `pi` CLI; test RPC framing and event mapping with local helpers or fixtures.
 - Run `npm run compile` after TypeScript changes.
 - Run `npm test` after changes to `src/chatSession.ts` or `src/piEventMapper.ts`.
 - Use `git diff --check` before finishing edits.
