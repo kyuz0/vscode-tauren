@@ -9,11 +9,6 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onView:piui.chatView",
-    "onCommand:piui.focus",
-    "onCommand:piui.newSession"
-  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
