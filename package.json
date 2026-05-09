@@ -3,6 +3,7 @@
   "displayName": "Pi UI",
   "description": "A VS Code sidebar UI for the Pi agent.",
   "version": "0.0.1",
+  "license": "MIT",
   "engines": {
     "vscode": "^1.118.0"
   },
