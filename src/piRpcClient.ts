@@ -20,14 +20,21 @@ type RpcResponse = RpcEvent & {
   data?: unknown;
 };
 
+export type PiModel = {
+  provider?: string;
+  id?: string;
+  name?: string;
+  reasoning?: boolean;
+  contextWindow?: number;
+};
+
 export type PiSessionState = {
-  model?: {
-    provider?: string;
-    id?: string;
-    reasoning?: boolean;
-    contextWindow?: number;
-  } | null;
+  model?: PiModel | null;
   thinkingLevel?: string;
+};
+
+export type PiAvailableModels = {
+  models?: PiModel[];
 };
 
 export type PiSessionStats = {
@@ -89,6 +96,20 @@ export class PiRpcClient {
   public async getSessionStats(): Promise<PiSessionStats> {
     const response = await this.send({ type: 'get_session_stats' });
     return isRecord(response.data) ? response.data : {};
+  }
+
+  public async getAvailableModels(): Promise<PiAvailableModels> {
+    const response = await this.send({ type: 'get_available_models' });
+    return isRecord(response.data) ? response.data : {};
+  }
+
+  public async setModel(provider: string, modelId: string): Promise<PiModel> {
+    const response = await this.send({ type: 'set_model', provider, modelId });
+    return isRecord(response.data) ? response.data : {};
+  }
+
+  public async setThinkingLevel(level: string): Promise<void> {
+    await this.send({ type: 'set_thinking_level', level });
   }
 
   public async cancelExtensionUiRequest(id: string): Promise<void> {

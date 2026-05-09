@@ -3,11 +3,26 @@ import type { ChatState } from './chatSession';
 export type WebviewMessage = {
   type?: unknown;
   text?: unknown;
+  provider?: unknown;
+  modelId?: unknown;
+  level?: unknown;
+};
+
+export type WebviewModelOption = {
+  provider: string;
+  id: string;
+  name: string;
+  reasoning: boolean;
 };
 
 export type WebviewStateMessage = ChatState & {
   type: 'state';
   modelLabel: string;
+  modelProvider: string;
+  modelId: string;
+  modelReasoning: boolean;
+  thinkingLevel: string;
+  modelOptions: WebviewModelOption[];
   contextUsageLabel: string;
   contextUsageTitle: string;
   contextUsageLevel: string;
@@ -18,13 +33,23 @@ export function createWebviewStateMessage(
   modelLabel = '',
   contextUsageLabel = '',
   contextUsageTitle = '',
-  contextUsageLevel = ''
+  contextUsageLevel = '',
+  modelProvider = '',
+  modelId = '',
+  modelReasoning = false,
+  thinkingLevel = '',
+  modelOptions: WebviewModelOption[] = []
 ): WebviewStateMessage {
   return {
     type: 'state',
     messages: state.messages,
     busy: state.busy,
     modelLabel,
+    modelProvider,
+    modelId,
+    modelReasoning,
+    thinkingLevel,
+    modelOptions,
     contextUsageLabel,
     contextUsageTitle,
     contextUsageLevel
@@ -361,6 +386,7 @@ export function createWebviewHtml(scriptUris: WebviewScriptUris): string {
     }
 
     .composer {
+      position: relative;
       display: grid;
       grid-template-columns: 36px minmax(0, 1fr) 36px;
       grid-template-rows: minmax(22px, auto) 36px;
@@ -487,8 +513,71 @@ export function createWebviewHtml(scriptUris: WebviewScriptUris): string {
 
     .composer__model {
       min-width: 0;
+      max-width: 100%;
+      padding: 0;
       overflow: hidden;
+      color: inherit;
+      background: transparent;
+      border: 0;
+      font: inherit;
+      text-align: left;
       text-overflow: ellipsis;
+      cursor: pointer;
+    }
+
+    .composer__model:hover:not(:disabled),
+    .composer__model:focus-visible {
+      color: var(--vscode-foreground);
+      outline: none;
+    }
+
+    .composer__model-menu {
+      position: absolute;
+      right: 46px;
+      bottom: 44px;
+      z-index: 2;
+      display: none;
+      width: min(320px, calc(100vw - 24px));
+      padding: 10px;
+      color: var(--vscode-foreground);
+      background: var(--vscode-dropdown-background, var(--vscode-editorWidget-background));
+      border: 1px solid var(--vscode-dropdown-border, var(--vscode-input-border, transparent));
+      border-radius: 8px;
+      box-shadow: 0 4px 16px color-mix(in srgb, #000 38%, transparent);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .composer__model-menu[open] {
+      display: grid;
+      gap: 8px;
+    }
+
+    .composer__field {
+      display: grid;
+      gap: 4px;
+    }
+
+    .composer__field label {
+      color: var(--vscode-descriptionForeground);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .composer__select {
+      width: 100%;
+      min-width: 0;
+      padding: 4px 6px;
+      color: var(--vscode-dropdown-foreground);
+      background: var(--vscode-dropdown-background);
+      border: 1px solid var(--vscode-dropdown-border, var(--vscode-input-border, transparent));
+      border-radius: 3px;
+      font: inherit;
+    }
+
+    .composer__select:focus {
+      outline: 1px solid var(--vscode-focusBorder);
+      outline-offset: -1px;
     }
 
     .composer__submit {
@@ -524,9 +613,26 @@ export function createWebviewHtml(scriptUris: WebviewScriptUris): string {
           <path d="M9.5 3.5V15.5M3.5 9.5H15.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
         </svg>
       </button>
-      <div class="composer__info" aria-hidden="true">
+      <div class="composer__info">
         <span class="composer__context"><span class="composer__context-value"></span><span class="composer__context-tooltip"></span></span>
-        <span class="composer__model"></span>
+        <button class="composer__model" type="button" aria-haspopup="true" aria-expanded="false"></button>
+      </div>
+      <div class="composer__model-menu" role="menu">
+        <div class="composer__field">
+          <label for="thinking-select">Thinking</label>
+          <select id="thinking-select" class="composer__select composer__thinking-select" aria-label="Thinking mode">
+            <option value="off">Off</option>
+            <option value="minimal">Minimal</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="xhigh">X High</option>
+          </select>
+        </div>
+        <div class="composer__field">
+          <label for="model-select">Model</label>
+          <select id="model-select" class="composer__select composer__model-select" aria-label="Model"></select>
+        </div>
       </div>
       <button class="composer__button composer__submit" type="submit" aria-label="Send message" title="Send message" disabled>
         <svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -549,12 +655,15 @@ export function createWebviewHtml(scriptUris: WebviewScriptUris): string {
     const contextValueElement = document.querySelector('.composer__context-value');
     const contextTooltipElement = document.querySelector('.composer__context-tooltip');
     const modelElement = document.querySelector('.composer__model');
+    const modelMenuElement = document.querySelector('.composer__model-menu');
+    const modelSelectElement = document.querySelector('.composer__model-select');
+    const thinkingSelectElement = document.querySelector('.composer__thinking-select');
     const submitButton = document.querySelector('.composer__submit');
     const messagesBottomThreshold = 4;
     const maxTextareaHeight = 180;
     const minTextareaHeight = 22;
     const isMac = navigator.platform.toUpperCase().includes('MAC');
-    let state = { messages: [], busy: false, modelLabel: '', contextUsageLabel: '', contextUsageTitle: '', contextUsageLevel: '' };
+    let state = { messages: [], busy: false, modelLabel: '', modelProvider: '', modelId: '', modelReasoning: false, thinkingLevel: '', modelOptions: [], contextUsageLabel: '', contextUsageTitle: '', contextUsageLevel: '' };
     const activityExpansion = new Map();
     const markdownRenderer = window.markdownit
       ? window.markdownit({
@@ -579,6 +688,11 @@ export function createWebviewHtml(scriptUris: WebviewScriptUris): string {
         messages: Array.isArray(event.data.messages) ? event.data.messages : [],
         busy: Boolean(event.data.busy),
         modelLabel: typeof event.data.modelLabel === 'string' ? event.data.modelLabel : '',
+        modelProvider: typeof event.data.modelProvider === 'string' ? event.data.modelProvider : '',
+        modelId: typeof event.data.modelId === 'string' ? event.data.modelId : '',
+        modelReasoning: Boolean(event.data.modelReasoning),
+        thinkingLevel: typeof event.data.thinkingLevel === 'string' ? event.data.thinkingLevel : '',
+        modelOptions: Array.isArray(event.data.modelOptions) ? event.data.modelOptions : [],
         contextUsageLabel: typeof event.data.contextUsageLabel === 'string' ? event.data.contextUsageLabel : '',
         contextUsageTitle: typeof event.data.contextUsageTitle === 'string' ? event.data.contextUsageTitle : '',
         contextUsageLevel: typeof event.data.contextUsageLevel === 'string' ? event.data.contextUsageLevel : ''
@@ -601,8 +715,28 @@ export function createWebviewHtml(scriptUris: WebviewScriptUris): string {
     });
 
     newSessionButton?.addEventListener('click', startNewSession);
+    modelElement?.addEventListener('click', toggleModelMenu);
+    modelSelectElement?.addEventListener('change', selectModel);
+    thinkingSelectElement?.addEventListener('change', selectThinkingLevel);
+
+    window.addEventListener('click', (event) => {
+      if (!modelMenuElement?.hasAttribute('open')) {
+        return;
+      }
+
+      if (modelMenuElement.contains(event.target) || modelElement?.contains(event.target)) {
+        return;
+      }
+
+      closeModelMenu();
+    });
 
     window.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        closeModelMenu();
+        return;
+      }
+
       if (!isNewSessionShortcut(event)) {
         return;
       }
@@ -901,8 +1035,93 @@ export function createWebviewHtml(scriptUris: WebviewScriptUris): string {
       contextElement.title = state.contextUsageTitle;
       contextElement.className = 'composer__context' + (state.contextUsageLevel ? ' composer__context--' + state.contextUsageLevel : '');
       contextElement.hidden = state.contextUsageLabel.length === 0;
-      modelElement.textContent = state.modelLabel;
-      modelElement.title = state.modelLabel;
+
+      const label = state.modelLabel || 'Select model';
+      modelElement.textContent = label;
+      modelElement.title = label;
+      modelElement.disabled = state.busy || state.modelOptions.length === 0;
+
+      syncModelSelect();
+      syncThinkingSelect();
+    }
+
+    function syncModelSelect() {
+      const selectedValue = modelKey(state.modelProvider, state.modelId);
+      const currentValue = modelSelectElement.value;
+      modelSelectElement.replaceChildren();
+
+      for (const model of state.modelOptions) {
+        if (!model || typeof model.provider !== 'string' || typeof model.id !== 'string') {
+          continue;
+        }
+
+        const option = document.createElement('option');
+        option.value = modelKey(model.provider, model.id);
+        option.textContent = model.name && model.name !== model.id
+          ? model.name + ' (' + model.provider + '/' + model.id + ')'
+          : model.provider + '/' + model.id;
+        modelSelectElement.append(option);
+      }
+
+      modelSelectElement.value = selectedValue || currentValue;
+      modelSelectElement.disabled = state.busy || state.modelOptions.length === 0;
+    }
+
+    function syncThinkingSelect() {
+      thinkingSelectElement.value = state.thinkingLevel || 'medium';
+      thinkingSelectElement.disabled = state.busy || !state.modelReasoning;
+      thinkingSelectElement.title = state.modelReasoning
+        ? 'Thinking mode'
+        : 'The selected model does not advertise thinking support.';
+    }
+
+    function toggleModelMenu() {
+      if (modelElement.disabled) {
+        return;
+      }
+
+      const open = !modelMenuElement.hasAttribute('open');
+      modelMenuElement.toggleAttribute('open', open);
+      modelElement.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+
+    function closeModelMenu() {
+      modelMenuElement?.removeAttribute('open');
+      modelElement?.setAttribute('aria-expanded', 'false');
+    }
+
+    function selectModel() {
+      const [provider, modelId] = splitModelKey(modelSelectElement.value);
+
+      if (!provider || !modelId || state.busy) {
+        return;
+      }
+
+      vscode.postMessage({ type: 'setModel', provider, modelId });
+    }
+
+    function selectThinkingLevel() {
+      const level = thinkingSelectElement.value;
+
+      if (!level || state.busy || !state.modelReasoning) {
+        return;
+      }
+
+      vscode.postMessage({ type: 'setThinkingLevel', level });
+    }
+
+    function modelKey(provider, id) {
+      return provider + '/' + id;
+    }
+
+    function splitModelKey(value) {
+      const slashIndex = value.indexOf('/');
+
+      if (slashIndex <= 0) {
+        return ['', ''];
+      }
+
+      return [value.slice(0, slashIndex), value.slice(slashIndex + 1)];
     }
 
     function isMessagesAtBottom() {

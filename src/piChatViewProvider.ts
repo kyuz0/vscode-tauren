@@ -15,7 +15,7 @@ import {
   type ActivityRemoveAction,
   type ActivityUpdateAction
 } from './piEventMapper';
-import { PiRpcClient, type PiSessionState, type PiSessionStats, type RpcEvent } from './piRpcClient';
+import { PiRpcClient, type PiModel, type PiSessionState, type PiSessionStats, type RpcEvent } from './piRpcClient';
 
 export const chatViewType = 'piui.chatView';
 
@@ -26,6 +26,11 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
   private webviewReady = false;
   private assistantStreamId = 0;
   private modelLabel = '';
+  private modelProvider = '';
+  private modelId = '';
+  private modelReasoning = false;
+  private thinkingLevel = '';
+  private modelOptions: { provider: string; id: string; name: string; reasoning: boolean }[] = [];
   private contextUsageLabel = '';
   private contextUsageTitle = '';
   private contextUsageLevel = '';
@@ -127,6 +132,16 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
       return;
     }
 
+    if (message.type === 'setModel') {
+      await this.setModel(message.provider, message.modelId);
+      return;
+    }
+
+    if (message.type === 'setThinkingLevel') {
+      await this.setThinkingLevel(message.level);
+      return;
+    }
+
     if (message.type !== 'submit') {
       return;
     }
@@ -153,8 +168,42 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
     }
   }
 
+  private async setModel(provider: unknown, modelId: unknown): Promise<void> {
+    if (typeof provider !== 'string' || typeof modelId !== 'string' || this.session.isBusy) {
+      return;
+    }
+
+    try {
+      await this.getClient().setModel(provider, modelId);
+      await this.refreshSessionMeta();
+    } catch (error) {
+      this.session.addErrorMessage(getErrorMessage(error));
+      this.postState();
+    }
+  }
+
+  private async setThinkingLevel(level: unknown): Promise<void> {
+    if (typeof level !== 'string' || this.session.isBusy) {
+      return;
+    }
+
+    try {
+      await this.getClient().setThinkingLevel(level);
+      await this.refreshSessionMeta();
+    } catch (error) {
+      this.session.addErrorMessage(getErrorMessage(error));
+      this.postState();
+    }
+  }
+
   private startNewSession(): void {
     this.assistantStreamId = 0;
+    this.modelLabel = '';
+    this.modelProvider = '';
+    this.modelId = '';
+    this.modelReasoning = false;
+    this.thinkingLevel = '';
+    this.modelOptions = [];
     this.contextUsageLabel = '';
     this.contextUsageTitle = '';
     this.contextUsageLevel = '';
@@ -168,25 +217,37 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
 
     try {
       const client = this.getClient();
-      const [state, stats] = await Promise.all([
+      const [state, stats, availableModels] = await Promise.all([
         client.getState(),
-        client.getSessionStats()
+        client.getSessionStats(),
+        client.getAvailableModels()
       ]);
 
       if (sessionGeneration !== this.session.generation) {
         return;
       }
 
-      const label = formatModelLabel(state);
+      const modelMeta = getModelMeta(state);
+      const modelOptions = formatModelOptions(availableModels.models);
       const contextUsage = formatContextUsage(stats);
 
       if (
-        label !== this.modelLabel
+        modelMeta.label !== this.modelLabel
+        || modelMeta.provider !== this.modelProvider
+        || modelMeta.id !== this.modelId
+        || modelMeta.reasoning !== this.modelReasoning
+        || modelMeta.thinkingLevel !== this.thinkingLevel
+        || !areModelOptionsEqual(modelOptions, this.modelOptions)
         || contextUsage.label !== this.contextUsageLabel
         || contextUsage.title !== this.contextUsageTitle
         || contextUsage.level !== this.contextUsageLevel
       ) {
-        this.modelLabel = label;
+        this.modelLabel = modelMeta.label;
+        this.modelProvider = modelMeta.provider;
+        this.modelId = modelMeta.id;
+        this.modelReasoning = modelMeta.reasoning;
+        this.thinkingLevel = modelMeta.thinkingLevel;
+        this.modelOptions = modelOptions;
         this.contextUsageLabel = contextUsage.label;
         this.contextUsageTitle = contextUsage.title;
         this.contextUsageLevel = contextUsage.level;
@@ -398,7 +459,12 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
         this.modelLabel,
         this.contextUsageLabel,
         this.contextUsageTitle,
-        this.contextUsageLevel
+        this.contextUsageLevel,
+        this.modelProvider,
+        this.modelId,
+        this.modelReasoning,
+        this.thinkingLevel,
+        this.modelOptions
       )
     );
   }
@@ -466,19 +532,65 @@ function formatInteger(value: number): string {
   return Math.round(value).toLocaleString('en-US');
 }
 
-function formatModelLabel(state: PiSessionState): string {
+function getModelMeta(state: PiSessionState): {
+  label: string;
+  provider: string;
+  id: string;
+  reasoning: boolean;
+  thinkingLevel: string;
+} {
   const model = state.model;
-  const modelId = typeof model?.id === 'string' ? model.id : '';
+  const id = typeof model?.id === 'string' ? model.id : '';
+  const provider = typeof model?.provider === 'string' ? model.provider : '';
+  const reasoning = Boolean(model?.reasoning);
+  const thinkingLevel = typeof state.thinkingLevel === 'string' ? state.thinkingLevel : '';
 
-  if (!modelId) {
-    return '';
+  if (!id) {
+    return { label: '', provider, id, reasoning, thinkingLevel };
   }
 
-  if (model?.reasoning && state.thinkingLevel) {
-    return `${modelId} ${formatThinkingLevel(state.thinkingLevel)}`;
+  if (reasoning && thinkingLevel) {
+    return { label: `${id} ${formatThinkingLevel(thinkingLevel)}`, provider, id, reasoning, thinkingLevel };
   }
 
-  return modelId;
+  return { label: id, provider, id, reasoning, thinkingLevel };
+}
+
+function formatModelOptions(models: PiModel[] | undefined): { provider: string; id: string; name: string; reasoning: boolean }[] {
+  if (!Array.isArray(models)) {
+    return [];
+  }
+
+  return models.flatMap((model) => {
+    const provider = typeof model.provider === 'string' ? model.provider : '';
+    const id = typeof model.id === 'string' ? model.id : '';
+
+    if (!provider || !id) {
+      return [];
+    }
+
+    return [{
+      provider,
+      id,
+      name: typeof model.name === 'string' && model.name.length > 0 ? model.name : id,
+      reasoning: Boolean(model.reasoning)
+    }];
+  });
+}
+
+function areModelOptionsEqual(
+  left: { provider: string; id: string; name: string; reasoning: boolean }[],
+  right: { provider: string; id: string; name: string; reasoning: boolean }[]
+): boolean {
+  return left.length === right.length
+    && left.every((model, index) => {
+      const other = right[index];
+      return other
+        && model.provider === other.provider
+        && model.id === other.id
+        && model.name === other.name
+        && model.reasoning === other.reasoning;
+    });
 }
 
 function formatThinkingLevel(level: string): string {

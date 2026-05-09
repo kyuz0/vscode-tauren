@@ -17,6 +17,11 @@ suite('Chat webview helpers', () => {
       messages: state.messages,
       busy: true,
       modelLabel: 'gpt-test High',
+      modelProvider: '',
+      modelId: '',
+      modelReasoning: false,
+      thinkingLevel: '',
+      modelOptions: [],
       contextUsageLabel: '30%',
       contextUsageTitle: '60,000 / 200,000 context tokens',
       contextUsageLevel: 'low'
@@ -31,6 +36,11 @@ suite('Chat webview helpers', () => {
         messages: [],
         busy: false,
         modelLabel: '',
+        modelProvider: '',
+        modelId: '',
+        modelReasoning: false,
+        thinkingLevel: '',
+        modelOptions: [],
         contextUsageLabel: '',
         contextUsageTitle: '',
         contextUsageLevel: ''
@@ -65,6 +75,9 @@ suite('Chat webview helpers', () => {
     assert.ok(html.includes('class="composer__context"'));
     assert.ok(html.includes('class="composer__context-tooltip"'));
     assert.ok(html.includes('class="composer__model"'));
+    assert.ok(html.includes('class="composer__model-menu"'));
+    assert.ok(html.includes('class="composer__select composer__thinking-select"'));
+    assert.ok(html.includes('class="composer__select composer__model-select"'));
     assert.ok(html.includes('class="composer__button composer__submit"'));
     assert.ok(html.includes("vscode.postMessage({ type: 'ready' });"));
   });
