@@ -19,7 +19,7 @@ Do not add transient notes, guesses, one-off debugging observations, or broad ge
 - `package.json` defines a VS Code extension with an Activity Bar view container named `Pi`.
 - The extension is TypeScript, CommonJS, and compiles `src` to `out`.
 - `src/extension.ts` is only the activation entrypoint and command/view registration.
-- `src/piChatViewProvider.ts` owns VS Code webview/provider integration, focus handling, notifications, workspace `cwd` lookup, and Pi client lifecycle.
+- `src/piChatViewProvider.ts` owns VS Code webview/provider integration, focus handling, notifications, workspace `cwd` lookup, cached selected-model metadata, and Pi client lifecycle.
 - `src/chatSession.ts` owns pure in-memory transcript/session state and has no VS Code or Pi process dependencies.
 - `src/chatWebview.ts` owns public sidebar webview HTML composition plus webview state/message types.
 - `src/chatWebviewStyles.ts` owns the static sidebar CSS string.
@@ -39,7 +39,7 @@ Do not add transient notes, guesses, one-off debugging observations, or broad ge
 - Spawn Pi lazily on first submitted prompt, not when the sidebar opens.
 - Opening the sidebar or receiving webview `ready` must not start Pi just to read model/context metadata.
 - Use the first VS Code workspace folder as the Pi process `cwd`.
-- Treat the Pi agent as the source of truth for current model/settings; after a new session or restart, clear local metadata and re-read state from the agent only once a new client is started by the first prompt or explicit model/settings interaction.
+- Treat the Pi agent as the source of truth for current model/settings, but keep the last known selected model visible from cached metadata across restarts and new sessions; clear session-scoped context usage and re-read state from the agent once a client is started by the first prompt or explicit model/settings interaction.
 - Keep default Pi tool and session behavior unless the user explicitly asks for safer or ephemeral behavior.
 - Stop the child process when the extension provider is disposed.
 

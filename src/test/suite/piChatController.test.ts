@@ -1,5 +1,10 @@
 import * as assert from 'assert';
-import { PiChatController, type PiChatControllerOptions, type PiRpcClientLike } from '../../piChatController';
+import {
+  PiChatController,
+  type PiChatControllerOptions,
+  type PiChatModelMeta,
+  type PiRpcClientLike
+} from '../../piChatController';
 import type { WebviewStateMessage } from '../../chatWebview';
 import type { StatePublisherScheduler } from '../../statePublisher';
 import type {
@@ -20,6 +25,29 @@ suite('PiChatController', () => {
 
     assert.strictEqual(harness.createCalls, 0);
     assert.strictEqual(harness.states.length, 1);
+    harness.controller.dispose();
+  });
+
+  test('initial cached model metadata is visible without creating a Pi client', async () => {
+    const harness = createControllerHarness([], {
+      initialModelMeta: {
+        label: 'cached-model High',
+        provider: 'anthropic',
+        id: 'cached-model',
+        reasoning: true,
+        thinkingLevel: 'high'
+      }
+    });
+
+    await harness.controller.handleWebviewMessage({ type: 'ready' });
+    await flushPromises();
+
+    assert.strictEqual(harness.createCalls, 0);
+    assert.strictEqual(lastState(harness).modelLabel, 'cached-model High');
+    assert.strictEqual(lastState(harness).modelProvider, 'anthropic');
+    assert.strictEqual(lastState(harness).modelId, 'cached-model');
+    assert.strictEqual(lastState(harness).modelReasoning, true);
+    assert.strictEqual(lastState(harness).thinkingLevel, 'high');
     harness.controller.dispose();
   });
 
@@ -66,13 +94,14 @@ suite('PiChatController', () => {
     harness.controller.dispose();
   });
 
-  test('starting a new session clears metadata until explicit refresh', async () => {
+  test('starting a new session keeps selected model visible until explicit refresh', async () => {
     const firstClient = new FakePiClient({
       state: {
         model: { provider: 'openai', id: 'first-model', reasoning: false },
         thinkingLevel: 'off'
       },
-      models: [{ provider: 'openai', id: 'first-model', name: 'First Model', reasoning: false }]
+      models: [{ provider: 'openai', id: 'first-model', name: 'First Model', reasoning: false }],
+      stats: { contextUsage: { tokens: 100, contextWindow: 1000, percent: 10 } }
     });
     const secondClient = new FakePiClient({
       state: {
@@ -88,6 +117,7 @@ suite('PiChatController', () => {
     assert.strictEqual(harness.createCalls, 1);
     assert.strictEqual(lastState(harness).modelProvider, 'openai');
     assert.strictEqual(lastState(harness).modelId, 'first-model');
+    assert.strictEqual(lastState(harness).contextUsageLabel, '10%');
     assert.strictEqual(firstClient.stateCalls, 1);
 
     harness.controller.startNewSession();
@@ -95,11 +125,12 @@ suite('PiChatController', () => {
 
     assert.strictEqual(firstClient.disposed, true);
     assert.strictEqual(harness.createCalls, 1);
-    assert.strictEqual(lastState(harness).modelProvider, '');
-    assert.strictEqual(lastState(harness).modelId, '');
+    assert.strictEqual(lastState(harness).modelProvider, 'openai');
+    assert.strictEqual(lastState(harness).modelId, 'first-model');
     assert.strictEqual(lastState(harness).modelReasoning, false);
-    assert.strictEqual(lastState(harness).thinkingLevel, '');
+    assert.strictEqual(lastState(harness).thinkingLevel, 'off');
     assert.deepStrictEqual(lastState(harness).modelOptions, []);
+    assert.strictEqual(lastState(harness).contextUsageLabel, '');
     assert.strictEqual(secondClient.stateCalls, 0);
 
     await harness.controller.handleWebviewMessage({ type: 'refreshMetadata' });
@@ -115,6 +146,58 @@ suite('PiChatController', () => {
     assert.strictEqual(secondClient.stateCalls, 1);
     assert.strictEqual(secondClient.modelsCalls, 1);
     assert.strictEqual(secondClient.statsCalls, 1);
+    harness.controller.dispose();
+  });
+
+  test('refresh metadata reads and posts selected model before requesting slower model list and context stats', async () => {
+    const stateDeferred = createDeferred<PiSessionState>();
+    const statsDeferred = createDeferred<PiSessionStats>();
+    const modelsDeferred = createDeferred<PiModel[]>();
+    const client = new FakePiClient({
+      stateResult: stateDeferred.promise,
+      statsResult: statsDeferred.promise,
+      modelsResult: modelsDeferred.promise
+    });
+    const cachedModelChanges: PiChatModelMeta[] = [];
+    const harness = createControllerHarness([client], {
+      onModelMetaChange: (metadata) => cachedModelChanges.push(metadata)
+    });
+
+    const refresh = harness.controller.handleWebviewMessage({ type: 'refreshMetadata' });
+    await flushPromises();
+
+    assert.strictEqual(client.stateCalls, 1);
+    assert.strictEqual(client.statsCalls, 0);
+    assert.strictEqual(client.modelsCalls, 0);
+
+    stateDeferred.resolve({
+      model: { provider: 'anthropic', id: 'fast-model', reasoning: true },
+      thinkingLevel: 'high'
+    });
+    await flushPromises();
+
+    assert.strictEqual(lastState(harness).modelProvider, 'anthropic');
+    assert.strictEqual(lastState(harness).modelId, 'fast-model');
+    assert.strictEqual(lastState(harness).modelLabel, 'fast-model High');
+    assert.deepStrictEqual(lastState(harness).modelOptions, []);
+    assert.strictEqual(client.statsCalls, 1);
+    assert.strictEqual(client.modelsCalls, 1);
+    assert.deepStrictEqual(cachedModelChanges, [{
+      label: 'fast-model High',
+      provider: 'anthropic',
+      id: 'fast-model',
+      reasoning: true,
+      thinkingLevel: 'high'
+    }]);
+
+    statsDeferred.resolve({ contextUsage: { tokens: 600, contextWindow: 1000 } });
+    modelsDeferred.resolve([{ provider: 'anthropic', id: 'fast-model', name: 'Fast Model', reasoning: true }]);
+    await refresh;
+
+    assert.deepStrictEqual(lastState(harness).modelOptions, [
+      { provider: 'anthropic', id: 'fast-model', name: 'Fast Model', reasoning: true }
+    ]);
+    assert.strictEqual(lastState(harness).contextUsageLabel, '60%');
     harness.controller.dispose();
   });
 
@@ -331,6 +414,8 @@ type ControllerHarnessOptions = {
   extensionUi?: PiChatControllerOptions['extensionUi'];
   fullRpcAgentCommunication?: boolean;
   stateScheduler?: StatePublisherScheduler;
+  initialModelMeta?: PiChatModelMeta;
+  onModelMetaChange?: (metadata: PiChatModelMeta) => void;
 };
 
 function createControllerHarness(
@@ -360,7 +445,9 @@ function createControllerHarness(
     },
     extensionUi: options.extensionUi,
     fullRpcAgentCommunication: options.fullRpcAgentCommunication ?? false,
-    stateScheduler: options.stateScheduler
+    stateScheduler: options.stateScheduler,
+    initialModelMeta: options.initialModelMeta,
+    onModelMetaChange: options.onModelMetaChange
   };
 
   const controller = new PiChatController(controllerOptions);
@@ -380,6 +467,9 @@ type FakePiClientOptions = {
   state?: PiSessionState;
   models?: PiModel[];
   stats?: PiSessionStats;
+  stateResult?: Promise<PiSessionState>;
+  modelsResult?: Promise<PiModel[]>;
+  statsResult?: Promise<PiSessionStats>;
   promptResult?: Promise<void>;
   promptError?: unknown;
 };
@@ -429,6 +519,9 @@ class FakePiClient implements PiRpcClientLike {
   public state: PiSessionState;
   public models: PiModel[];
   public stats: PiSessionStats;
+  public stateResult: Promise<PiSessionState> | undefined;
+  public modelsResult: Promise<PiModel[]> | undefined;
+  public statsResult: Promise<PiSessionStats> | undefined;
   public promptResult: Promise<void> | undefined;
   public promptError: unknown;
   private readonly eventListeners = new Set<(event: RpcEvent) => void>();
@@ -441,6 +534,9 @@ class FakePiClient implements PiRpcClientLike {
     };
     this.models = options.models ?? [{ provider: 'openai', id: 'gpt-test', name: 'GPT Test', reasoning: false }];
     this.stats = options.stats ?? {};
+    this.stateResult = options.stateResult;
+    this.modelsResult = options.modelsResult;
+    this.statsResult = options.statsResult;
     this.promptResult = options.promptResult;
     this.promptError = options.promptError;
   }
@@ -479,17 +575,17 @@ class FakePiClient implements PiRpcClientLike {
 
   public async getState(): Promise<PiSessionState> {
     this.stateCalls += 1;
-    return this.state;
+    return this.stateResult ?? this.state;
   }
 
   public async getSessionStats(): Promise<PiSessionStats> {
     this.statsCalls += 1;
-    return this.stats;
+    return this.statsResult ?? this.stats;
   }
 
   public async getAvailableModels(): Promise<{ models?: PiModel[] }> {
     this.modelsCalls += 1;
-    return { models: this.models };
+    return { models: await (this.modelsResult ?? this.models) };
   }
 
   public async setModel(_provider: string, _modelId: string): Promise<PiModel> {

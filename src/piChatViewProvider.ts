@@ -6,12 +6,15 @@ import {
 } from './chatWebview';
 import {
   PiChatController,
+  type PiChatModelMeta,
   type PiRpcClientFactory
 } from './piChatController';
 import { PiRpcClient } from './piRpcClient';
 
 export const chatViewType = 'piui.chatView';
 export type { PiRpcClientLike } from './piChatController';
+
+const cachedModelMetaStorageKey = 'piui.cachedModelMeta';
 
 export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   private webviewView: vscode.WebviewView | undefined;
@@ -23,7 +26,8 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
 
   public constructor(
     private readonly extensionUri: vscode.Uri,
-    createClient: PiRpcClientFactory = (options) => new PiRpcClient(options)
+    createClient: PiRpcClientFactory = (options) => new PiRpcClient(options),
+    private readonly workspaceState?: vscode.Memento
   ) {
     this.controller = new PiChatController({
       createClient,
@@ -44,7 +48,9 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
           placeHolder: placeholder
         })
       },
-      fullRpcAgentCommunication: getFullRpcAgentCommunicationSetting()
+      fullRpcAgentCommunication: getFullRpcAgentCommunicationSetting(),
+      initialModelMeta: readCachedModelMeta(this.workspaceState),
+      onModelMetaChange: (metadata) => this.writeCachedModelMeta(metadata)
     });
 
     this.disposables.push(
@@ -192,6 +198,15 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
   private postInputFocusSoon(): void {
     setTimeout(() => this.postInputFocus(), 0);
   }
+
+  private writeCachedModelMeta(metadata: PiChatModelMeta): void {
+    if (!this.workspaceState) {
+      return;
+    }
+
+    const value = metadata.id ? metadata : undefined;
+    void this.workspaceState.update(cachedModelMetaStorageKey, value).then(undefined, () => undefined);
+  }
 }
 
 function getFullRpcAgentCommunicationSetting(): boolean {
@@ -199,4 +214,35 @@ function getFullRpcAgentCommunicationSetting(): boolean {
     'fullRpcAgentCommunication',
     false
   );
+}
+
+function readCachedModelMeta(workspaceState: vscode.Memento | undefined): PiChatModelMeta | undefined {
+  const value = workspaceState?.get<unknown>(cachedModelMetaStorageKey);
+
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const id = getRecordString(value, 'id');
+
+  if (!id) {
+    return undefined;
+  }
+
+  return {
+    label: getRecordString(value, 'label') || id,
+    provider: getRecordString(value, 'provider') ?? '',
+    id,
+    reasoning: value.reasoning === true,
+    thinkingLevel: getRecordString(value, 'thinkingLevel') ?? ''
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function getRecordString(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key];
+  return typeof value === 'string' ? value : undefined;
 }

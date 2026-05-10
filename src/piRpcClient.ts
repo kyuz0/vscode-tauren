@@ -204,16 +204,16 @@ export class PiRpcClient {
   }
 
   private async ensureStarted(): Promise<PiRpcProcess> {
-    if (this.process && this.process.exitCode === null) {
-      return this.process;
-    }
-
     if (this.startPromise) {
       await this.startPromise;
 
       if (this.process && this.process.exitCode === null) {
         return this.process;
       }
+    }
+
+    if (this.process && this.process.exitCode === null) {
+      return this.process;
     }
 
     this.stderr = '';

@@ -49,6 +49,14 @@ export type PiRpcClientLike = Pick<
 
 export type PiRpcClientFactory = (options: PiRpcClientOptions) => PiRpcClientLike;
 
+export type PiChatModelMeta = {
+  label: string;
+  provider: string;
+  id: string;
+  reasoning: boolean;
+  thinkingLevel: string;
+};
+
 export type PiChatControllerOptions = {
   createClient: PiRpcClientFactory;
   postState: (message: WebviewStateMessage) => void;
@@ -57,6 +65,8 @@ export type PiChatControllerOptions = {
   getCwd?: () => string | undefined;
   fullRpcAgentCommunication?: boolean;
   stateScheduler?: StatePublisherScheduler;
+  initialModelMeta?: PiChatModelMeta;
+  onModelMetaChange?: (metadata: PiChatModelMeta) => void;
 };
 
 type DisposableLike = {
@@ -83,6 +93,11 @@ export class PiChatController {
 
   public constructor(private readonly options: PiChatControllerOptions) {
     this.fullRpcAgentCommunication = options.fullRpcAgentCommunication ?? false;
+
+    if (options.initialModelMeta) {
+      this.setModelMetaFields(options.initialModelMeta);
+    }
+
     this.statePublisher = new StatePublisher(
       () => this.getStateMessage(),
       options.postState,
@@ -194,55 +209,126 @@ export class PiChatController {
 
   public async refreshSessionMeta(options: { startClient?: boolean } = {}): Promise<void> {
     const sessionGeneration = this.session.generation;
+    let client: PiRpcClientLike | undefined;
 
     try {
-      const client = options.startClient ? this.getClient() : this.getExistingClient();
-
-      if (!client) {
-        return;
-      }
-
-      const [state, stats, availableModels] = await Promise.all([
-        client.getState(),
-        client.getSessionStats(),
-        client.getAvailableModels()
-      ]);
-
-      if (sessionGeneration !== this.session.generation) {
-        return;
-      }
-
-      const modelMeta = getModelMeta(state);
-      const modelOptions = formatModelOptions(availableModels.models);
-      const contextUsage = formatContextUsage(stats);
-
-      if (
-        modelMeta.label !== this.modelLabel
-        || modelMeta.provider !== this.modelProvider
-        || modelMeta.id !== this.modelId
-        || modelMeta.reasoning !== this.modelReasoning
-        || modelMeta.thinkingLevel !== this.thinkingLevel
-        || !areModelOptionsEqual(modelOptions, this.modelOptions)
-        || contextUsage.label !== this.contextUsageLabel
-        || contextUsage.title !== this.contextUsageTitle
-        || contextUsage.level !== this.contextUsageLevel
-      ) {
-        this.modelLabel = modelMeta.label;
-        this.modelProvider = modelMeta.provider;
-        this.modelId = modelMeta.id;
-        this.modelReasoning = modelMeta.reasoning;
-        this.thinkingLevel = modelMeta.thinkingLevel;
-        this.modelOptions = modelOptions;
-        this.contextUsageLabel = contextUsage.label;
-        this.contextUsageTitle = contextUsage.title;
-        this.contextUsageLevel = contextUsage.level;
-        this.postState();
-      }
+      client = options.startClient ? this.getClient() : this.getExistingClient();
     } catch (error) {
       if (sessionGeneration === this.session.generation) {
         this.handleClientError(getErrorMessage(error));
       }
+
+      return;
     }
+
+    if (!client) {
+      return;
+    }
+
+    let handledError = false;
+    const handleRefreshError = (error: unknown): void => {
+      if (handledError || sessionGeneration !== this.session.generation) {
+        return;
+      }
+
+      handledError = true;
+      this.handleClientError(getErrorMessage(error));
+    };
+
+    await this.refreshModelMeta(client, sessionGeneration).catch(handleRefreshError);
+
+    if (handledError || sessionGeneration !== this.session.generation) {
+      return;
+    }
+
+    await Promise.all([
+      this.refreshContextUsage(client, sessionGeneration),
+      this.refreshModelOptions(client, sessionGeneration)
+    ].map((refresh) => refresh.catch(handleRefreshError)));
+  }
+
+  private async refreshModelMeta(client: PiRpcClientLike, sessionGeneration: number): Promise<void> {
+    const state = await client.getState();
+
+    if (sessionGeneration !== this.session.generation) {
+      return;
+    }
+
+    if (this.applyModelMeta(getModelMeta(state))) {
+      this.postState();
+    }
+  }
+
+  private async refreshContextUsage(client: PiRpcClientLike, sessionGeneration: number): Promise<void> {
+    const stats = await client.getSessionStats();
+
+    if (sessionGeneration !== this.session.generation) {
+      return;
+    }
+
+    if (this.applyContextUsage(formatContextUsage(stats))) {
+      this.postState();
+    }
+  }
+
+  private async refreshModelOptions(client: PiRpcClientLike, sessionGeneration: number): Promise<void> {
+    const availableModels = await client.getAvailableModels();
+
+    if (sessionGeneration !== this.session.generation) {
+      return;
+    }
+
+    if (this.applyModelOptions(formatModelOptions(availableModels.models))) {
+      this.postState();
+    }
+  }
+
+  private applyModelMeta(modelMeta: PiChatModelMeta): boolean {
+    if (
+      modelMeta.label === this.modelLabel
+      && modelMeta.provider === this.modelProvider
+      && modelMeta.id === this.modelId
+      && modelMeta.reasoning === this.modelReasoning
+      && modelMeta.thinkingLevel === this.thinkingLevel
+    ) {
+      return false;
+    }
+
+    this.setModelMetaFields(modelMeta);
+    this.options.onModelMetaChange?.(modelMeta);
+    return true;
+  }
+
+  private setModelMetaFields(modelMeta: PiChatModelMeta): void {
+    this.modelLabel = modelMeta.label;
+    this.modelProvider = modelMeta.provider;
+    this.modelId = modelMeta.id;
+    this.modelReasoning = modelMeta.reasoning;
+    this.thinkingLevel = modelMeta.thinkingLevel;
+  }
+
+  private applyContextUsage(contextUsage: { label: string; title: string; level: string }): boolean {
+    if (
+      contextUsage.label === this.contextUsageLabel
+      && contextUsage.title === this.contextUsageTitle
+      && contextUsage.level === this.contextUsageLevel
+    ) {
+      return false;
+    }
+
+    this.contextUsageLabel = contextUsage.label;
+    this.contextUsageTitle = contextUsage.title;
+    this.contextUsageLevel = contextUsage.level;
+    return true;
+  }
+
+  private applyModelOptions(modelOptions: WebviewModelOption[]): boolean {
+    if (areModelOptionsEqual(modelOptions, this.modelOptions)) {
+      return false;
+    }
+
+    this.modelOptions = modelOptions;
+    return true;
   }
 
   private async setModel(provider: string, modelId: string): Promise<void> {
@@ -274,11 +360,6 @@ export class PiChatController {
   }
 
   private resetSessionMeta(): void {
-    this.modelLabel = '';
-    this.modelProvider = '';
-    this.modelId = '';
-    this.modelReasoning = false;
-    this.thinkingLevel = '';
     this.modelOptions = [];
     this.contextUsageLabel = '';
     this.contextUsageTitle = '';
@@ -511,13 +592,7 @@ function formatInteger(value: number): string {
   return Math.round(value).toLocaleString('en-US');
 }
 
-function getModelMeta(state: PiSessionState): {
-  label: string;
-  provider: string;
-  id: string;
-  reasoning: boolean;
-  thinkingLevel: string;
-} {
+function getModelMeta(state: PiSessionState): PiChatModelMeta {
   const model = state.model;
   const id = typeof model?.id === 'string' ? model.id : '';
   const provider = typeof model?.provider === 'string' ? model.provider : '';

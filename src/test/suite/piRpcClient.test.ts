@@ -29,6 +29,37 @@ suite('PiRpcClient', () => {
     client.dispose();
   });
 
+  test('preserves command order for concurrent requests while the process is starting', async () => {
+    const { client, fakeProcess } = createClient();
+
+    const statePromise = client.getState();
+    const modelsPromise = client.getAvailableModels();
+    const stateCommand = await fakeProcess.nextCommand();
+    const modelsCommand = await fakeProcess.nextCommand();
+
+    assert.strictEqual(stateCommand.type, 'get_state');
+    assert.strictEqual(modelsCommand.type, 'get_available_models');
+
+    fakeProcess.writeRecord({
+      type: 'response',
+      id: stateCommand.id,
+      command: 'get_state',
+      success: true,
+      data: { thinkingLevel: 'medium' }
+    });
+    fakeProcess.writeRecord({
+      type: 'response',
+      id: modelsCommand.id,
+      command: 'get_available_models',
+      success: true,
+      data: { models: [] }
+    });
+
+    assert.deepStrictEqual(await statePromise, { thinkingLevel: 'medium' });
+    assert.deepStrictEqual(await modelsPromise, { models: [] });
+    client.dispose();
+  });
+
   test('correlates responses by id', async () => {
     const { client, fakeProcess, spawnCalls } = createClient({ cwd: '/workspace' });
 
