@@ -83,9 +83,6 @@ export const chatWebviewStyles = /* css */ `    :root {
       transition: transform 120ms ease;
     }
 
-    .pi-toolbar__sessions--back svg {
-      transform: scaleX(-1);
-    }
 
     .pi-toolbar__title {
       position: relative;
