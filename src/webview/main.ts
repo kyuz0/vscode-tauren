@@ -1,78 +1,61 @@
-// @ts-nocheck
+import { getWebviewDom } from './dom';
+import { createMessageElement } from './renderMessages';
+import { buildSessionTreePrefix, formatSessionMeta, getSessionDisplayName, shortenPath } from './sessionFormat';
+import {
+  localSlashCommands,
+  maxSessionMenuItems,
+  maxTextareaHeight,
+  messagesBottomThreshold,
+  minTextareaHeight
+} from './constants';
+import type {
+  Activity,
+  PromptContextAttachment,
+  SessionItem,
+  SlashCommand,
+  WebviewState,
+  WebviewStreamingBehavior
+} from './types';
+
 const vscode = acquireVsCodeApi();
-const toolbarTitleElement = document.querySelector('.pi-toolbar__title');
-const toolbarTitleTextElement = document.querySelector('.pi-toolbar__title-text');
-const sessionToggleButton = document.querySelector('.pi-toolbar__sessions');
-const sessionMenuElement = document.querySelector('.pi-toolbar__session-menu');
-const messagesElement = document.querySelector('.messages');
-const sessionsElement = document.querySelector('.sessions');
-const form = document.querySelector('.composer');
-const textarea = document.querySelector('textarea');
-const slashMenuElement = document.querySelector('.composer__slash-menu');
-const contextBadgesElement = document.querySelector('.composer__context-badges');
-const busySubmitElement = document.querySelector('.composer__busy-submit');
-const busySubmitHintElement = document.querySelector('.composer__busy-submit-hint');
-const streamingBehaviorButtonElements = Array.from(document.querySelectorAll('.composer__mode-button'));
-const newSessionButton = document.querySelector('.composer__add');
-const contextElement = document.querySelector('.composer__context');
-const contextValueElement = document.querySelector('.composer__context-value');
-const contextTooltipElement = document.querySelector('.composer__context-tooltip');
-const modelElement = document.querySelector('.composer__model');
-const modelMenuElement = document.querySelector('.composer__model-menu');
-const modelSelectElement = document.querySelector('.composer__model-select');
-const thinkingSelectElement = document.querySelector('.composer__thinking-select');
-const submitButton = document.querySelector('.composer__submit');
-const messagesBottomThreshold = 4;
-const maxTextareaHeight = 180;
-const minTextareaHeight = 22;
+const {
+  toolbarTitleElement,
+  toolbarTitleTextElement,
+  sessionToggleButton,
+  sessionMenuElement,
+  messagesElement,
+  sessionsElement,
+  form,
+  textarea,
+  slashMenuElement,
+  contextBadgesElement,
+  busySubmitElement,
+  busySubmitHintElement,
+  streamingBehaviorButtonElements,
+  newSessionButton,
+  contextElement,
+  contextValueElement,
+  contextTooltipElement,
+  modelElement,
+  modelMenuElement,
+  modelSelectElement,
+  thinkingSelectElement,
+  submitButton
+} = getWebviewDom();
 const isMac = navigator.platform.toUpperCase().includes('MAC');
-let state = { messages: [], busy: false, modelLabel: '', modelProvider: '', modelId: '', modelReasoning: false, thinkingLevel: '', modelOptions: [], contextUsageLabel: '', contextUsageTitle: '', contextUsageLevel: '', metadataRefreshing: false, slashCommands: [], slashCommandsRefreshing: false, promptContext: [], composerText: '', composerTextRevision: 0, viewMode: 'chat', sessions: [], sessionsRefreshing: false, sessionsError: '', currentSessionFile: '' };
+let state: WebviewState = { messages: [], busy: false, modelLabel: '', modelProvider: '', modelId: '', modelReasoning: false, thinkingLevel: '', modelOptions: [], contextUsageLabel: '', contextUsageTitle: '', contextUsageLevel: '', metadataRefreshing: false, slashCommands: [], slashCommandsRefreshing: false, promptContext: [], composerText: '', composerTextRevision: 0, viewMode: 'chat', sessions: [], sessionsRefreshing: false, sessionsError: '', currentSessionFile: '' };
 let appliedComposerTextRevision = 0;
 let slashMenuOpen = false;
 let slashMenuActiveIndex = 0;
-let slashMenuItems = [];
+let slashMenuItems: SlashCommand[] = [];
 let slashMenuQuery = '';
-let slashMenuDismissedQuery;
+let slashMenuDismissedQuery: string | undefined;
 let slashCommandsRefreshRequested = false;
-let streamingBehavior = 'steer';
-let busySubmitHideTimeout;
+let streamingBehavior: WebviewStreamingBehavior = 'steer';
+let busySubmitHideTimeout: ReturnType<typeof setTimeout> | undefined;
 let sessionListSelectedIndex = 0;
 let sessionMenuOpen = false;
-let sessionMenuItems = [];
-const maxSessionMenuItems = 20;
-const localSlashCommands = [
-  { name: 'model', description: 'Select model', source: 'builtin' },
-  { name: 'name', description: 'Set or clear session name', source: 'builtin' },
-  { name: 'session', description: 'Show session info and stats', source: 'builtin' },
-  { name: 'compact', description: 'Manually compact context', source: 'builtin' },
-  { name: 'copy', description: 'Copy last Pi response', source: 'builtin' },
-  { name: 'export', description: 'Export session to HTML', source: 'builtin' },
-  { name: 'new', description: 'Start a new session', source: 'builtin' },
-  { name: 'settings', description: 'Terminal-only: use VS Code settings instead', source: 'unsupported' },
-  { name: 'scoped-models', description: 'Terminal-only: scoped model cycling is not supported here yet', source: 'unsupported' },
-  { name: 'import', description: 'Terminal-only: session import is not supported here yet', source: 'unsupported' },
-  { name: 'share', description: 'Not supported here yet', source: 'unsupported' },
-  { name: 'changelog', description: 'Not supported here yet', source: 'unsupported' },
-  { name: 'hotkeys', description: 'Terminal-only: use VS Code keybindings instead', source: 'unsupported' },
-  { name: 'fork', description: 'Fork from a previous user message', source: 'builtin' },
-  { name: 'clone', description: 'Duplicate the current session', source: 'builtin' },
-  { name: 'tree', description: 'Open session switcher', source: 'builtin' },
-  { name: 'login', description: 'Terminal-only: run pi in a terminal to authenticate', source: 'unsupported' },
-  { name: 'logout', description: 'Terminal-only: run pi in a terminal to manage auth', source: 'unsupported' },
-  { name: 'resume', description: 'Resume a different session', source: 'builtin' },
-  { name: 'reload', description: 'Reload keybindings, extensions, skills, prompts, and themes', source: 'builtin' },
-  { name: 'quit', description: 'Not supported here', source: 'unsupported' }
-];
-const activityExpansion = new Map();
-const markdownRenderer = window.markdownit
-  ? window.markdownit({
-    html: false,
-    linkify: true,
-    breaks: false,
-    highlight: highlightCode
-  })
-  : undefined;
-
+let sessionMenuItems: SessionItem[] = [];
 window.addEventListener('message', (event) => {
   if (event.data?.type === 'focusInput') {
     focusPromptInput();
@@ -170,7 +153,7 @@ sessionMenuElement?.addEventListener('mousedown', (event) => {
   event.preventDefault();
 });
 sessionMenuElement?.addEventListener('click', (event) => {
-  const item = event.target?.closest?.('.pi-toolbar__session-item');
+  const item = eventTargetElement(event)?.closest('.pi-toolbar__session-item');
 
   if (!item) {
     return;
@@ -186,7 +169,7 @@ sessionMenuElement?.addEventListener('click', (event) => {
 });
 sessionsElement?.addEventListener('keydown', handleSessionListKeydown);
 sessionsElement?.addEventListener('click', (event) => {
-  const item = event.target?.closest?.('.sessions__item');
+  const item = eventTargetElement(event)?.closest('.sessions__item');
 
   if (!item) {
     return;
@@ -200,20 +183,22 @@ modelSelectElement?.addEventListener('change', selectModel);
 thinkingSelectElement?.addEventListener('change', selectThinkingLevel);
 
 window.addEventListener('click', (event) => {
+  const target = eventTargetNode(event);
+
   if (modelMenuElement?.hasAttribute('open')) {
-    if (!modelMenuElement.contains(event.target) && !modelElement?.contains(event.target)) {
+    if (!modelMenuElement.contains(target) && !modelElement?.contains(target)) {
       closeModelMenu();
     }
   }
 
   if (slashMenuOpen) {
-    if (!slashMenuElement?.contains(event.target) && event.target !== textarea) {
+    if (!slashMenuElement?.contains(target) && target !== textarea) {
       closeSlashMenu();
     }
   }
 
   if (sessionMenuOpen) {
-    if (!sessionMenuElement?.contains(event.target) && !toolbarTitleElement?.contains(event.target)) {
+    if (!sessionMenuElement?.contains(target) && !toolbarTitleElement?.contains(target)) {
       closeSessionMenu();
     }
   }
@@ -270,7 +255,7 @@ slashMenuElement?.addEventListener('mousedown', (event) => {
 });
 
 slashMenuElement?.addEventListener('click', (event) => {
-  const item = event.target?.closest?.('.composer__slash-item');
+  const item = eventTargetElement(event)?.closest('.composer__slash-item');
 
   if (!item) {
     return;
@@ -285,13 +270,13 @@ slashMenuElement?.addEventListener('click', (event) => {
 });
 
 contextBadgesElement?.addEventListener('mousedown', (event) => {
-  if (event.target?.closest?.('.composer__context-remove')) {
+  if (eventTargetElement(event)?.closest('.composer__context-remove')) {
     event.preventDefault();
   }
 });
 
 contextBadgesElement?.addEventListener('click', (event) => {
-  const removeButton = event.target?.closest?.('.composer__context-remove');
+  const removeButton = eventTargetElement(event)?.closest('.composer__context-remove');
 
   if (!removeButton) {
     return;
@@ -407,14 +392,14 @@ function renderSessions() {
   }
 }
 
-function createSessionEmptyElement(text) {
+function createSessionEmptyElement(text: string): HTMLElement {
   const empty = document.createElement('div');
   empty.className = 'sessions__empty';
   empty.textContent = text;
   return empty;
 }
 
-function createSessionItemElement(session, index) {
+function createSessionItemElement(session: SessionItem, index: number): HTMLElement {
   const item = document.createElement('button');
   item.type = 'button';
   item.id = 'session-' + index;
@@ -474,90 +459,7 @@ function getCurrentSession() {
     ?? state.sessions.find((session) => session.current);
 }
 
-function getSessionDisplayName(session) {
-  const title = sanitizeSessionTitle(session?.name || session?.firstMessage || '');
-  return title || '(no messages)';
-}
-
-function sanitizeSessionTitle(value) {
-  if (typeof value !== 'string') {
-    return '';
-  }
-
-  return value
-    .replace(/<\/?[A-Za-z][^>\n]*(?:>|$)/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function buildSessionTreePrefix(session) {
-  const depth = Number(session.depth) || 0;
-
-  if (depth <= 0) {
-    return '';
-  }
-
-  const ancestors = Array.isArray(session.ancestorContinues) ? session.ancestorContinues : [];
-  const parts = ancestors.map((continues) => continues ? '│  ' : '   ');
-  parts.push(session.isLast ? '└─ ' : '├─ ');
-  return parts.join('');
-}
-
-function formatSessionMeta(session) {
-  const count = typeof session.messageCount === 'number' ? session.messageCount : 0;
-  const age = formatRelativeTime(session.modified);
-  return count + ' ' + age + (session.current ? ' · current' : '');
-}
-
-function formatRelativeTime(value) {
-  const date = new Date(value);
-  const time = date.getTime();
-
-  if (Number.isNaN(time)) {
-    return '';
-  }
-
-  const diffMs = Math.max(0, Date.now() - time);
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) {
-    return 'now';
-  }
-
-  if (diffMins < 60) {
-    return diffMins + 'm';
-  }
-
-  if (diffHours < 24) {
-    return diffHours + 'h';
-  }
-
-  if (diffDays < 7) {
-    return diffDays + 'd';
-  }
-
-  if (diffDays < 30) {
-    return Math.floor(diffDays / 7) + 'w';
-  }
-
-  if (diffDays < 365) {
-    return Math.floor(diffDays / 30) + 'mo';
-  }
-
-  return Math.floor(diffDays / 365) + 'y';
-}
-
-function shortenPath(path) {
-  if (typeof path !== 'string') {
-    return '';
-  }
-
-  return path.replace(/^\/Users\/[^/]+/, '~');
-}
-
-function handleSessionListKeydown(event) {
+function handleSessionListKeydown(event: KeyboardEvent): boolean {
   if (state.viewMode !== 'sessions') {
     return false;
   }
@@ -594,7 +496,7 @@ function handleSessionListKeydown(event) {
   return false;
 }
 
-function moveSessionSelection(delta) {
+function moveSessionSelection(delta: number): void {
   if (!Array.isArray(state.sessions) || state.sessions.length === 0) {
     return;
   }
@@ -604,7 +506,7 @@ function moveSessionSelection(delta) {
   document.getElementById('session-' + sessionListSelectedIndex)?.scrollIntoView({ block: 'nearest' });
 }
 
-function selectSessionIndex(index) {
+function selectSessionIndex(index: number): void {
   const session = Array.isArray(state.sessions) ? state.sessions[index] : undefined;
 
   if (!session?.path) {
@@ -614,7 +516,7 @@ function selectSessionIndex(index) {
   selectSessionByPath(session.path);
 }
 
-function selectSessionByPath(sessionPath) {
+function selectSessionByPath(sessionPath: string): void {
   if (!sessionPath || state.busy || state.sessionsRefreshing) {
     return;
   }
@@ -622,7 +524,7 @@ function selectSessionByPath(sessionPath) {
   vscode.postMessage({ type: 'selectSession', sessionPath });
 }
 
-function clampSessionIndex(index) {
+function clampSessionIndex(index: number): number {
   const count = Array.isArray(state.sessions) ? state.sessions.length : 0;
 
   if (count === 0) {
@@ -639,7 +541,7 @@ function selectCurrentSession() {
   sessionListSelectedIndex = currentIndex >= 0 ? currentIndex : 0;
 }
 
-function toggleSessionMenu(event) {
+function toggleSessionMenu(event: MouseEvent): void {
   event?.preventDefault();
   event?.stopPropagation();
 
@@ -715,7 +617,7 @@ function renderSessionMenu() {
   }
 }
 
-function createSessionMenuItemElement(session, index) {
+function createSessionMenuItemElement(session: SessionItem, index: number): HTMLElement {
   const item = document.createElement('button');
   item.type = 'button';
   item.className = 'pi-toolbar__session-item' + (session.current || session.path === state.currentSessionFile ? ' pi-toolbar__session-item--current' : '');
@@ -736,7 +638,7 @@ function createSessionMenuItemElement(session, index) {
   return item;
 }
 
-function createSessionMenuEmptyElement(text) {
+function createSessionMenuEmptyElement(text: string): HTMLElement {
   const empty = document.createElement('div');
   empty.className = 'pi-toolbar__session-empty';
   empty.textContent = text;
@@ -753,192 +655,6 @@ function toggleSessionView() {
   vscode.postMessage({ type: 'showSessions' });
 }
 
-function createMessageElement(message, showRole) {
-  const article = document.createElement('article');
-  article.className = `message message--${message.role}${message.error ? ' message--error' : ''}${message.variant === 'thinking' ? ' message--thinking' : ''}`;
-
-  const body = document.createElement('div');
-  body.className = 'message__body';
-
-  if (message.role === 'assistant' && !message.error) {
-    renderMarkdownInto(body, message.text || '');
-  } else {
-    body.textContent = message.text || '';
-  }
-
-  if (showRole) {
-    const role = document.createElement('div');
-    role.className = 'message__role';
-    role.textContent = roleLabel(message.role);
-    article.append(role);
-  }
-
-  const activities = Array.isArray(message.activities) ? message.activities : [];
-  const hasBody = Boolean(message.text || message.error || activities.length === 0);
-
-  if (message.role !== 'assistant') {
-    article.append(body);
-    return article;
-  }
-
-  if (activities.length > 0) {
-    article.append(createActivityListElement(activities));
-  }
-
-  if (hasBody) {
-    if (activities.length > 0) {
-      body.classList.add('message__body--after-activities');
-    }
-
-    article.append(body);
-  }
-
-  return article;
-}
-
-function renderMarkdownInto(element, text) {
-  if (!markdownRenderer || !window.DOMPurify) {
-    element.textContent = text;
-    return;
-  }
-
-  element.classList.add('message__body--markdown');
-
-  const rendered = markdownRenderer.render(text);
-  element.innerHTML = window.DOMPurify.sanitize(rendered, {
-    USE_PROFILES: { html: true }
-  });
-}
-
-function highlightCode(code, language) {
-  if (!window.hljs || typeof language !== 'string' || language.length === 0) {
-    return escapeHtml(code);
-  }
-
-  const normalizedLanguage = normalizeCodeLanguage(language);
-
-  if (!window.hljs.getLanguage(normalizedLanguage)) {
-    return escapeHtml(code);
-  }
-
-  try {
-    return window.hljs.highlight(code, {
-      language: normalizedLanguage,
-      ignoreIllegals: true
-    }).value;
-  } catch {
-    return escapeHtml(code);
-  }
-}
-
-function normalizeCodeLanguage(language) {
-  const normalized = language.toLowerCase().trim();
-  const aliases = {
-    cjs: 'javascript',
-    js: 'javascript',
-    jsx: 'javascript',
-    mjs: 'javascript',
-    shell: 'bash',
-    sh: 'bash',
-    ts: 'typescript',
-    tsx: 'typescript',
-    yml: 'yaml'
-  };
-
-  return aliases[normalized] || normalized;
-}
-
-function escapeHtml(value) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-function createActivityListElement(activities) {
-  const list = document.createElement('div');
-  list.className = 'activity-list';
-
-  for (const activity of activities) {
-    list.append(createActivityElement(activity));
-  }
-
-  return list;
-}
-
-function createActivityElement(activity) {
-  const details = document.createElement('details');
-  details.className = `activity activity--${activity.kind || 'rpc'} activity--${activity.status || 'info'}`;
-
-  const activityId = typeof activity.id === 'string' ? activity.id : '';
-  const savedOpenState = activityExpansion.get(activityId);
-  details.open = typeof savedOpenState === 'boolean'
-    ? savedOpenState
-    : activity.status === 'running' || shouldKeepActivityOpen(activity);
-
-  details.addEventListener('toggle', () => {
-    if (activityId) {
-      activityExpansion.set(activityId, details.open);
-    }
-  });
-
-  const summary = document.createElement('summary');
-  summary.className = 'activity__summary';
-
-  const title = document.createElement('span');
-  title.className = 'activity__title';
-  title.textContent = typeof activity.title === 'string' ? activity.title : 'Activity';
-
-  const status = document.createElement('span');
-  status.className = 'activity__status';
-  status.textContent = activityStatusLabel(activity.status);
-
-  summary.append(title, status);
-
-  if (typeof activity.summary === 'string' && activity.summary.length > 0) {
-    const description = document.createElement('span');
-    description.className = 'activity__description';
-    description.textContent = activity.summary;
-    summary.append(description);
-  }
-
-  details.append(summary);
-
-  if (typeof activity.body === 'string' && activity.body.length > 0) {
-    const body = document.createElement(activity.code ? 'pre' : 'div');
-    body.className = `activity__body${activity.code ? ' activity__body--code' : ' activity__body--markdown'}`;
-
-    if (activity.code) {
-      body.textContent = activity.body;
-    } else {
-      renderMarkdownInto(body, activity.body);
-    }
-
-    details.append(body);
-  }
-
-  return details;
-}
-
-function shouldKeepActivityOpen(activity) {
-  return activity.kind === 'thinking'
-    && typeof activity.body === 'string'
-    && activity.body.length > 0;
-}
-
-function roleLabel(role) {
-  if (role === 'user') {
-    return 'You';
-  }
-
-  if (role === 'assistant') {
-    return 'Pi';
-  }
-
-  return 'System';
-}
-
 function syncSubmit() {
   const isStopMode = isStopSubmitMode();
   const hasInput = textarea.value.length > 0;
@@ -950,7 +666,7 @@ function syncSubmit() {
   submitButton.title = label;
 }
 
-function getSubmitLabel(isStopMode) {
+function getSubmitLabel(isStopMode: boolean): string {
   if (isStopMode) {
     return 'Stop current response';
   }
@@ -991,7 +707,7 @@ function syncBusySubmitMode() {
   }
 }
 
-function setBusySubmitVisible(visible) {
+function setBusySubmitVisible(visible: boolean): void {
   if (!busySubmitElement) {
     return;
   }
@@ -1017,22 +733,6 @@ function setBusySubmitVisible(visible) {
   }, 160);
 }
 
-function activityStatusLabel(status) {
-  if (status === 'running') {
-    return 'Running';
-  }
-
-  if (status === 'completed') {
-    return 'Done';
-  }
-
-  if (status === 'error') {
-    return 'Error';
-  }
-
-  return 'Info';
-}
-
 function getBusyStatusText() {
   const activity = getLatestRunningActivity();
 
@@ -1050,10 +750,11 @@ function getBusyStatusText() {
   return title + summary;
 }
 
-function getLatestRunningActivity() {
+function getLatestRunningActivity(): Activity | undefined {
   for (let messageIndex = state.messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
-    const activities = Array.isArray(state.messages[messageIndex].activities)
-      ? state.messages[messageIndex].activities
+    const message = state.messages[messageIndex];
+    const activities: Activity[] = Array.isArray(message.activities)
+      ? message.activities
       : [];
 
     for (let activityIndex = activities.length - 1; activityIndex >= 0; activityIndex -= 1) {
@@ -1100,11 +801,15 @@ function syncPromptContextBadges() {
   }
 }
 
-function isPromptContextAttachment(value) {
-  return value
-    && typeof value.id === 'string'
-    && typeof value.label === 'string'
-    && typeof value.title === 'string';
+function isPromptContextAttachment(value: unknown): value is PromptContextAttachment {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const attachment = value as Partial<PromptContextAttachment>;
+  return typeof attachment.id === 'string'
+    && typeof attachment.label === 'string'
+    && typeof attachment.title === 'string';
 }
 
 function syncModelLabel() {
@@ -1220,7 +925,7 @@ function selectThinkingLevel() {
   vscode.postMessage({ type: 'setThinkingLevel', level });
 }
 
-function handleSlashMenuKeydown(event) {
+function handleSlashMenuKeydown(event: KeyboardEvent): boolean {
   if (!slashMenuOpen) {
     if (event.key === 'Escape') {
       dismissSlashMenu();
@@ -1320,7 +1025,7 @@ function getSlashCommandQuery() {
   return textarea.value.slice(1, textarea.selectionStart).toLowerCase();
 }
 
-function getFilteredSlashCommands(query) {
+function getFilteredSlashCommands(query: string): SlashCommand[] {
   const commands = getAllSlashCommands();
   const scored = [];
 
@@ -1369,7 +1074,7 @@ function getAllSlashCommands() {
   return commands;
 }
 
-function getSlashCommandSourceRank(source) {
+function getSlashCommandSourceRank(source: string): number {
   if (source === 'builtin') {
     return 0;
   }
@@ -1393,7 +1098,7 @@ function getSlashCommandSourceRank(source) {
   return 5;
 }
 
-function renderSlashMenu(query) {
+function renderSlashMenu(query: string): void {
   slashMenuElement.replaceChildren();
 
   if (state.slashCommandsRefreshing && slashMenuItems.length === 0) {
@@ -1413,14 +1118,14 @@ function renderSlashMenu(query) {
   syncSlashMenuActiveDescendant();
 }
 
-function createSlashMenuEmptyElement(text) {
+function createSlashMenuEmptyElement(text: string): HTMLElement {
   const empty = document.createElement('div');
   empty.className = 'composer__slash-empty';
   empty.textContent = text;
   return empty;
 }
 
-function createSlashMenuItemElement(command, index) {
+function createSlashMenuItemElement(command: SlashCommand, index: number): HTMLElement {
   const item = document.createElement('button');
   item.type = 'button';
   item.id = 'slash-command-' + index;
@@ -1452,7 +1157,7 @@ function createSlashMenuItemElement(command, index) {
   return item;
 }
 
-function formatSlashCommandMeta(command) {
+function formatSlashCommandMeta(command: SlashCommand): string {
   const source = typeof command.source === 'string' ? command.source : '';
   const location = typeof command.location === 'string' ? command.location : '';
 
@@ -1490,7 +1195,7 @@ function closeSlashMenu() {
   textarea?.removeAttribute('aria-activedescendant');
 }
 
-function moveSlashMenuSelection(delta) {
+function moveSlashMenuSelection(delta: number): void {
   if (slashMenuItems.length === 0) {
     return;
   }
@@ -1517,7 +1222,7 @@ function acceptActiveSlashCommand() {
   }
 }
 
-function acceptSlashCommand(command) {
+function acceptSlashCommand(command: SlashCommand): void {
   const cursor = textarea.selectionStart;
   const after = textarea.value.slice(cursor).trimStart();
   const value = '/' + command.name + ' ' + after;
@@ -1529,11 +1234,11 @@ function acceptSlashCommand(command) {
   focusPromptInput();
 }
 
-function modelKey(provider, id) {
+function modelKey(provider: string, id: string): string {
   return provider + '/' + id;
 }
 
-function splitModelKey(value) {
+function splitModelKey(value: string): [provider: string, id: string] {
   const slashIndex = value.indexOf('/');
 
   if (slashIndex <= 0) {
@@ -1580,7 +1285,7 @@ function getComposerChromeHeight() {
   return Math.max(0, composerHeight - textareaHeight);
 }
 
-function parseCssPixelValue(value) {
+function parseCssPixelValue(value: string): number {
   return Number.parseFloat(value) || 0;
 }
 
@@ -1596,7 +1301,7 @@ function applyComposerTextFromState() {
   focusPromptInput();
 }
 
-function syncComposer(options = {}) {
+function syncComposer(options: { preserveBottom?: boolean } = {}): void {
   const shouldPreserveBottom = Boolean(options.preserveBottom) && isMessagesAtBottom();
   syncSubmit();
   syncBusySubmitMode();
@@ -1612,7 +1317,7 @@ function startNewSession() {
   focusPromptInput();
 }
 
-function isNewSessionShortcut(event) {
+function isNewSessionShortcut(event: KeyboardEvent): boolean {
   if (event.key.toLowerCase() !== 'n' || event.shiftKey || event.altKey) {
     return false;
   }
@@ -1628,6 +1333,14 @@ function focusPromptInput() {
   requestAnimationFrame(() => {
     textarea.focus({ preventScroll: true });
   });
+}
+
+function eventTargetElement(event: Event): Element | null {
+  return event.target instanceof Element ? event.target : null;
+}
+
+function eventTargetNode(event: Event): Node | null {
+  return event.target instanceof Node ? event.target : null;
 }
 
 vscode.postMessage({ type: 'ready' });

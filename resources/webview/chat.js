@@ -1,46 +1,278 @@
 "use strict";
 (() => {
-  // src/webview/main.ts
-  var vscode = acquireVsCodeApi();
-  var toolbarTitleElement = document.querySelector(".pi-toolbar__title");
-  var toolbarTitleTextElement = document.querySelector(".pi-toolbar__title-text");
-  var sessionToggleButton = document.querySelector(".pi-toolbar__sessions");
-  var sessionMenuElement = document.querySelector(".pi-toolbar__session-menu");
-  var messagesElement = document.querySelector(".messages");
-  var sessionsElement = document.querySelector(".sessions");
-  var form = document.querySelector(".composer");
-  var textarea = document.querySelector("textarea");
-  var slashMenuElement = document.querySelector(".composer__slash-menu");
-  var contextBadgesElement = document.querySelector(".composer__context-badges");
-  var busySubmitElement = document.querySelector(".composer__busy-submit");
-  var busySubmitHintElement = document.querySelector(".composer__busy-submit-hint");
-  var streamingBehaviorButtonElements = Array.from(document.querySelectorAll(".composer__mode-button"));
-  var newSessionButton = document.querySelector(".composer__add");
-  var contextElement = document.querySelector(".composer__context");
-  var contextValueElement = document.querySelector(".composer__context-value");
-  var contextTooltipElement = document.querySelector(".composer__context-tooltip");
-  var modelElement = document.querySelector(".composer__model");
-  var modelMenuElement = document.querySelector(".composer__model-menu");
-  var modelSelectElement = document.querySelector(".composer__model-select");
-  var thinkingSelectElement = document.querySelector(".composer__thinking-select");
-  var submitButton = document.querySelector(".composer__submit");
+  // src/webview/dom.ts
+  function getWebviewDom() {
+    return {
+      toolbarTitleElement: queryRequired(".pi-toolbar__title"),
+      toolbarTitleTextElement: queryRequired(".pi-toolbar__title-text"),
+      sessionToggleButton: queryRequired(".pi-toolbar__sessions"),
+      sessionMenuElement: queryRequired(".pi-toolbar__session-menu"),
+      messagesElement: queryRequired(".messages"),
+      sessionsElement: queryRequired(".sessions"),
+      form: queryRequired(".composer"),
+      textarea: queryRequired("textarea"),
+      slashMenuElement: queryRequired(".composer__slash-menu"),
+      contextBadgesElement: queryRequired(".composer__context-badges"),
+      busySubmitElement: queryRequired(".composer__busy-submit"),
+      busySubmitHintElement: queryRequired(".composer__busy-submit-hint"),
+      streamingBehaviorButtonElements: queryAll(".composer__mode-button"),
+      newSessionButton: queryRequired(".composer__add"),
+      contextElement: queryRequired(".composer__context"),
+      contextValueElement: queryRequired(".composer__context-value"),
+      contextTooltipElement: queryRequired(".composer__context-tooltip"),
+      modelElement: queryRequired(".composer__model"),
+      modelMenuElement: queryRequired(".composer__model-menu"),
+      modelSelectElement: queryRequired(".composer__model-select"),
+      thinkingSelectElement: queryRequired(".composer__thinking-select"),
+      submitButton: queryRequired(".composer__submit")
+    };
+  }
+  function queryRequired(selector) {
+    const element = document.querySelector(selector);
+    if (!element) {
+      throw new Error(`Missing required webview element: ${selector}`);
+    }
+    return element;
+  }
+  function queryAll(selector) {
+    return Array.from(document.querySelectorAll(selector));
+  }
+
+  // src/webview/markdown.ts
+  var markdownRenderer = window.markdownit ? window.markdownit({
+    html: false,
+    linkify: true,
+    breaks: false,
+    highlight: highlightCode
+  }) : void 0;
+  function renderMarkdownInto(element, text) {
+    if (!markdownRenderer || !window.DOMPurify) {
+      element.textContent = text;
+      return;
+    }
+    element.classList.add("message__body--markdown");
+    const rendered = markdownRenderer.render(text);
+    element.innerHTML = window.DOMPurify.sanitize(rendered, {
+      USE_PROFILES: { html: true }
+    });
+  }
+  function highlightCode(code, language) {
+    if (!window.hljs || typeof language !== "string" || language.length === 0) {
+      return escapeHtml(code);
+    }
+    const normalizedLanguage = normalizeCodeLanguage(language);
+    if (!window.hljs.getLanguage(normalizedLanguage)) {
+      return escapeHtml(code);
+    }
+    try {
+      return window.hljs.highlight(code, {
+        language: normalizedLanguage,
+        ignoreIllegals: true
+      }).value;
+    } catch {
+      return escapeHtml(code);
+    }
+  }
+  function normalizeCodeLanguage(language) {
+    const normalized = language.toLowerCase().trim();
+    const aliases = {
+      cjs: "javascript",
+      js: "javascript",
+      jsx: "javascript",
+      mjs: "javascript",
+      shell: "bash",
+      sh: "bash",
+      ts: "typescript",
+      tsx: "typescript",
+      yml: "yaml"
+    };
+    return aliases[normalized] || normalized;
+  }
+  function escapeHtml(value) {
+    return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  // src/webview/renderMessages.ts
+  var activityExpansion = /* @__PURE__ */ new Map();
+  function createMessageElement(message, showRole) {
+    const article = document.createElement("article");
+    article.className = `message message--${message.role}${message.error ? " message--error" : ""}${message.variant === "thinking" ? " message--thinking" : ""}`;
+    const body = document.createElement("div");
+    body.className = "message__body";
+    if (message.role === "assistant" && !message.error) {
+      renderMarkdownInto(body, message.text || "");
+    } else {
+      body.textContent = message.text || "";
+    }
+    if (showRole) {
+      const role = document.createElement("div");
+      role.className = "message__role";
+      role.textContent = roleLabel(message.role);
+      article.append(role);
+    }
+    const activities = Array.isArray(message.activities) ? message.activities : [];
+    const hasBody = Boolean(message.text || message.error || activities.length === 0);
+    if (message.role !== "assistant") {
+      article.append(body);
+      return article;
+    }
+    if (activities.length > 0) {
+      article.append(createActivityListElement(activities));
+    }
+    if (hasBody) {
+      if (activities.length > 0) {
+        body.classList.add("message__body--after-activities");
+      }
+      article.append(body);
+    }
+    return article;
+  }
+  function createActivityListElement(activities) {
+    const list = document.createElement("div");
+    list.className = "activity-list";
+    for (const activity of activities) {
+      list.append(createActivityElement(activity));
+    }
+    return list;
+  }
+  function createActivityElement(activity) {
+    const details = document.createElement("details");
+    details.className = `activity activity--${activity.kind || "rpc"} activity--${activity.status || "info"}`;
+    const activityId = typeof activity.id === "string" ? activity.id : "";
+    const savedOpenState = activityExpansion.get(activityId);
+    details.open = typeof savedOpenState === "boolean" ? savedOpenState : activity.status === "running" || shouldKeepActivityOpen(activity);
+    details.addEventListener("toggle", () => {
+      if (activityId) {
+        activityExpansion.set(activityId, details.open);
+      }
+    });
+    const summary = document.createElement("summary");
+    summary.className = "activity__summary";
+    const title = document.createElement("span");
+    title.className = "activity__title";
+    title.textContent = typeof activity.title === "string" ? activity.title : "Activity";
+    const status = document.createElement("span");
+    status.className = "activity__status";
+    status.textContent = activityStatusLabel(activity.status);
+    summary.append(title, status);
+    if (typeof activity.summary === "string" && activity.summary.length > 0) {
+      const description = document.createElement("span");
+      description.className = "activity__description";
+      description.textContent = activity.summary;
+      summary.append(description);
+    }
+    details.append(summary);
+    if (typeof activity.body === "string" && activity.body.length > 0) {
+      const body = document.createElement(activity.code ? "pre" : "div");
+      body.className = `activity__body${activity.code ? " activity__body--code" : " activity__body--markdown"}`;
+      if (activity.code) {
+        body.textContent = activity.body;
+      } else {
+        renderMarkdownInto(body, activity.body);
+      }
+      details.append(body);
+    }
+    return details;
+  }
+  function shouldKeepActivityOpen(activity) {
+    return activity.kind === "thinking" && typeof activity.body === "string" && activity.body.length > 0;
+  }
+  function roleLabel(role) {
+    if (role === "user") {
+      return "You";
+    }
+    if (role === "assistant") {
+      return "Pi";
+    }
+    return "System";
+  }
+  function activityStatusLabel(status) {
+    if (status === "running") {
+      return "Running";
+    }
+    if (status === "completed") {
+      return "Done";
+    }
+    if (status === "error") {
+      return "Error";
+    }
+    return "Info";
+  }
+
+  // src/webview/sessionFormat.ts
+  function getSessionDisplayName(session) {
+    const name = sanitizeSessionTitle(session.name);
+    const firstMessage = sanitizeSessionTitle(session.firstMessage);
+    return name || firstMessage || shortenPath(session.cwd) || "Untitled session";
+  }
+  function buildSessionTreePrefix(session) {
+    const depth = Number(session.depth) || 0;
+    if (depth <= 0) {
+      return "";
+    }
+    const ancestors = Array.isArray(session.ancestorContinues) ? session.ancestorContinues : [];
+    const parts = ancestors.map((continues) => continues ? "\u2502  " : "   ");
+    parts.push(session.isLast ? "\u2514\u2500 " : "\u251C\u2500 ");
+    return parts.join("");
+  }
+  function formatSessionMeta(session) {
+    const count = typeof session.messageCount === "number" ? session.messageCount : 0;
+    const age = formatRelativeTime(session.modified);
+    const cwd = shortenPath(session.cwd);
+    const countLabel = count === 1 ? "1 message" : count + " messages";
+    return [countLabel, age, cwd].filter(Boolean).join(" \xB7 ");
+  }
+  function shortenPath(path) {
+    if (typeof path !== "string" || path.length === 0) {
+      return "";
+    }
+    const parts = path.split(/[\\/]/).filter(Boolean);
+    return parts.length > 0 ? parts[parts.length - 1] : path;
+  }
+  function sanitizeSessionTitle(value) {
+    if (typeof value !== "string") {
+      return "";
+    }
+    return value.replace(/<\/?[A-Za-z][^>\n]*(?:>|$)/g, "").replace(/\s+/g, " ").trim();
+  }
+  function formatRelativeTime(value) {
+    if (typeof value !== "string" || value.length === 0) {
+      return "";
+    }
+    const timestamp = Date.parse(value);
+    if (!Number.isFinite(timestamp)) {
+      return "";
+    }
+    const diffMs = Date.now() - timestamp;
+    const absMs = Math.abs(diffMs);
+    const minute = 60 * 1e3;
+    const hour = 60 * minute;
+    const day = 24 * hour;
+    if (absMs < minute) {
+      return "just now";
+    }
+    if (absMs < hour) {
+      const minutes = Math.max(1, Math.round(absMs / minute));
+      return minutes + "m ago";
+    }
+    if (absMs < day) {
+      const hours = Math.round(absMs / hour);
+      return hours + "h ago";
+    }
+    if (absMs < 7 * day) {
+      const days = Math.round(absMs / day);
+      return days + "d ago";
+    }
+    return new Date(timestamp).toLocaleDateString(void 0, {
+      month: "short",
+      day: "numeric"
+    });
+  }
+
+  // src/webview/constants.ts
   var messagesBottomThreshold = 4;
   var maxTextareaHeight = 180;
   var minTextareaHeight = 22;
-  var isMac = navigator.platform.toUpperCase().includes("MAC");
-  var state = { messages: [], busy: false, modelLabel: "", modelProvider: "", modelId: "", modelReasoning: false, thinkingLevel: "", modelOptions: [], contextUsageLabel: "", contextUsageTitle: "", contextUsageLevel: "", metadataRefreshing: false, slashCommands: [], slashCommandsRefreshing: false, promptContext: [], composerText: "", composerTextRevision: 0, viewMode: "chat", sessions: [], sessionsRefreshing: false, sessionsError: "", currentSessionFile: "" };
-  var appliedComposerTextRevision = 0;
-  var slashMenuOpen = false;
-  var slashMenuActiveIndex = 0;
-  var slashMenuItems = [];
-  var slashMenuQuery = "";
-  var slashMenuDismissedQuery;
-  var slashCommandsRefreshRequested = false;
-  var streamingBehavior = "steer";
-  var busySubmitHideTimeout;
-  var sessionListSelectedIndex = 0;
-  var sessionMenuOpen = false;
-  var sessionMenuItems = [];
   var maxSessionMenuItems = 20;
   var localSlashCommands = [
     { name: "model", description: "Select model", source: "builtin" },
@@ -65,13 +297,47 @@
     { name: "reload", description: "Reload keybindings, extensions, skills, prompts, and themes", source: "builtin" },
     { name: "quit", description: "Not supported here", source: "unsupported" }
   ];
-  var activityExpansion = /* @__PURE__ */ new Map();
-  var markdownRenderer = window.markdownit ? window.markdownit({
-    html: false,
-    linkify: true,
-    breaks: false,
-    highlight: highlightCode
-  }) : void 0;
+
+  // src/webview/main.ts
+  var vscode = acquireVsCodeApi();
+  var {
+    toolbarTitleElement,
+    toolbarTitleTextElement,
+    sessionToggleButton,
+    sessionMenuElement,
+    messagesElement,
+    sessionsElement,
+    form,
+    textarea,
+    slashMenuElement,
+    contextBadgesElement,
+    busySubmitElement,
+    busySubmitHintElement,
+    streamingBehaviorButtonElements,
+    newSessionButton,
+    contextElement,
+    contextValueElement,
+    contextTooltipElement,
+    modelElement,
+    modelMenuElement,
+    modelSelectElement,
+    thinkingSelectElement,
+    submitButton
+  } = getWebviewDom();
+  var isMac = navigator.platform.toUpperCase().includes("MAC");
+  var state = { messages: [], busy: false, modelLabel: "", modelProvider: "", modelId: "", modelReasoning: false, thinkingLevel: "", modelOptions: [], contextUsageLabel: "", contextUsageTitle: "", contextUsageLevel: "", metadataRefreshing: false, slashCommands: [], slashCommandsRefreshing: false, promptContext: [], composerText: "", composerTextRevision: 0, viewMode: "chat", sessions: [], sessionsRefreshing: false, sessionsError: "", currentSessionFile: "" };
+  var appliedComposerTextRevision = 0;
+  var slashMenuOpen = false;
+  var slashMenuActiveIndex = 0;
+  var slashMenuItems = [];
+  var slashMenuQuery = "";
+  var slashMenuDismissedQuery;
+  var slashCommandsRefreshRequested = false;
+  var streamingBehavior = "steer";
+  var busySubmitHideTimeout;
+  var sessionListSelectedIndex = 0;
+  var sessionMenuOpen = false;
+  var sessionMenuItems = [];
   window.addEventListener("message", (event) => {
     if (event.data?.type === "focusInput") {
       focusPromptInput();
@@ -152,7 +418,7 @@
     event.preventDefault();
   });
   sessionMenuElement?.addEventListener("click", (event) => {
-    const item = event.target?.closest?.(".pi-toolbar__session-item");
+    const item = eventTargetElement(event)?.closest(".pi-toolbar__session-item");
     if (!item) {
       return;
     }
@@ -165,7 +431,7 @@
   });
   sessionsElement?.addEventListener("keydown", handleSessionListKeydown);
   sessionsElement?.addEventListener("click", (event) => {
-    const item = event.target?.closest?.(".sessions__item");
+    const item = eventTargetElement(event)?.closest(".sessions__item");
     if (!item) {
       return;
     }
@@ -176,18 +442,19 @@
   modelSelectElement?.addEventListener("change", selectModel);
   thinkingSelectElement?.addEventListener("change", selectThinkingLevel);
   window.addEventListener("click", (event) => {
+    const target = eventTargetNode(event);
     if (modelMenuElement?.hasAttribute("open")) {
-      if (!modelMenuElement.contains(event.target) && !modelElement?.contains(event.target)) {
+      if (!modelMenuElement.contains(target) && !modelElement?.contains(target)) {
         closeModelMenu();
       }
     }
     if (slashMenuOpen) {
-      if (!slashMenuElement?.contains(event.target) && event.target !== textarea) {
+      if (!slashMenuElement?.contains(target) && target !== textarea) {
         closeSlashMenu();
       }
     }
     if (sessionMenuOpen) {
-      if (!sessionMenuElement?.contains(event.target) && !toolbarTitleElement?.contains(event.target)) {
+      if (!sessionMenuElement?.contains(target) && !toolbarTitleElement?.contains(target)) {
         closeSessionMenu();
       }
     }
@@ -234,7 +501,7 @@
     event.preventDefault();
   });
   slashMenuElement?.addEventListener("click", (event) => {
-    const item = event.target?.closest?.(".composer__slash-item");
+    const item = eventTargetElement(event)?.closest(".composer__slash-item");
     if (!item) {
       return;
     }
@@ -245,12 +512,12 @@
     }
   });
   contextBadgesElement?.addEventListener("mousedown", (event) => {
-    if (event.target?.closest?.(".composer__context-remove")) {
+    if (eventTargetElement(event)?.closest(".composer__context-remove")) {
       event.preventDefault();
     }
   });
   contextBadgesElement?.addEventListener("click", (event) => {
-    const removeButton = event.target?.closest?.(".composer__context-remove");
+    const removeButton = eventTargetElement(event)?.closest(".composer__context-remove");
     if (!removeButton) {
       return;
     }
@@ -393,67 +660,6 @@
       return void 0;
     }
     return state.sessions.find((session) => session.path === state.currentSessionFile) ?? state.sessions.find((session) => session.current);
-  }
-  function getSessionDisplayName(session) {
-    const title = sanitizeSessionTitle(session?.name || session?.firstMessage || "");
-    return title || "(no messages)";
-  }
-  function sanitizeSessionTitle(value) {
-    if (typeof value !== "string") {
-      return "";
-    }
-    return value.replace(/<\/?[A-Za-z][^>\n]*(?:>|$)/g, "").replace(/\s+/g, " ").trim();
-  }
-  function buildSessionTreePrefix(session) {
-    const depth = Number(session.depth) || 0;
-    if (depth <= 0) {
-      return "";
-    }
-    const ancestors = Array.isArray(session.ancestorContinues) ? session.ancestorContinues : [];
-    const parts = ancestors.map((continues) => continues ? "\u2502  " : "   ");
-    parts.push(session.isLast ? "\u2514\u2500 " : "\u251C\u2500 ");
-    return parts.join("");
-  }
-  function formatSessionMeta(session) {
-    const count = typeof session.messageCount === "number" ? session.messageCount : 0;
-    const age = formatRelativeTime(session.modified);
-    return count + " " + age + (session.current ? " \xB7 current" : "");
-  }
-  function formatRelativeTime(value) {
-    const date = new Date(value);
-    const time = date.getTime();
-    if (Number.isNaN(time)) {
-      return "";
-    }
-    const diffMs = Math.max(0, Date.now() - time);
-    const diffMins = Math.floor(diffMs / 6e4);
-    const diffHours = Math.floor(diffMs / 36e5);
-    const diffDays = Math.floor(diffMs / 864e5);
-    if (diffMins < 1) {
-      return "now";
-    }
-    if (diffMins < 60) {
-      return diffMins + "m";
-    }
-    if (diffHours < 24) {
-      return diffHours + "h";
-    }
-    if (diffDays < 7) {
-      return diffDays + "d";
-    }
-    if (diffDays < 30) {
-      return Math.floor(diffDays / 7) + "w";
-    }
-    if (diffDays < 365) {
-      return Math.floor(diffDays / 30) + "mo";
-    }
-    return Math.floor(diffDays / 365) + "y";
-  }
-  function shortenPath(path) {
-    if (typeof path !== "string") {
-      return "";
-    }
-    return path.replace(/^\/Users\/[^/]+/, "~");
   }
   function handleSessionListKeydown(event) {
     if (state.viewMode !== "sessions") {
@@ -606,144 +812,6 @@
     }
     vscode.postMessage({ type: "showSessions" });
   }
-  function createMessageElement(message, showRole) {
-    const article = document.createElement("article");
-    article.className = `message message--${message.role}${message.error ? " message--error" : ""}${message.variant === "thinking" ? " message--thinking" : ""}`;
-    const body = document.createElement("div");
-    body.className = "message__body";
-    if (message.role === "assistant" && !message.error) {
-      renderMarkdownInto(body, message.text || "");
-    } else {
-      body.textContent = message.text || "";
-    }
-    if (showRole) {
-      const role = document.createElement("div");
-      role.className = "message__role";
-      role.textContent = roleLabel(message.role);
-      article.append(role);
-    }
-    const activities = Array.isArray(message.activities) ? message.activities : [];
-    const hasBody = Boolean(message.text || message.error || activities.length === 0);
-    if (message.role !== "assistant") {
-      article.append(body);
-      return article;
-    }
-    if (activities.length > 0) {
-      article.append(createActivityListElement(activities));
-    }
-    if (hasBody) {
-      if (activities.length > 0) {
-        body.classList.add("message__body--after-activities");
-      }
-      article.append(body);
-    }
-    return article;
-  }
-  function renderMarkdownInto(element, text) {
-    if (!markdownRenderer || !window.DOMPurify) {
-      element.textContent = text;
-      return;
-    }
-    element.classList.add("message__body--markdown");
-    const rendered = markdownRenderer.render(text);
-    element.innerHTML = window.DOMPurify.sanitize(rendered, {
-      USE_PROFILES: { html: true }
-    });
-  }
-  function highlightCode(code, language) {
-    if (!window.hljs || typeof language !== "string" || language.length === 0) {
-      return escapeHtml(code);
-    }
-    const normalizedLanguage = normalizeCodeLanguage(language);
-    if (!window.hljs.getLanguage(normalizedLanguage)) {
-      return escapeHtml(code);
-    }
-    try {
-      return window.hljs.highlight(code, {
-        language: normalizedLanguage,
-        ignoreIllegals: true
-      }).value;
-    } catch {
-      return escapeHtml(code);
-    }
-  }
-  function normalizeCodeLanguage(language) {
-    const normalized = language.toLowerCase().trim();
-    const aliases = {
-      cjs: "javascript",
-      js: "javascript",
-      jsx: "javascript",
-      mjs: "javascript",
-      shell: "bash",
-      sh: "bash",
-      ts: "typescript",
-      tsx: "typescript",
-      yml: "yaml"
-    };
-    return aliases[normalized] || normalized;
-  }
-  function escapeHtml(value) {
-    return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  }
-  function createActivityListElement(activities) {
-    const list = document.createElement("div");
-    list.className = "activity-list";
-    for (const activity of activities) {
-      list.append(createActivityElement(activity));
-    }
-    return list;
-  }
-  function createActivityElement(activity) {
-    const details = document.createElement("details");
-    details.className = `activity activity--${activity.kind || "rpc"} activity--${activity.status || "info"}`;
-    const activityId = typeof activity.id === "string" ? activity.id : "";
-    const savedOpenState = activityExpansion.get(activityId);
-    details.open = typeof savedOpenState === "boolean" ? savedOpenState : activity.status === "running" || shouldKeepActivityOpen(activity);
-    details.addEventListener("toggle", () => {
-      if (activityId) {
-        activityExpansion.set(activityId, details.open);
-      }
-    });
-    const summary = document.createElement("summary");
-    summary.className = "activity__summary";
-    const title = document.createElement("span");
-    title.className = "activity__title";
-    title.textContent = typeof activity.title === "string" ? activity.title : "Activity";
-    const status = document.createElement("span");
-    status.className = "activity__status";
-    status.textContent = activityStatusLabel(activity.status);
-    summary.append(title, status);
-    if (typeof activity.summary === "string" && activity.summary.length > 0) {
-      const description = document.createElement("span");
-      description.className = "activity__description";
-      description.textContent = activity.summary;
-      summary.append(description);
-    }
-    details.append(summary);
-    if (typeof activity.body === "string" && activity.body.length > 0) {
-      const body = document.createElement(activity.code ? "pre" : "div");
-      body.className = `activity__body${activity.code ? " activity__body--code" : " activity__body--markdown"}`;
-      if (activity.code) {
-        body.textContent = activity.body;
-      } else {
-        renderMarkdownInto(body, activity.body);
-      }
-      details.append(body);
-    }
-    return details;
-  }
-  function shouldKeepActivityOpen(activity) {
-    return activity.kind === "thinking" && typeof activity.body === "string" && activity.body.length > 0;
-  }
-  function roleLabel(role) {
-    if (role === "user") {
-      return "You";
-    }
-    if (role === "assistant") {
-      return "Pi";
-    }
-    return "System";
-  }
   function syncSubmit() {
     const isStopMode = isStopSubmitMode();
     const hasInput = textarea.value.length > 0;
@@ -804,18 +872,6 @@
       }
     }, 160);
   }
-  function activityStatusLabel(status) {
-    if (status === "running") {
-      return "Running";
-    }
-    if (status === "completed") {
-      return "Done";
-    }
-    if (status === "error") {
-      return "Error";
-    }
-    return "Info";
-  }
   function getBusyStatusText() {
     const activity = getLatestRunningActivity();
     if (!activity) {
@@ -827,7 +883,8 @@
   }
   function getLatestRunningActivity() {
     for (let messageIndex = state.messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
-      const activities = Array.isArray(state.messages[messageIndex].activities) ? state.messages[messageIndex].activities : [];
+      const message = state.messages[messageIndex];
+      const activities = Array.isArray(message.activities) ? message.activities : [];
       for (let activityIndex = activities.length - 1; activityIndex >= 0; activityIndex -= 1) {
         if (activities[activityIndex]?.status === "running") {
           return activities[activityIndex];
@@ -863,7 +920,11 @@
     }
   }
   function isPromptContextAttachment(value) {
-    return value && typeof value.id === "string" && typeof value.label === "string" && typeof value.title === "string";
+    if (!value || typeof value !== "object") {
+      return false;
+    }
+    const attachment = value;
+    return typeof attachment.id === "string" && typeof attachment.label === "string" && typeof attachment.title === "string";
   }
   function syncModelLabel() {
     contextValueElement.textContent = state.contextUsageLabel;
@@ -1270,6 +1331,12 @@
     requestAnimationFrame(() => {
       textarea.focus({ preventScroll: true });
     });
+  }
+  function eventTargetElement(event) {
+    return event.target instanceof Element ? event.target : null;
+  }
+  function eventTargetNode(event) {
+    return event.target instanceof Node ? event.target : null;
   }
   vscode.postMessage({ type: "ready" });
   window.addEventListener("resize", () => {
