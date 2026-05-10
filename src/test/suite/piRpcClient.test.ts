@@ -130,6 +130,29 @@ suite('PiRpcClient', () => {
     client.dispose();
   });
 
+  test('gets session messages', async () => {
+    const { client, fakeProcess } = createClient();
+
+    const messagesPromise = client.getMessages();
+    const command = await fakeProcess.nextCommand();
+
+    assert.strictEqual(command.type, 'get_messages');
+    assert.ok(typeof command.id === 'string');
+
+    fakeProcess.writeRecord({
+      type: 'response',
+      id: command.id,
+      command: 'get_messages',
+      success: true,
+      data: { messages: [{ role: 'user', content: 'hello' }] }
+    });
+
+    assert.deepStrictEqual(await messagesPromise, {
+      messages: [{ role: 'user', content: 'hello' }]
+    });
+    client.dispose();
+  });
+
   test('sends streaming behavior with queued prompts', async () => {
     const { client, fakeProcess } = createClient();
 

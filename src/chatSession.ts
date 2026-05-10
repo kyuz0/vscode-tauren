@@ -65,6 +65,10 @@ export class ChatSession {
     return this.busy;
   }
 
+  public get isEmpty(): boolean {
+    return this.transcript.length === 0;
+  }
+
   public snapshot(): ChatState {
     return {
       messages: this.transcript.map(cloneMessage),
@@ -93,6 +97,15 @@ export class ChatSession {
     this.sessionGeneration += 1;
     this.activitySequence = 0;
     this.transcript.length = 0;
+    this.activeAssistantIndex = undefined;
+    this.activeActivityIds.clear();
+    this.busy = false;
+  }
+
+  public replaceMessages(messages: ChatMessage[]): void {
+    this.activitySequence = 0;
+    this.transcript.length = 0;
+    this.transcript.push(...messages.map(cloneMessage));
     this.activeAssistantIndex = undefined;
     this.activeActivityIds.clear();
     this.busy = false;

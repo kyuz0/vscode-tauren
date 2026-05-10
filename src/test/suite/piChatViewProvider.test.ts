@@ -4,6 +4,7 @@ import { PiChatViewProvider, type PiRpcClientLike } from '../../piChatViewProvid
 import type { WebviewStateMessage } from '../../chatWebview';
 import type {
   ExtensionUiResponse,
+  PiAgentMessage,
   PiModel,
   PiSessionState,
   PiSessionStats,
@@ -70,6 +71,42 @@ suite('PiChatViewProvider', () => {
       }
     });
     assert.strictEqual(workspaceState.get<unknown>('piui.cachedModelMeta'), undefined);
+    provider.dispose();
+  });
+
+  test('restores and persists current session file through workspace state', async () => {
+    const workspaceState = new FakeMemento({
+      'piui.currentSessionFile': '/sessions/current.jsonl'
+    });
+    const clientOptions: unknown[] = [];
+    const client = new FakePiClient({
+      state: {
+        model: { provider: 'openai', id: 'live-model', reasoning: false },
+        thinkingLevel: 'off',
+        sessionFile: '/sessions/updated.jsonl'
+      },
+      messages: [{ role: 'user', content: 'Restored prompt' }]
+    });
+    const provider = new PiChatViewProvider(
+      vscode.Uri.file('/extension'),
+      (options) => {
+        clientOptions.push(options);
+        return client;
+      },
+      workspaceState
+    );
+    const view = new FakeWebviewView();
+
+    provider.resolveWebviewView(view.asWebviewView());
+    await flushPromises();
+
+    assert.deepStrictEqual(clientOptions, [
+      { cwd: undefined, sessionFile: '/sessions/current.jsonl' }
+    ]);
+    assert.deepStrictEqual(lastPostedState(view).messages, [
+      { role: 'user', text: 'Restored prompt' }
+    ]);
+    assert.strictEqual(workspaceState.get<unknown>('piui.currentSessionFile'), '/sessions/updated.jsonl');
     provider.dispose();
   });
 
@@ -260,11 +297,13 @@ class FakePiClient implements PiRpcClientLike {
   private readonly state: PiSessionState;
   private readonly models: PiModel[];
   private readonly stats: PiSessionStats;
+  private readonly messages: PiAgentMessage[];
 
-  public constructor(options: { state: PiSessionState; models?: PiModel[]; stats?: PiSessionStats }) {
+  public constructor(options: { state: PiSessionState; models?: PiModel[]; stats?: PiSessionStats; messages?: PiAgentMessage[] }) {
     this.state = options.state;
     this.models = options.models ?? [];
     this.stats = options.stats ?? {};
+    this.messages = options.messages ?? [];
   }
 
   public onEvent(_listener: (event: RpcEvent) => void): () => void {
@@ -302,6 +341,10 @@ class FakePiClient implements PiRpcClientLike {
 
   public async getCommands(): Promise<{ commands?: [] }> {
     return { commands: [] };
+  }
+
+  public async getMessages(): Promise<{ messages?: PiAgentMessage[] }> {
+    return { messages: this.messages };
   }
 
   public async setModel(_provider: string, _modelId: string): Promise<PiModel> {

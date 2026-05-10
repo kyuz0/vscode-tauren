@@ -90,6 +90,25 @@ suite('ChatSession', () => {
     });
   });
 
+  test('replaceMessages restores an idle transcript', () => {
+    const session = new ChatSession();
+
+    session.beginSubmit('old prompt');
+    session.replaceMessages([
+      { role: 'user', text: 'restored prompt' },
+      { role: 'assistant', text: 'restored response' }
+    ]);
+
+    assert.deepStrictEqual(session.snapshot(), {
+      messages: [
+        { role: 'user', text: 'restored prompt' },
+        { role: 'assistant', text: 'restored response' }
+      ],
+      busy: false
+    });
+    assert.strictEqual(session.isEmpty, false);
+  });
+
   test('setBusy updates busy state without changing transcript', () => {
     const session = new ChatSession();
 

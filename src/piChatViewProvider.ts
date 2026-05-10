@@ -19,6 +19,7 @@ export type { PiRpcClientLike } from './piChatController';
 
 const cachedSessionMetaStorageKey = 'piui.cachedSessionMeta';
 const cachedModelMetaStorageKey = 'piui.cachedModelMeta';
+const currentSessionFileStorageKey = 'piui.currentSessionFile';
 
 export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   private webviewView: vscode.WebviewView | undefined;
@@ -55,7 +56,9 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
       },
       fullRpcAgentCommunication: getFullRpcAgentCommunicationSetting(),
       initialSessionMeta: readCachedSessionMeta(this.workspaceState),
-      onSessionMetaChange: (metadata) => this.writeCachedSessionMeta(metadata)
+      initialSessionFile: readCurrentSessionFile(this.workspaceState),
+      onSessionMetaChange: (metadata) => this.writeCachedSessionMeta(metadata),
+      onSessionFileChange: (sessionFile) => this.writeCurrentSessionFile(sessionFile)
     });
 
     this.disposables.push(
@@ -224,6 +227,14 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
     void this.workspaceState.update(cachedSessionMetaStorageKey, value).then(undefined, () => undefined);
     void this.workspaceState.update(cachedModelMetaStorageKey, undefined).then(undefined, () => undefined);
   }
+
+  private writeCurrentSessionFile(sessionFile: string | undefined): void {
+    if (!this.workspaceState) {
+      return;
+    }
+
+    void this.workspaceState.update(currentSessionFileStorageKey, sessionFile || undefined).then(undefined, () => undefined);
+  }
 }
 
 function getFullRpcAgentCommunicationSetting(): boolean {
@@ -244,6 +255,11 @@ function readCachedSessionMeta(workspaceState: vscode.Memento | undefined): PiCh
   const legacyModelMeta = parseCachedModelMeta(workspaceState?.get<unknown>(cachedModelMetaStorageKey));
 
   return legacyModelMeta ? { model: legacyModelMeta } : undefined;
+}
+
+function readCurrentSessionFile(workspaceState: vscode.Memento | undefined): string | undefined {
+  const value = workspaceState?.get<unknown>(currentSessionFileStorageKey);
+  return typeof value === 'string' && value ? value : undefined;
 }
 
 function parseCachedSessionMeta(value: unknown): PiChatSessionMetaSnapshot | undefined {

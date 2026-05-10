@@ -50,6 +50,7 @@ Do not add transient notes, guesses, one-off debugging observations, or broad ge
 - Parse records by splitting only on LF (`\n`) and stripping a trailing CR (`\r`).
 - Do not use Node `readline` for RPC output; it is not protocol-compliant for Pi RPC framing.
 - Prompt commands use `{ "type": "prompt", "message": "..." }` and should include an `id` for response correlation.
+- Restore sidebar history from Pi RPC `get_messages` after reconnecting to the persisted `sessionFile`; do not treat a locally cached transcript as the session source of truth.
 - Track responses by `id`; events do not include request ids.
 - Stream assistant text from `message_update` events where `assistantMessageEvent.type === "text_delta"`.
 - Treat `agent_start` as busy and `agent_end` as idle.

@@ -1,4 +1,4 @@
-import { ChatSession } from './chatSession';
+import { ChatSession, type ChatMessage } from './chatSession';
 import {
   createWebviewStateMessage,
   type WebviewMessage,
@@ -25,6 +25,7 @@ import {
   type ActivityUpdateAction
 } from './piEventMapper';
 import type {
+  PiAgentMessage,
   PiCommand,
   PiModel,
   PiPromptStreamingBehavior,
@@ -53,6 +54,7 @@ export type PiRpcClientLike = Pick<
   | 'compact'
   | 'exportHtml'
   | 'getLastAssistantText'
+  | 'getMessages'
   | 'respondExtensionUiRequest'
   | 'dispose'
 >;
@@ -88,7 +90,9 @@ export type PiChatControllerOptions = {
   fullRpcAgentCommunication?: boolean;
   stateScheduler?: StatePublisherScheduler;
   initialSessionMeta?: PiChatSessionMetaSnapshot;
+  initialSessionFile?: string;
   onSessionMetaChange?: (metadata: PiChatSessionMetaSnapshot) => void;
+  onSessionFileChange?: (sessionFile: string | undefined) => void;
   writeClipboard?: (text: string) => PromiseLike<void> | Promise<void> | void;
 };
 
@@ -113,7 +117,9 @@ export class PiChatController {
   private slashCommandsRefreshing = false;
   private metadataRefreshSequence = 0;
   private slashCommandsRefreshSequence = 0;
+  private currentSessionFile: string | undefined;
   private nextClientSessionFile: string | undefined;
+  private shouldRestoreInitialSessionHistory: boolean;
   private abortRequested = false;
   private abortNoticeAdded = false;
   private metadataRefreshInFlight: { generation: number; promise: Promise<void> } | undefined;
@@ -126,6 +132,8 @@ export class PiChatController {
 
   public constructor(private readonly options: PiChatControllerOptions) {
     this.fullRpcAgentCommunication = options.fullRpcAgentCommunication ?? false;
+    this.currentSessionFile = options.initialSessionFile;
+    this.shouldRestoreInitialSessionHistory = Boolean(options.initialSessionFile);
 
     if (options.initialSessionMeta) {
       this.setSessionMetaFields(options.initialSessionMeta);
@@ -213,6 +221,10 @@ export class PiChatController {
       return;
     }
 
+    if (this.shouldRestoreInitialSessionHistory) {
+      await this.refreshSessionMeta({ startClient: true });
+    }
+
     const submittedPrompt = this.session.beginSubmit(message.text);
 
     if (!submittedPrompt) {
@@ -239,7 +251,10 @@ export class PiChatController {
     this.assistantStreamId = 0;
     this.resetAbortState();
     this.session.startNewSession();
+    this.currentSessionFile = undefined;
     this.nextClientSessionFile = undefined;
+    this.shouldRestoreInitialSessionHistory = false;
+    this.options.onSessionFileChange?.(undefined);
     this.resetSessionMeta();
     this.disposeClient();
     this.postState();
@@ -358,6 +373,7 @@ export class PiChatController {
 
     try {
       await Promise.all([
+        this.restoreInitialSessionHistory(client, sessionGeneration, refreshId),
         this.refreshModelMeta(client, sessionGeneration, refreshId),
         this.refreshContextUsage(client, sessionGeneration, refreshId),
         this.refreshModelOptions(client, sessionGeneration, refreshId)
@@ -367,6 +383,37 @@ export class PiChatController {
         this.setMetadataRefreshing(false);
       }
     }
+  }
+
+  private async restoreInitialSessionHistory(
+    client: PiRpcClientLike,
+    sessionGeneration: number,
+    refreshId: number
+  ): Promise<void> {
+    if (!this.shouldRestoreInitialSessionHistory) {
+      return;
+    }
+
+    const result = await client.getMessages();
+
+    if (!this.isCurrentMetadataRefresh(sessionGeneration, refreshId)) {
+      return;
+    }
+
+    this.shouldRestoreInitialSessionHistory = false;
+
+    if (!this.session.isEmpty) {
+      return;
+    }
+
+    const messages = formatAgentMessages(result.messages);
+
+    if (messages.length === 0) {
+      return;
+    }
+
+    this.session.replaceMessages(messages);
+    this.postState();
   }
 
   private async refreshModelMeta(
@@ -379,6 +426,8 @@ export class PiChatController {
     if (!this.isCurrentMetadataRefresh(sessionGeneration, refreshId)) {
       return;
     }
+
+    this.applyCurrentSessionFile(getSessionFile(state));
 
     if (this.applyModelMeta(getModelMeta(state))) {
       this.postState();
@@ -394,6 +443,12 @@ export class PiChatController {
 
     if (!this.isCurrentMetadataRefresh(sessionGeneration, refreshId)) {
       return;
+    }
+
+    const statsSessionFile = getSessionFile(stats);
+
+    if (statsSessionFile) {
+      this.applyCurrentSessionFile(statsSessionFile);
     }
 
     if (this.applyContextUsage(formatContextUsage(stats))) {
@@ -528,6 +583,15 @@ export class PiChatController {
 
     this.slashCommands = slashCommands;
     return true;
+  }
+
+  private applyCurrentSessionFile(sessionFile: string | undefined): void {
+    if (sessionFile === this.currentSessionFile) {
+      return;
+    }
+
+    this.currentSessionFile = sessionFile;
+    this.options.onSessionFileChange?.(sessionFile);
   }
 
   private setSessionMetaFields(snapshot: PiChatSessionMetaSnapshot): void {
@@ -908,7 +972,7 @@ export class PiChatController {
       return this.client;
     }
 
-    const sessionFile = this.nextClientSessionFile;
+    const sessionFile = this.nextClientSessionFile ?? this.currentSessionFile;
     this.nextClientSessionFile = undefined;
     const clientOptions: PiRpcClientOptions = { cwd: this.options.getCwd?.() };
 
@@ -1129,10 +1193,89 @@ function formatInteger(value: number): string {
   return Math.round(value).toLocaleString('en-US');
 }
 
-function getSessionFile(state: PiSessionState): string | undefined {
+function getSessionFile(state: { sessionFile?: string }): string | undefined {
   return typeof state.sessionFile === 'string' && state.sessionFile
     ? state.sessionFile
     : undefined;
+}
+
+function formatAgentMessages(messages: PiAgentMessage[] | undefined): ChatMessage[] {
+  if (!Array.isArray(messages)) {
+    return [];
+  }
+
+  return messages.flatMap((message): ChatMessage[] => {
+    if (!isRecord(message)) {
+      return [];
+    }
+
+    if (message.role === 'user') {
+      const text = extractMessageText(message.content);
+      return text.trim() ? [{ role: 'user', text }] : [];
+    }
+
+    if (message.role === 'assistant') {
+      const text = extractMessageText(message.content);
+      const errorMessage = typeof message.errorMessage === 'string' ? message.errorMessage : '';
+      const displayText = text || errorMessage;
+      return displayText.trim()
+        ? [{ role: 'assistant', text: displayText, ...(errorMessage ? { error: true } : {}) }]
+        : [];
+    }
+
+    if (message.role === 'compactionSummary') {
+      const summary = typeof message.summary === 'string' ? message.summary : '';
+      return summary.trim()
+        ? [{ role: 'system', text: `Compacted session context.\n\n${summary}` }]
+        : [];
+    }
+
+    if (message.role === 'branchSummary') {
+      const summary = typeof message.summary === 'string' ? message.summary : '';
+      return summary.trim()
+        ? [{ role: 'system', text: `Returned from branch.\n\n${summary}` }]
+        : [];
+    }
+
+    if (message.role === 'custom') {
+      const displayText = typeof message.display === 'string'
+        ? message.display
+        : extractMessageText(message.content);
+      return displayText.trim() ? [{ role: 'system', text: displayText }] : [];
+    }
+
+    return [];
+  });
+}
+
+function extractMessageText(content: unknown): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  if (!Array.isArray(content)) {
+    return '';
+  }
+
+  return content.flatMap((item) => {
+    if (!isRecord(item)) {
+      return [];
+    }
+
+    if (item.type === 'text' && typeof item.text === 'string') {
+      return [item.text];
+    }
+
+    if (item.type === 'image') {
+      return ['[Image]'];
+    }
+
+    return [];
+  }).join('\n\n');
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 function getModelMeta(state: PiSessionState): PiChatModelMeta {

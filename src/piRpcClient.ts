@@ -82,6 +82,18 @@ export type PiLastAssistantText = {
   text?: string | null;
 };
 
+export type PiAgentMessage = {
+  role?: string;
+  content?: unknown;
+  errorMessage?: string;
+  summary?: string;
+  display?: unknown;
+};
+
+export type PiMessagesResult = {
+  messages?: PiAgentMessage[];
+};
+
 export type PiPromptStreamingBehavior = 'steer' | 'followUp';
 
 type PendingRequest = {
@@ -217,6 +229,11 @@ export class PiRpcClient {
 
   public async getLastAssistantText(): Promise<PiLastAssistantText> {
     const response = await this.send({ type: 'get_last_assistant_text' });
+    return isRecord(response.data) ? response.data : {};
+  }
+
+  public async getMessages(): Promise<PiMessagesResult> {
+    const response = await this.send({ type: 'get_messages' });
     return isRecord(response.data) ? response.data : {};
   }
 

@@ -9,6 +9,7 @@ import type { WebviewStateMessage } from '../../chatWebview';
 import type { StatePublisherScheduler } from '../../statePublisher';
 import type {
   ExtensionUiResponse,
+  PiAgentMessage,
   PiCommand,
   PiModel,
   PiRpcClientOptions,
@@ -92,6 +93,59 @@ suite('PiChatController', () => {
     ]);
     assert.strictEqual(lastState(harness).metadataRefreshing, true);
     assert.strictEqual(harness.createCalls, 1);
+    harness.controller.dispose();
+  });
+
+  test('initial session file reconnects and restores messages from Pi history', async () => {
+    const client = new FakePiClient({
+      state: {
+        model: { provider: 'openai', id: 'gpt-test', reasoning: false },
+        thinkingLevel: 'off',
+        sessionFile: '/sessions/current.jsonl'
+      },
+      messages: [
+        { role: 'user', content: 'Earlier question' },
+        { role: 'assistant', content: [{ type: 'text', text: 'Earlier answer' }] },
+        { role: 'toolResult', content: [{ type: 'text', text: 'hidden tool output' }] },
+        { role: 'assistant', content: [], errorMessage: 'Earlier failure' }
+      ]
+    });
+    const harness = createControllerHarness([client], {
+      cwd: '/workspace',
+      initialSessionFile: '/sessions/current.jsonl'
+    });
+
+    await harness.controller.handleWebviewMessage({ type: 'ready' });
+    await flushPromises();
+
+    assert.deepStrictEqual(harness.clientOptions, [
+      { cwd: '/workspace', sessionFile: '/sessions/current.jsonl' }
+    ]);
+    assert.strictEqual(client.messagesCalls, 1);
+    assert.deepStrictEqual(lastState(harness).messages, [
+      { role: 'user', text: 'Earlier question' },
+      { role: 'assistant', text: 'Earlier answer' },
+      { role: 'assistant', text: 'Earlier failure', error: true }
+    ]);
+    harness.controller.dispose();
+  });
+
+  test('metadata refresh publishes the current session file', async () => {
+    const sessionFiles: Array<string | undefined> = [];
+    const client = new FakePiClient({
+      state: {
+        model: { provider: 'openai', id: 'gpt-test', reasoning: false },
+        thinkingLevel: 'off',
+        sessionFile: '/sessions/current.jsonl'
+      }
+    });
+    const harness = createControllerHarness([client], {
+      onSessionFileChange: (sessionFile) => sessionFiles.push(sessionFile)
+    });
+
+    await harness.controller.handleWebviewMessage({ type: 'refreshMetadata' });
+
+    assert.deepStrictEqual(sessionFiles, ['/sessions/current.jsonl']);
     harness.controller.dispose();
   });
 
@@ -353,6 +407,26 @@ suite('PiChatController', () => {
       { role: 'assistant', text: 'Prompt failed', error: true }
     ]);
     assert.strictEqual(lastState(harness).busy, false);
+    harness.controller.dispose();
+  });
+
+  test('starting a new session clears the remembered session file', async () => {
+    const sessionFiles: Array<string | undefined> = [];
+    const nextClient = new FakePiClient({
+      stateResult: createDeferred<PiSessionState>().promise,
+      statsResult: createDeferred<PiSessionStats>().promise,
+      modelsResult: createDeferred<PiModel[]>().promise
+    });
+    const harness = createControllerHarness([nextClient], {
+      initialSessionFile: '/sessions/current.jsonl',
+      onSessionFileChange: (sessionFile) => sessionFiles.push(sessionFile)
+    });
+
+    harness.controller.startNewSession();
+    await flushPromises();
+
+    assert.deepStrictEqual(sessionFiles, [undefined]);
+    assert.deepStrictEqual(harness.clientOptions, [{ cwd: undefined }]);
     harness.controller.dispose();
   });
 
@@ -740,7 +814,9 @@ type ControllerHarnessOptions = {
   fullRpcAgentCommunication?: boolean;
   stateScheduler?: StatePublisherScheduler;
   initialSessionMeta?: PiChatSessionMetaSnapshot;
+  initialSessionFile?: string;
   onSessionMetaChange?: (metadata: PiChatSessionMetaSnapshot) => void;
+  onSessionFileChange?: (sessionFile: string | undefined) => void;
 };
 
 function createControllerHarness(
@@ -772,7 +848,9 @@ function createControllerHarness(
     fullRpcAgentCommunication: options.fullRpcAgentCommunication ?? false,
     stateScheduler: options.stateScheduler,
     initialSessionMeta: options.initialSessionMeta,
-    onSessionMetaChange: options.onSessionMetaChange
+    initialSessionFile: options.initialSessionFile,
+    onSessionMetaChange: options.onSessionMetaChange,
+    onSessionFileChange: options.onSessionFileChange
   };
 
   const controller = new PiChatController(controllerOptions);
@@ -796,6 +874,8 @@ type FakePiClientOptions = {
   modelsResult?: Promise<PiModel[]>;
   statsResult?: Promise<PiSessionStats>;
   commands?: PiCommand[];
+  messages?: PiAgentMessage[];
+  messagesResult?: Promise<PiAgentMessage[]>;
   commandsResult?: Promise<PiCommand[]>;
   commandsError?: unknown;
   reloadError?: unknown;
@@ -854,10 +934,13 @@ class FakePiClient implements PiRpcClientLike {
   public models: PiModel[];
   public stats: PiSessionStats;
   public commands: PiCommand[];
+  public messages: PiAgentMessage[];
   public stateResult: Promise<PiSessionState> | undefined;
   public modelsResult: Promise<PiModel[]> | undefined;
   public statsResult: Promise<PiSessionStats> | undefined;
   public commandsResult: Promise<PiCommand[]> | undefined;
+  public messagesResult: Promise<PiAgentMessage[]> | undefined;
+  public messagesCalls = 0;
   public commandsError: unknown;
   public reloadError: unknown;
   public promptResult: Promise<void> | undefined;
@@ -873,10 +956,12 @@ class FakePiClient implements PiRpcClientLike {
     this.models = options.models ?? [{ provider: 'openai', id: 'gpt-test', name: 'GPT Test', reasoning: false }];
     this.stats = options.stats ?? {};
     this.commands = options.commands ?? [];
+    this.messages = options.messages ?? [];
     this.stateResult = options.stateResult;
     this.modelsResult = options.modelsResult;
     this.statsResult = options.statsResult;
     this.commandsResult = options.commandsResult;
+    this.messagesResult = options.messagesResult;
     this.commandsError = options.commandsError;
     this.reloadError = options.reloadError;
     this.promptResult = options.promptResult;
@@ -951,6 +1036,11 @@ class FakePiClient implements PiRpcClientLike {
     }
 
     return { commands: await (this.commandsResult ?? this.commands) };
+  }
+
+  public async getMessages(): Promise<{ messages?: PiAgentMessage[] }> {
+    this.messagesCalls += 1;
+    return { messages: await (this.messagesResult ?? this.messages) };
   }
 
   public async setModel(_provider: string, _modelId: string): Promise<PiModel> {
