@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import { PiChatController, type PiChatControllerOptions, type PiRpcClientLike } from '../../piChatController';
 import type { WebviewStateMessage } from '../../chatWebview';
+import type { StatePublisherScheduler } from '../../statePublisher';
 import type { PiModel, PiRpcClientOptions, PiSessionState, PiSessionStats, RpcEvent } from '../../piRpcClient';
 
 suite('PiChatController', () => {
@@ -142,6 +143,80 @@ suite('PiChatController', () => {
     harness.controller.dispose();
   });
 
+  test('streaming text deltas are coalesced into one scheduled state post', async () => {
+    const client = new FakePiClient();
+    const scheduler = new FakeStateScheduler();
+    const harness = createControllerHarness([client], { stateScheduler: scheduler });
+
+    await harness.controller.handleWebviewMessage({ type: 'submit', text: 'hello' });
+    const stateCountAfterSubmit = harness.states.length;
+
+    client.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'A' } });
+    client.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'B' } });
+    client.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'C' } });
+
+    assert.strictEqual(harness.states.length, stateCountAfterSubmit);
+    assert.strictEqual(scheduler.pendingCount, 1);
+
+    scheduler.runAll();
+
+    assert.strictEqual(harness.states.length, stateCountAfterSubmit + 1);
+    assert.deepStrictEqual(lastState(harness).messages, [
+      { role: 'user', text: 'hello' },
+      { role: 'assistant', text: 'ABC' }
+    ]);
+    harness.controller.dispose();
+  });
+
+  test('agent end flushes a pending streaming state post', async () => {
+    const client = new FakePiClient();
+    const scheduler = new FakeStateScheduler();
+    const harness = createControllerHarness([client], { stateScheduler: scheduler });
+
+    await harness.controller.handleWebviewMessage({ type: 'submit', text: 'hello' });
+    const stateCountAfterSubmit = harness.states.length;
+
+    client.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'done' } });
+    client.emit({ type: 'agent_end' });
+
+    assert.strictEqual(scheduler.pendingCount, 0);
+    assert.strictEqual(harness.states.length, stateCountAfterSubmit + 1);
+    assert.deepStrictEqual(lastState(harness).messages, [
+      { role: 'user', text: 'hello' },
+      { role: 'assistant', text: 'done' }
+    ]);
+    assert.strictEqual(lastState(harness).busy, false);
+
+    scheduler.runAll();
+
+    assert.strictEqual(harness.states.length, stateCountAfterSubmit + 1);
+    harness.controller.dispose();
+  });
+
+  test('assistant errors flush a pending streaming state post', async () => {
+    const client = new FakePiClient();
+    const scheduler = new FakeStateScheduler();
+    const harness = createControllerHarness([client], { stateScheduler: scheduler });
+
+    await harness.controller.handleWebviewMessage({ type: 'submit', text: 'hello' });
+    const stateCountAfterSubmit = harness.states.length;
+
+    client.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'partial' } });
+    client.emit({ type: 'message_update', assistantMessageEvent: { type: 'error', reason: 'stream failed' } });
+
+    assert.strictEqual(scheduler.pendingCount, 0);
+    assert.strictEqual(harness.states.length, stateCountAfterSubmit + 1);
+    assert.deepStrictEqual(lastState(harness).messages, [
+      { role: 'user', text: 'hello' },
+      { role: 'assistant', text: 'stream failed', error: true }
+    ]);
+
+    scheduler.runAll();
+
+    assert.strictEqual(harness.states.length, stateCountAfterSubmit + 1);
+    harness.controller.dispose();
+  });
+
   test('extension errors are added to the transcript', async () => {
     const client = new FakePiClient();
     const harness = createControllerHarness([client]);
@@ -217,6 +292,7 @@ type ControllerHarness = {
 type ControllerHarnessOptions = {
   cwd?: string;
   fullRpcAgentCommunication?: boolean;
+  stateScheduler?: StatePublisherScheduler;
 };
 
 function createControllerHarness(
@@ -244,7 +320,8 @@ function createControllerHarness(
     showNotification: (message, type) => {
       notifications.push({ message, type });
     },
-    fullRpcAgentCommunication: options.fullRpcAgentCommunication ?? false
+    fullRpcAgentCommunication: options.fullRpcAgentCommunication ?? false,
+    stateScheduler: options.stateScheduler
   };
 
   const controller = new PiChatController(controllerOptions);
@@ -267,6 +344,41 @@ type FakePiClientOptions = {
   promptResult?: Promise<void>;
   promptError?: unknown;
 };
+
+class FakeStateScheduler implements StatePublisherScheduler {
+  private nextId = 0;
+  private readonly callbacks = new Map<number, () => void>();
+
+  public get pendingCount(): number {
+    return this.callbacks.size;
+  }
+
+  public schedule(callback: () => void): { dispose(): void } {
+    const id = this.nextId;
+    this.nextId += 1;
+    this.callbacks.set(id, callback);
+
+    return {
+      dispose: () => {
+        this.callbacks.delete(id);
+      }
+    };
+  }
+
+  public runAll(): void {
+    while (this.callbacks.size > 0) {
+      const next = this.callbacks.entries().next().value;
+
+      if (!next) {
+        return;
+      }
+
+      const [id, callback] = next;
+      this.callbacks.delete(id);
+      callback();
+    }
+  }
+}
 
 class FakePiClient implements PiRpcClientLike {
   public disposed = false;

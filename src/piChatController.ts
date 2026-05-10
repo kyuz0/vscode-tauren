@@ -6,6 +6,10 @@ import {
   type WebviewStateMessage
 } from './chatWebview';
 import {
+  StatePublisher,
+  type StatePublisherScheduler
+} from './statePublisher';
+import {
   formatExtensionError,
   getFailedResponseError,
   mapExtensionUiRequest,
@@ -47,6 +51,7 @@ export type PiChatControllerOptions = {
   showNotification: (message: string, notifyType: string) => void;
   getCwd?: () => string | undefined;
   fullRpcAgentCommunication?: boolean;
+  stateScheduler?: StatePublisherScheduler;
 };
 
 type DisposableLike = {
@@ -68,12 +73,19 @@ export class PiChatController {
   private fullRpcAgentCommunication: boolean;
   private readonly session = new ChatSession();
   private readonly clientDisposables: DisposableLike[] = [];
+  private readonly statePublisher: StatePublisher<WebviewStateMessage>;
 
   public constructor(private readonly options: PiChatControllerOptions) {
     this.fullRpcAgentCommunication = options.fullRpcAgentCommunication ?? false;
+    this.statePublisher = new StatePublisher(
+      () => this.getStateMessage(),
+      options.postState,
+      options.stateScheduler
+    );
   }
 
   public dispose(): void {
+    this.statePublisher.dispose();
     this.disposeClient();
   }
 
@@ -145,7 +157,7 @@ export class PiChatController {
   }
 
   public postState(): void {
-    this.options.postState(this.getStateMessage());
+    this.statePublisher.flush();
   }
 
   public getStateMessage(): WebviewStateMessage {
@@ -355,7 +367,7 @@ export class PiChatController {
 
     if (action.type === 'text_delta') {
       if (this.session.appendAssistantDelta(action.delta)) {
-        this.postState();
+        this.scheduleState();
       }
 
       return;
@@ -364,12 +376,22 @@ export class PiChatController {
     if (action.type === 'assistant_error') {
       this.session.markActiveAssistantError(action.message);
       this.postState();
+      return;
     }
 
     if (action.type === 'activity_update' || action.type === 'activity_add' || action.type === 'activity_remove') {
       this.applyActivityAction(action);
-      this.postState();
+
+      if (action.type === 'activity_update' && action.bodyMode === 'append') {
+        this.scheduleState();
+      } else {
+        this.postState();
+      }
     }
+  }
+
+  private scheduleState(): void {
+    this.statePublisher.schedule();
   }
 
   private applyRpcActivity(event: RpcEvent): void {
