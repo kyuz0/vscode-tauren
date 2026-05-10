@@ -22,5 +22,5 @@ plan/**
 # Build metadata
 out/**/*.map
 
-# Browser bundles are vendored under resources/vendor.
+# Runtime webview assets are kept under resources/.
 node_modules/**

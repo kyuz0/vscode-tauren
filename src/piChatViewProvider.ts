@@ -106,11 +106,15 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
     const highlightUri = webviewView.webview.asWebviewUri(
       vscode.Uri.joinPath(this.extensionUri, 'resources', 'vendor', 'highlight.min.js')
     );
+    const webviewScriptUri = webviewView.webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, 'resources', 'webview', 'chat.js')
+    );
 
     webviewView.webview.html = createWebviewHtml({
       markdownItScriptUri: markdownItUri.toString(),
       domPurifyScriptUri: domPurifyUri.toString(),
-      highlightScriptUri: highlightUri.toString()
+      highlightScriptUri: highlightUri.toString(),
+      webviewScriptUri: webviewScriptUri.toString()
     });
 
     this.webviewDisposables.push(

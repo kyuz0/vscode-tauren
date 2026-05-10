@@ -23,14 +23,14 @@ Do not add transient notes, guesses, one-off debugging observations, or broad ge
 - `src/chatSession.ts` owns pure in-memory transcript/session state and has no VS Code or Pi process dependencies.
 - `src/chatWebview.ts` owns public sidebar webview HTML composition plus webview state/message types.
 - `src/chatWebviewStyles.ts` owns the static sidebar CSS string.
-- `src/chatWebviewScript.ts` owns the static browser script string embedded into the webview HTML.
+- Browser-side sidebar logic lives under `src/webview` and is bundled by esbuild to `resources/webview/chat.js`; keep generated webview assets in `resources/webview`.
 - `src/nonce.ts` owns nonce generation for CSP-protected inline scripts.
 - `src/piEventMapper.ts` owns pure Pi RPC event-to-UI action mapping helpers.
 - `src/extensionUiRequestHandler.ts` owns extension UI request routing through an injected VS Code UI adapter, safe cancellation, and stale request cleanup.
 - `src/piSessionList.ts` owns extension-side discovery/parsing of persisted Pi session JSONL files for the sidebar session switcher.
 - `src/piRpcClient.ts` owns the `pi --mode rpc` subprocess, strict JSONL parsing, request/response tracking, stderr collection, and process cleanup.
-- Webview browser bundles are vendored in `resources/vendor`; keep browser-only libraries out of runtime `dependencies` unless extension-host code imports them.
-- There is no bundler. Keep the implementation compatible with the current direct `tsc` build.
+- Third-party webview browser bundles are vendored in `resources/vendor`; generated first-party webview bundles live in `resources/webview`; keep browser-only libraries out of runtime `dependencies` unless extension-host code imports them.
+- The extension host still compiles with direct `tsc`; browser-side webview code is bundled separately with esbuild through `npm run compile:webview`.
 
 ## Pi Integration
 

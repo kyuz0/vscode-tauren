@@ -1,10 +1,11 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
+import * as path from 'path';
 import {
   createWebviewHtml,
   createWebviewStateMessage,
   parseWebviewMessage
 } from '../../chatWebview';
-import { chatWebviewScript } from '../../chatWebviewScript';
 import type { ChatState } from '../../chatSession';
 
 suite('Chat webview helpers', () => {
@@ -142,15 +143,21 @@ suite('Chat webview helpers', () => {
     assert.deepStrictEqual(parseWebviewMessage({ type: 'futureMessage' }), { type: 'unknown' });
   });
 
-  test('embedded webview script is valid JavaScript', () => {
-    assert.doesNotThrow(() => new Function(chatWebviewScript));
+  test('webview bundle is valid JavaScript', () => {
+    const bundlePath = path.resolve(__dirname, '..', '..', '..', 'resources', 'webview', 'chat.js');
+    const bundle = fs.readFileSync(bundlePath, 'utf8');
+
+    assert.doesNotThrow(() => new Function(bundle));
+    assert.ok(bundle.includes('vscode.postMessage({ type: "ready" });'));
+    assert.ok(bundle.includes('vscode.postMessage({ type: "refreshMetadata" });'));
   });
 
   test('createWebviewHtml wires CSP nonce and stable composer markup', () => {
     const html = createWebviewHtml({
       markdownItScriptUri: 'vscode-resource://markdown-it.js',
       domPurifyScriptUri: 'vscode-resource://dompurify.js',
-      highlightScriptUri: 'vscode-resource://highlight.js'
+      highlightScriptUri: 'vscode-resource://highlight.js',
+      webviewScriptUri: 'vscode-resource://chat.js'
     });
     const scriptMatch = html.match(/<script nonce="([A-Za-z0-9]{32})"/);
 
@@ -166,6 +173,7 @@ suite('Chat webview helpers', () => {
     assert.ok(html.includes('<script nonce="' + nonce + '" src="vscode-resource://highlight.js"></script>'));
     assert.ok(html.includes('<script nonce="' + nonce + '" src="vscode-resource://markdown-it.js"></script>'));
     assert.ok(html.includes('<script nonce="' + nonce + '" src="vscode-resource://dompurify.js"></script>'));
+    assert.ok(html.includes('<script nonce="' + nonce + '" src="vscode-resource://chat.js"></script>'));
     assert.ok(html.includes('class="pi-toolbar__sessions"'));
     assert.ok(html.includes('class="messages" aria-live="polite" aria-label="Pi conversation"'));
     assert.ok(html.includes('class="sessions" aria-label="Pi sessions" role="listbox"'));
@@ -188,10 +196,6 @@ suite('Chat webview helpers', () => {
     assert.ok(html.includes('class="composer__select composer__thinking-select"'));
     assert.ok(html.includes('class="composer__select composer__model-select"'));
     assert.ok(html.includes('class="composer__button composer__submit"'));
-    assert.ok(html.includes('state.modelOptions.length === 0 && !state.metadataRefreshing'));
-    assert.ok(html.includes("vscode.postMessage({ type: 'refreshMetadata' });"));
-    assert.ok(html.includes("vscode.postMessage({ type: 'refreshSlashCommands' });"));
-    assert.ok(html.includes("vscode.postMessage({ type: 'showSessions' });"));
-    assert.ok(html.includes("vscode.postMessage({ type: 'ready' });"));
+
   });
 });

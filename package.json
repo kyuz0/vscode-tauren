@@ -98,10 +98,11 @@
     }
   },
   "scripts": {
-    "compile": "tsc -p ./",
+    "compile": "npm run compile:webview && tsc -p ./",
+    "compile:webview": "esbuild src/webview/main.ts --bundle --format=iife --target=es2022 --outfile=resources/webview/chat.js --sourcemap",
     "install:local": "npm run compile && npx --yes @vscode/vsce package --out piui-local.vsix && code --install-extension piui-local.vsix --force && node scripts/restart-vscode-extension-host.js",
     "test": "npm run compile -- --pretty false && vscode-test",
-    "watch": "tsc -watch -p ./"
+    "watch": "npm run compile:webview && tsc -watch -p ./"
   },
   "devDependencies": {
     "@highlightjs/cdn-assets": "^11.11.1",
@@ -111,6 +112,7 @@
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "dompurify": "^3.4.2",
+    "esbuild": "^0.28.0",
     "markdown-it": "^14.1.1",
     "mocha": "^11.7.5",
     "typescript": "^6.0.3"

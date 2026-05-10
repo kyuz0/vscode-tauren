@@ -1,5 +1,4 @@
 import type { ChatState } from './chatSession';
-import { chatWebviewScript } from './chatWebviewScript';
 import { chatWebviewStyles } from './chatWebviewStyles';
 import { createNonce } from './nonce';
 
@@ -231,6 +230,7 @@ export type WebviewScriptUris = {
   markdownItScriptUri: string;
   domPurifyScriptUri: string;
   highlightScriptUri: string;
+  webviewScriptUri: string;
 };
 
 export function createWebviewHtml(scriptUris: WebviewScriptUris): string {
@@ -311,9 +311,7 @@ ${chatWebviewStyles}
   <script nonce="${nonce}" src="${scriptUris.highlightScriptUri}"></script>
   <script nonce="${nonce}" src="${scriptUris.markdownItScriptUri}"></script>
   <script nonce="${nonce}" src="${scriptUris.domPurifyScriptUri}"></script>
-  <script nonce="${nonce}">
-${chatWebviewScript}
-  </script>
+  <script nonce="${nonce}" src="${scriptUris.webviewScriptUri}"></script>
 </body>
 </html>`;
 }
