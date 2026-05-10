@@ -3,6 +3,7 @@ import { ChatSession } from './chatSession';
 import {
   createWebviewHtml,
   createWebviewStateMessage,
+  parseWebviewMessage,
   type WebviewMessage
 } from './chatWebview';
 import {
@@ -112,8 +113,8 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
           this.webviewReady = false;
         }
       }),
-      webviewView.webview.onDidReceiveMessage((message: WebviewMessage) => {
-        void this.handleWebviewMessage(message);
+      webviewView.webview.onDidReceiveMessage((message: unknown) => {
+        void this.handleWebviewMessage(parseWebviewMessage(message));
       })
     );
 
@@ -165,9 +166,7 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
       return;
     }
 
-    const submittedPrompt = this.session.beginSubmit(
-      typeof message.text === 'string' ? message.text : ''
-    );
+    const submittedPrompt = this.session.beginSubmit(message.text);
 
     if (!submittedPrompt) {
       return;
@@ -187,8 +186,8 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
     }
   }
 
-  private async setModel(provider: unknown, modelId: unknown): Promise<void> {
-    if (typeof provider !== 'string' || typeof modelId !== 'string' || this.session.isBusy) {
+  private async setModel(provider: string, modelId: string): Promise<void> {
+    if (this.session.isBusy) {
       return;
     }
 
@@ -201,8 +200,8 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
     }
   }
 
-  private async setThinkingLevel(level: unknown): Promise<void> {
-    if (typeof level !== 'string' || this.session.isBusy) {
+  private async setThinkingLevel(level: string): Promise<void> {
+    if (this.session.isBusy) {
       return;
     }
 

@@ -1,5 +1,9 @@
 import * as assert from 'assert';
-import { createWebviewHtml, createWebviewStateMessage } from '../../chatWebview';
+import {
+  createWebviewHtml,
+  createWebviewStateMessage,
+  parseWebviewMessage
+} from '../../chatWebview';
 import type { ChatState } from '../../chatSession';
 
 suite('Chat webview helpers', () => {
@@ -46,6 +50,34 @@ suite('Chat webview helpers', () => {
         contextUsageLevel: ''
       }
     );
+  });
+
+  test('parseWebviewMessage narrows valid inbound messages', () => {
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'ready' }), { type: 'ready' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'newSession' }), { type: 'newSession' });
+    assert.deepStrictEqual(
+      parseWebviewMessage({ type: 'submit', text: 'hello' }),
+      { type: 'submit', text: 'hello' }
+    );
+    assert.deepStrictEqual(
+      parseWebviewMessage({ type: 'setModel', provider: 'openai', modelId: 'gpt-test' }),
+      { type: 'setModel', provider: 'openai', modelId: 'gpt-test' }
+    );
+    assert.deepStrictEqual(
+      parseWebviewMessage({ type: 'setThinkingLevel', level: 'high' }),
+      { type: 'setThinkingLevel', level: 'high' }
+    );
+  });
+
+  test('parseWebviewMessage maps malformed or unknown inbound messages to unknown', () => {
+    assert.deepStrictEqual(parseWebviewMessage(undefined), { type: 'unknown' });
+    assert.deepStrictEqual(parseWebviewMessage({}), { type: 'unknown' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'submit', text: 42 }), { type: 'unknown' });
+    assert.deepStrictEqual(
+      parseWebviewMessage({ type: 'setModel', provider: 'openai' }),
+      { type: 'unknown' }
+    );
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'futureMessage' }), { type: 'unknown' });
   });
 
   test('createWebviewHtml wires CSP nonce and stable composer markup', () => {

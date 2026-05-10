@@ -1,23 +1,19 @@
 import { spawn, type SpawnOptionsWithoutStdio } from 'child_process';
-import { attachJsonlLineReader, serializeJsonLine } from './piRpcProtocol';
+import {
+  attachJsonlLineReader,
+  parseRpcEvent,
+  parseRpcResponse,
+  serializeJsonLine,
+  type RpcEvent,
+  type RpcResponse
+} from './piRpcProtocol';
 
-export type RpcEvent = {
-  type: string;
-  [key: string]: unknown;
-};
+export { parseRpcEvent, parseRpcResponse } from './piRpcProtocol';
+export type { RpcEvent, RpcResponse } from './piRpcProtocol';
 
 type RpcCommand = {
   type: string;
   [key: string]: unknown;
-};
-
-type RpcResponse = RpcEvent & {
-  type: 'response';
-  command?: string;
-  id?: string;
-  success?: boolean;
-  error?: string;
-  data?: unknown;
 };
 
 export type PiModel = {
@@ -288,14 +284,17 @@ export class PiRpcClient {
       return;
     }
 
-    if (!isRpcEvent(parsed)) {
+    const event = parseRpcEvent(parsed);
+
+    if (!event) {
       this.emitError('Received malformed Pi RPC output.');
       return;
     }
 
-    if (parsed.type === 'response') {
-      const response = parsed as RpcResponse;
-      const id = typeof response.id === 'string' ? response.id : undefined;
+    const response = parseRpcResponse(event);
+
+    if (response) {
+      const id = response.id;
 
       if (id && this.pendingRequests.has(id)) {
         const pending = this.pendingRequests.get(id);
@@ -315,9 +314,12 @@ export class PiRpcClient {
         pending.resolve(response);
         return;
       }
+
+      this.emitEvent(response);
+      return;
     }
 
-    this.emitEvent(parsed);
+    this.emitEvent(event);
   }
 
   private handleProcessFailure(message: string): void {
@@ -361,10 +363,6 @@ export class PiRpcClient {
 
     return ` Stderr: ${stderr}`;
   }
-}
-
-function isRpcEvent(value: unknown): value is RpcEvent {
-  return isRecord(value) && typeof value.type === 'string';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -1,12 +1,39 @@
 import type { ChatState } from './chatSession';
 
-export type WebviewMessage = {
-  type?: unknown;
-  text?: unknown;
-  provider?: unknown;
-  modelId?: unknown;
-  level?: unknown;
-};
+export type WebviewMessage =
+  | { type: 'ready' }
+  | { type: 'newSession' }
+  | { type: 'submit'; text: string }
+  | { type: 'setModel'; provider: string; modelId: string }
+  | { type: 'setThinkingLevel'; level: string }
+  | { type: 'unknown' };
+
+export function parseWebviewMessage(value: unknown): WebviewMessage {
+  if (!isRecord(value) || typeof value.type !== 'string') {
+    return { type: 'unknown' };
+  }
+
+  switch (value.type) {
+    case 'ready':
+      return { type: 'ready' };
+    case 'newSession':
+      return { type: 'newSession' };
+    case 'submit':
+      return typeof value.text === 'string'
+        ? { type: 'submit', text: value.text }
+        : { type: 'unknown' };
+    case 'setModel':
+      return typeof value.provider === 'string' && typeof value.modelId === 'string'
+        ? { type: 'setModel', provider: value.provider, modelId: value.modelId }
+        : { type: 'unknown' };
+    case 'setThinkingLevel':
+      return typeof value.level === 'string'
+        ? { type: 'setThinkingLevel', level: value.level }
+        : { type: 'unknown' };
+    default:
+      return { type: 'unknown' };
+  }
+}
 
 export type WebviewModelOption = {
   provider: string;
@@ -1206,6 +1233,10 @@ export function createWebviewHtml(scriptUris: WebviewScriptUris): string {
   </script>
 </body>
 </html>`;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 function getNonce(): string {

@@ -1,8 +1,60 @@
 import * as assert from 'assert';
 import { PassThrough } from 'stream';
-import { attachJsonlLineReader, serializeJsonLine } from '../../piRpcProtocol';
+import {
+  attachJsonlLineReader,
+  parseRpcEvent,
+  parseRpcResponse,
+  serializeJsonLine
+} from '../../piRpcProtocol';
 
 suite('Pi RPC protocol helpers', () => {
+  test('parseRpcEvent accepts records with string event types', () => {
+    assert.deepStrictEqual(
+      parseRpcEvent({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'text_delta', delta: 'hello' }
+      }),
+      { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'hello' } }
+    );
+    assert.deepStrictEqual(
+      parseRpcEvent({ type: 'future_event', value: 1 }),
+      { type: 'future_event', value: 1 }
+    );
+  });
+
+  test('parseRpcEvent rejects malformed records', () => {
+    assert.strictEqual(parseRpcEvent(undefined), undefined);
+    assert.strictEqual(parseRpcEvent({}), undefined);
+    assert.strictEqual(parseRpcEvent({ type: 42 }), undefined);
+  });
+
+  test('parseRpcResponse accepts response records and sanitizes known fields', () => {
+    assert.deepStrictEqual(
+      parseRpcResponse({
+        type: 'response',
+        id: 'piui-1',
+        command: 'get_state',
+        success: true,
+        error: 404,
+        data: { thinkingLevel: 'high' },
+        extra: 'kept'
+      }),
+      {
+        type: 'response',
+        id: 'piui-1',
+        command: 'get_state',
+        success: true,
+        data: { thinkingLevel: 'high' },
+        extra: 'kept'
+      }
+    );
+  });
+
+  test('parseRpcResponse rejects non-response records', () => {
+    assert.strictEqual(parseRpcResponse({ type: 'agent_start' }), undefined);
+    assert.strictEqual(parseRpcResponse({}), undefined);
+  });
+
   test('splits LF-delimited records and strips trailing CR', () => {
     const stream = new PassThrough();
     const lines: string[] = [];
