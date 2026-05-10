@@ -618,7 +618,7 @@ export const chatWebviewStyles = /* css */ `    :root {
       margin: 0 12px 1lh 8px;
       padding: 14px 9px 8px;
       overflow: visible;
-      background: #303030;
+      background: var(--vscode-input-background);
       border: 1px solid var(--vscode-input-border, transparent);
       border-radius: 21px;
       box-shadow: inset 0 1px 0 color-mix(in srgb, var(--vscode-foreground) 8%, transparent);

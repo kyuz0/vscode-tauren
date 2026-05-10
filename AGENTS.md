@@ -29,6 +29,7 @@ Do not add transient notes, guesses, one-off debugging observations, or broad ge
 - `src/extensionUiRequestHandler.ts` owns extension UI request routing through an injected VS Code UI adapter, safe cancellation, and stale request cleanup.
 - `src/piSessionList.ts` owns extension-side discovery/parsing of persisted Pi session JSONL files for the sidebar session switcher.
 - `src/piRpcClient.ts` owns the `pi --mode rpc` subprocess, strict JSONL parsing, request/response tracking, stderr collection, and process cleanup.
+- Webview browser bundles are vendored in `resources/vendor`; keep browser-only libraries out of runtime `dependencies` unless extension-host code imports them.
 - There is no bundler. Keep the implementation compatible with the current direct `tsc` build.
 
 ## Pi Integration

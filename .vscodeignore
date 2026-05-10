@@ -5,6 +5,7 @@ out/test/**
 .vscode/**
 .vscode-test/**
 .vscode-test.js
+scripts/**
 tsconfig.json
 
 # Project-only docs/assets not needed at runtime
@@ -21,20 +22,5 @@ plan/**
 # Build metadata
 out/**/*.map
 
-# Runtime only needs these browser bundles from dependencies.
+# Browser bundles are vendored under resources/vendor.
 node_modules/**
-!node_modules/markdown-it/
-node_modules/markdown-it/**
-!node_modules/markdown-it/dist/
-node_modules/markdown-it/dist/**
-!node_modules/markdown-it/dist/markdown-it.min.js
-!node_modules/dompurify/
-node_modules/dompurify/**
-!node_modules/dompurify/dist/
-node_modules/dompurify/dist/**
-!node_modules/dompurify/dist/purify.min.js
-!node_modules/@highlightjs/
-node_modules/@highlightjs/**
-!node_modules/@highlightjs/cdn-assets/
-node_modules/@highlightjs/cdn-assets/**
-!node_modules/@highlightjs/cdn-assets/highlight.min.js

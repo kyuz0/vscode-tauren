@@ -1203,7 +1203,11 @@ export const chatWebviewScript = /* javascript */ `    const vscode = acquireVsC
 
       closeModelMenu();
       closeSessionMenu();
-      if (!state.slashCommandsRefreshing && !slashCommandsRefreshRequested) {
+      if (
+        state.slashCommands.length === 0
+        && !state.slashCommandsRefreshing
+        && !slashCommandsRefreshRequested
+      ) {
         slashCommandsRefreshRequested = true;
         vscode.postMessage({ type: 'refreshSlashCommands' });
       }
@@ -1409,6 +1413,7 @@ export const chatWebviewScript = /* javascript */ `    const vscode = acquireVsC
 
     function closeSlashMenu() {
       slashMenuOpen = false;
+      slashCommandsRefreshRequested = false;
       slashMenuItems = [];
       slashMenuActiveIndex = 0;
       slashMenuQuery = '';

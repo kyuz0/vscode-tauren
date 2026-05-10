@@ -1640,10 +1640,6 @@ function formatModelOptions(models: PiModel[] | undefined): WebviewModelOption[]
   });
 }
 
-const blacklistedSlashCommandNames = new Set<string>([
-  // Future: add commands known to be TUI-only or confusing in VS Code.
-]);
-
 function formatSlashCommands(commands: PiCommand[] | undefined): WebviewSlashCommand[] {
   if (!Array.isArray(commands)) {
     return [];
@@ -1653,7 +1649,7 @@ function formatSlashCommands(commands: PiCommand[] | undefined): WebviewSlashCom
     .flatMap((command) => {
       const name = typeof command.name === 'string' ? command.name.trim() : '';
 
-      if (!name || isBlacklistedSlashCommand(command)) {
+      if (!name) {
         return [];
       }
 
@@ -1666,11 +1662,6 @@ function formatSlashCommands(commands: PiCommand[] | undefined): WebviewSlashCom
       }];
     })
     .sort(compareSlashCommands);
-}
-
-function isBlacklistedSlashCommand(command: PiCommand): boolean {
-  const name = typeof command.name === 'string' ? command.name.trim() : '';
-  return blacklistedSlashCommandNames.has(name);
 }
 
 function compareSlashCommands(left: WebviewSlashCommand, right: WebviewSlashCommand): number {

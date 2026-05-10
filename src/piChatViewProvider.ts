@@ -95,13 +95,13 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
     };
 
     const markdownItUri = webviewView.webview.asWebviewUri(
-      vscode.Uri.joinPath(this.extensionUri, 'node_modules', 'markdown-it', 'dist', 'markdown-it.min.js')
+      vscode.Uri.joinPath(this.extensionUri, 'resources', 'vendor', 'markdown-it.min.js')
     );
     const domPurifyUri = webviewView.webview.asWebviewUri(
-      vscode.Uri.joinPath(this.extensionUri, 'node_modules', 'dompurify', 'dist', 'purify.min.js')
+      vscode.Uri.joinPath(this.extensionUri, 'resources', 'vendor', 'purify.min.js')
     );
     const highlightUri = webviewView.webview.asWebviewUri(
-      vscode.Uri.joinPath(this.extensionUri, 'node_modules', '@highlightjs', 'cdn-assets', 'highlight.min.js')
+      vscode.Uri.joinPath(this.extensionUri, 'resources', 'vendor', 'highlight.min.js')
     );
 
     webviewView.webview.html = createWebviewHtml({

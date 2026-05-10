@@ -284,10 +284,6 @@ export class PiRpcClient {
     return this.writeToRunningProcess({ type: 'extension_ui_response', ...response });
   }
 
-  public async cancelExtensionUiRequest(id: string): Promise<void> {
-    await this.respondExtensionUiRequest({ id, cancelled: true });
-  }
-
   public dispose(): void {
     this.isDisposing = true;
     this.removeStdoutReader?.();
