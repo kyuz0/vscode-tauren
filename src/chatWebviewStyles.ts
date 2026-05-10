@@ -492,7 +492,7 @@ export const chatWebviewStyles = /* css */ `    :root {
     }
 
     .message--thinking .message__body {
-      color: var(--vscode-descriptionForeground);
+      color: color-mix(in srgb, var(--vscode-descriptionForeground) 94%, #000 6%);
     }
 
     .message--error .message__body {

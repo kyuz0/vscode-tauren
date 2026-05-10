@@ -759,7 +759,7 @@ export const chatWebviewScript = /* javascript */ `    const vscode = acquireVsC
       const body = document.createElement('div');
       body.className = 'message__body';
 
-      if (message.role === 'assistant' && !message.error && message.variant !== 'thinking') {
+      if (message.role === 'assistant' && !message.error) {
         renderMarkdownInto(body, message.text || '');
       } else {
         body.textContent = message.text || '';
