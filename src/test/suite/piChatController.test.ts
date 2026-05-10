@@ -391,6 +391,59 @@ suite('PiChatController', () => {
     harness.controller.dispose();
   });
 
+  test('new sessions preserve unsent IDE context', async () => {
+    const client = new FakePiClient({
+      stateResult: createDeferred<PiSessionState>().promise,
+      statsResult: createDeferred<PiSessionStats>().promise,
+      modelsResult: createDeferred<PiModel[]>().promise
+    });
+    const harness = createControllerHarness([client]);
+
+    harness.controller.addPromptContext({
+      kind: 'file',
+      path: 'src/foo.ts',
+      label: 'foo.ts',
+      title: 'src/foo.ts'
+    });
+    harness.controller.startNewSession();
+    await flushPromises();
+
+    assert.deepStrictEqual(lastState(harness).promptContext, [
+      { id: 'context-1', kind: 'file', label: 'foo.ts', title: 'src/foo.ts' }
+    ]);
+    harness.controller.dispose();
+  });
+
+  test('session switches preserve unsent IDE context', async () => {
+    const client = new FakePiClient({
+      state: {
+        model: { provider: 'openai', id: 'gpt-test', reasoning: false },
+        thinkingLevel: 'off',
+        sessionFile: '/sessions/next.jsonl'
+      },
+      messages: [{ role: 'user', content: 'Next prompt' }]
+    });
+    const harness = createControllerHarness([client]);
+
+    harness.controller.addPromptContext({
+      kind: 'file',
+      path: 'src/foo.ts',
+      label: 'foo.ts',
+      title: 'src/foo.ts'
+    });
+    await harness.controller.handleWebviewMessage({ type: 'selectSession', sessionPath: '/sessions/next.jsonl' });
+    await flushPromises();
+
+    assert.deepStrictEqual(client.switchedSessions, ['/sessions/next.jsonl']);
+    assert.deepStrictEqual(lastState(harness).promptContext, [
+      { id: 'context-1', kind: 'file', label: 'foo.ts', title: 'src/foo.ts' }
+    ]);
+    assert.deepStrictEqual(lastState(harness).messages, [
+      { role: 'user', text: 'Next prompt' }
+    ]);
+    harness.controller.dispose();
+  });
+
   test('restored history hides PiUI IDE context wrappers from user messages', async () => {
     const client = new FakePiClient({
       messages: [

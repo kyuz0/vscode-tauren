@@ -309,6 +309,7 @@ export class PiChatController {
         return;
       }
 
+      this.restorePromptContext(promptContext);
       this.session.failActivePrompt(getErrorMessage(error));
       this.postState();
     }
@@ -319,7 +320,6 @@ export class PiChatController {
     this.assistantStreamId = 0;
     this.resetAbortState();
     this.session.startNewSession();
-    this.promptContext = [];
     this.sessionViewMode = 'chat';
     this.sessionsError = '';
     this.currentSessionFile = undefined;
@@ -495,6 +495,17 @@ export class PiChatController {
     return context;
   }
 
+  private restorePromptContext(context: PiPromptContextAttachment[]): void {
+    if (context.length === 0) {
+      return;
+    }
+
+    this.promptContext = [
+      ...context.map((attachment) => ({ ...attachment })),
+      ...this.promptContext
+    ];
+  }
+
   public refreshSessionMeta(options: { startClient?: boolean; force?: boolean } = {}): Promise<void> {
     const sessionGeneration = this.session.generation;
     const existingRefresh = this.metadataRefreshInFlight;
@@ -626,7 +637,6 @@ export class PiChatController {
     this.extensionUiRequestHandler.startNewGeneration();
     this.assistantStreamId = 0;
     this.resetAbortState();
-    this.promptContext = [];
     this.metadataRefreshSequence += 1;
     this.slashCommandsRefreshSequence += 1;
     this.shouldRestoreInitialSessionHistory = false;
@@ -1015,6 +1025,7 @@ export class PiChatController {
         return;
       }
 
+      this.restorePromptContext(promptContext);
       this.session.addActivity({
         kind: 'queue',
         title: streamingBehavior === 'followUp' ? 'Failed to queue follow-up' : 'Failed to queue steering',
