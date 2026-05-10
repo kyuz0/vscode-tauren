@@ -1,5 +1,6 @@
 export const chatWebviewScript = /* javascript */ `    const vscode = acquireVsCodeApi();
     const toolbarTitleElement = document.querySelector('.pi-toolbar__title');
+    const toolbarTitleTextElement = document.querySelector('.pi-toolbar__title-text');
     const sessionToggleButton = document.querySelector('.pi-toolbar__sessions');
     const sessionMenuElement = document.querySelector('.pi-toolbar__session-menu');
     const messagesElement = document.querySelector('.messages');
@@ -282,8 +283,11 @@ export const chatWebviewScript = /* javascript */ `    const vscode = acquireVsC
       messagesElement.hidden = isSessionView;
       sessionsElement.hidden = !isSessionView;
       form.hidden = isSessionView;
-      toolbarTitleElement.textContent = isSessionView ? 'Sessions' : getCurrentSessionTitle();
-      toolbarTitleElement.title = isSessionView ? 'Sessions' : 'Switch session';
+      const toolbarTitle = isSessionView ? 'Sessions' : getCurrentSessionTitle();
+      if (toolbarTitleTextElement) {
+        toolbarTitleTextElement.textContent = toolbarTitle;
+      }
+      toolbarTitleElement.title = isSessionView ? 'Sessions' : toolbarTitle;
       toolbarTitleElement.disabled = isSessionView;
       sessionToggleButton.title = isSessionView ? 'Back to chat' : 'Show sessions';
       sessionToggleButton.setAttribute('aria-label', sessionToggleButton.title);
@@ -1532,6 +1536,7 @@ export const chatWebviewScript = /* javascript */ `    const vscode = acquireVsC
 
     vscode.postMessage({ type: 'ready' });
     window.addEventListener('resize', () => {
+      render();
       syncComposer({ preserveBottom: true });
     });
     render();`;

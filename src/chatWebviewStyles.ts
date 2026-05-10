@@ -4,16 +4,26 @@ export const chatWebviewStyles = /* css */ `    :root {
 
     * {
       box-sizing: border-box;
+      max-width: 100%;
+    }
+
+    body * {
+      min-width: 0;
     }
 
     html,
     body {
+      width: 100%;
+      max-width: 100%;
       height: 100%;
     }
 
     body {
+      width: 100%;
+      max-width: 100%;
       margin: 0;
       overflow: hidden;
+      overflow-x: hidden;
       color: var(--vscode-foreground);
       background: var(--vscode-sideBar-background);
       font-family: var(--vscode-font-family);
@@ -23,7 +33,11 @@ export const chatWebviewStyles = /* css */ `    :root {
     .pi-view {
       display: grid;
       grid-template-rows: auto minmax(0, 1fr) auto;
+      width: 100%;
+      max-width: 100%;
       height: 100vh;
+      padding: 0 4px;
+      min-width: 0;
       min-height: 0;
       overflow: hidden;
     }
@@ -32,10 +46,13 @@ export const chatWebviewStyles = /* css */ `    :root {
       position: relative;
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 2px;
       width: 100%;
+      max-width: 100%;
+      min-width: 0;
       min-height: 34px;
-      padding: 3px 2px 2px;
+      padding: 3px 0 2px;
+      overflow: visible;
       color: var(--vscode-descriptionForeground);
       border-bottom: 1px solid color-mix(in srgb, var(--vscode-foreground) 8%, transparent);
     }
@@ -43,7 +60,9 @@ export const chatWebviewStyles = /* css */ `    :root {
     .pi-toolbar__sessions {
       display: grid;
       place-items: center;
+      flex: 0 0 26px;
       width: 26px;
+      max-width: 26px;
       height: 26px;
       padding: 0;
       color: inherit;
@@ -70,10 +89,15 @@ export const chatWebviewStyles = /* css */ `    :root {
 
     .pi-toolbar__title {
       position: relative;
-      flex: 1 1 auto;
+      display: block;
+      appearance: none;
+      flex: 1 1 0;
+      width: 0;
       min-width: 0;
+      max-width: none;
+      contain: inline-size;
       height: 26px;
-      padding: 0 18px 0 7px;
+      padding: 0 21px 0 5px;
       overflow: hidden;
       color: var(--vscode-foreground);
       background: transparent;
@@ -87,6 +111,16 @@ export const chatWebviewStyles = /* css */ `    :root {
       text-overflow: ellipsis;
       white-space: nowrap;
       cursor: pointer;
+    }
+
+    .pi-toolbar__title-text {
+      display: block;
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .pi-toolbar__title::after {
@@ -194,8 +228,11 @@ export const chatWebviewStyles = /* css */ `    :root {
     }
 
     .messages {
+      max-width: 100vw;
+      min-width: 0;
       min-height: 0;
-      padding: 6px 2px calc(4px + 4lh);
+      padding: 6px 0 calc(4px + 4lh);
+      overflow-x: hidden;
       overflow-y: auto;
     }
 
@@ -205,8 +242,11 @@ export const chatWebviewStyles = /* css */ `    :root {
     }
 
     .sessions {
+      max-width: 100vw;
+      min-width: 0;
       min-height: 0;
-      padding: 6px 2px 8px;
+      padding: 6px 0 8px;
+      overflow-x: hidden;
       overflow-y: auto;
       outline: none;
     }
@@ -572,8 +612,9 @@ export const chatWebviewStyles = /* css */ `    :root {
       align-items: end;
       gap: 4px 8px;
       min-height: 84px;
+      max-width: 100%;
       max-height: calc(100vh - 16px);
-      margin: 0 2px 1lh;
+      margin: 0 0 1lh;
       padding: 14px 9px 8px;
       overflow: visible;
       background: #303030;

@@ -224,7 +224,7 @@ ${chatWebviewStyles}
           <path d="M11.25 4.5L6.75 9L11.25 13.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
-      <button class="pi-toolbar__title" type="button" aria-haspopup="listbox" aria-expanded="false">Pi</button>
+      <button class="pi-toolbar__title" type="button" aria-haspopup="listbox" aria-expanded="false"><span class="pi-toolbar__title-text">Pi</span></button>
       <div class="pi-toolbar__session-menu" role="listbox" aria-label="Recent sessions"></div>
     </header>
     <section class="messages" aria-live="polite" aria-label="Pi conversation">
