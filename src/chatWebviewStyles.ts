@@ -443,6 +443,77 @@ export const chatWebviewStyles = /* css */ `    :root {
       outline: none;
     }
 
+    .composer__busy-submit {
+      position: absolute;
+      left: 4px;
+      right: 4px;
+      bottom: calc(100% + 6px);
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+      padding: 6px 8px;
+      color: var(--vscode-descriptionForeground);
+      background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+      border: 1px solid var(--vscode-widget-border, var(--vscode-input-border, transparent));
+      border-radius: 8px;
+      box-shadow: 0 4px 14px color-mix(in srgb, #000 28%, transparent);
+      font-size: 11px;
+      line-height: 1.25;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(8px);
+      transition: opacity 140ms ease, transform 160ms ease;
+    }
+
+    .composer__busy-submit--visible {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+
+    .composer__busy-submit[hidden] {
+      display: none;
+    }
+
+    .composer__busy-submit-hint {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .composer__busy-submit-modes {
+      display: inline-flex;
+      flex: 0 0 auto;
+      gap: 2px;
+      padding: 2px;
+      background: color-mix(in srgb, var(--vscode-foreground) 8%, transparent);
+      border-radius: 999px;
+    }
+
+    .composer__mode-button {
+      padding: 2px 7px;
+      color: var(--vscode-descriptionForeground);
+      background: transparent;
+      border: 0;
+      border-radius: 999px;
+      font: inherit;
+      font-size: 11px;
+      line-height: 1.3;
+      cursor: pointer;
+    }
+
+    .composer__mode-button:hover,
+    .composer__mode-button:focus-visible,
+    .composer__mode-button--active {
+      color: var(--vscode-input-background);
+      background: color-mix(in srgb, var(--vscode-foreground) 82%, transparent);
+      outline: none;
+    }
+
     .composer__button {
       display: grid;
       place-items: center;

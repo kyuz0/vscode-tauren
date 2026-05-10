@@ -3,13 +3,15 @@ import { chatWebviewScript } from './chatWebviewScript';
 import { chatWebviewStyles } from './chatWebviewStyles';
 import { createNonce } from './nonce';
 
+export type WebviewStreamingBehavior = 'steer' | 'followUp';
+
 export type WebviewMessage =
   | { type: 'ready' }
   | { type: 'newSession' }
   | { type: 'refreshMetadata' }
   | { type: 'refreshSlashCommands' }
   | { type: 'abort' }
-  | { type: 'submit'; text: string }
+  | { type: 'submit'; text: string; streamingBehavior?: WebviewStreamingBehavior }
   | { type: 'setModel'; provider: string; modelId: string }
   | { type: 'setThinkingLevel'; level: string }
   | { type: 'unknown' };
@@ -30,10 +32,21 @@ export function parseWebviewMessage(value: unknown): WebviewMessage {
       return { type: 'refreshSlashCommands' };
     case 'abort':
       return { type: 'abort' };
-    case 'submit':
-      return typeof value.text === 'string'
-        ? { type: 'submit', text: value.text }
-        : { type: 'unknown' };
+    case 'submit': {
+      if (typeof value.text !== 'string') {
+        return { type: 'unknown' };
+      }
+
+      const streamingBehavior = parseStreamingBehavior(value.streamingBehavior);
+
+      if ('streamingBehavior' in value && !streamingBehavior) {
+        return { type: 'unknown' };
+      }
+
+      return streamingBehavior
+        ? { type: 'submit', text: value.text, streamingBehavior }
+        : { type: 'submit', text: value.text };
+    }
     case 'setModel':
       return typeof value.provider === 'string' && typeof value.modelId === 'string'
         ? { type: 'setModel', provider: value.provider, modelId: value.modelId }
@@ -153,6 +166,13 @@ ${chatWebviewStyles}
     <form class="composer" aria-label="Pi message input">
       <div id="slash-command-list" class="composer__slash-menu" role="listbox" aria-label="Slash commands"></div>
       <textarea class="composer__input" rows="1" aria-label="Message" placeholder="Write your prompt…" aria-autocomplete="list" aria-controls="slash-command-list" aria-expanded="false"></textarea>
+      <div class="composer__busy-submit" hidden aria-live="polite">
+        <span class="composer__busy-submit-hint"></span>
+        <span class="composer__busy-submit-modes" role="group" aria-label="Busy submit mode">
+          <button class="composer__mode-button" type="button" data-streaming-behavior="steer">Steer</button>
+          <button class="composer__mode-button" type="button" data-streaming-behavior="followUp">Follow-up</button>
+        </span>
+      </div>
       <button class="composer__button composer__add" type="button" aria-label="New session" title="New session">
         <svg aria-hidden="true" width="19" height="19" viewBox="0 0 19 19" fill="none">
           <path d="M9.5 3.5V15.5M3.5 9.5H15.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
@@ -196,6 +216,10 @@ ${chatWebviewScript}
   </script>
 </body>
 </html>`;
+}
+
+function parseStreamingBehavior(value: unknown): WebviewStreamingBehavior | undefined {
+  return value === 'steer' || value === 'followUp' ? value : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

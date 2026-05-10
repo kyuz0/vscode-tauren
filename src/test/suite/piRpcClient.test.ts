@@ -130,6 +130,28 @@ suite('PiRpcClient', () => {
     client.dispose();
   });
 
+  test('sends streaming behavior with queued prompts', async () => {
+    const { client, fakeProcess } = createClient();
+
+    const promptPromise = client.prompt('adjust course', 'steer');
+    const command = await fakeProcess.nextCommand();
+
+    assert.strictEqual(command.type, 'prompt');
+    assert.strictEqual(command.message, 'adjust course');
+    assert.strictEqual(command.streamingBehavior, 'steer');
+    assert.ok(typeof command.id === 'string');
+
+    fakeProcess.writeRecord({
+      type: 'response',
+      id: command.id,
+      command: 'prompt',
+      success: true
+    });
+
+    await promptPromise;
+    client.dispose();
+  });
+
   test('sends abort as a correlated RPC command', async () => {
     const { client, fakeProcess } = createClient();
 

@@ -91,6 +91,14 @@ suite('Chat webview helpers', () => {
       { type: 'submit', text: 'hello' }
     );
     assert.deepStrictEqual(
+      parseWebviewMessage({ type: 'submit', text: 'hello', streamingBehavior: 'steer' }),
+      { type: 'submit', text: 'hello', streamingBehavior: 'steer' }
+    );
+    assert.deepStrictEqual(
+      parseWebviewMessage({ type: 'submit', text: 'hello', streamingBehavior: 'followUp' }),
+      { type: 'submit', text: 'hello', streamingBehavior: 'followUp' }
+    );
+    assert.deepStrictEqual(
       parseWebviewMessage({ type: 'setModel', provider: 'openai', modelId: 'gpt-test' }),
       { type: 'setModel', provider: 'openai', modelId: 'gpt-test' }
     );
@@ -104,6 +112,7 @@ suite('Chat webview helpers', () => {
     assert.deepStrictEqual(parseWebviewMessage(undefined), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({}), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'submit', text: 42 }), { type: 'unknown' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'submit', text: 'hello', streamingBehavior: 'later' }), { type: 'unknown' });
     assert.deepStrictEqual(
       parseWebviewMessage({ type: 'setModel', provider: 'openai' }),
       { type: 'unknown' }
@@ -145,6 +154,9 @@ suite('Chat webview helpers', () => {
     assert.ok(html.includes('class="composer__model"'));
     assert.ok(html.includes('class="composer__model-menu"'));
     assert.ok(html.includes('class="composer__slash-menu"'));
+    assert.ok(html.includes('class="composer__busy-submit"'));
+    assert.ok(html.includes('data-streaming-behavior="steer"'));
+    assert.ok(html.includes('data-streaming-behavior="followUp"'));
     assert.ok(html.includes('aria-autocomplete="list"'));
     assert.ok(html.includes('placeholder="Write your prompt…"'));
     assert.ok(html.includes('composer__model--refreshing'));

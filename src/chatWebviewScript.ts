@@ -3,6 +3,9 @@ export const chatWebviewScript = /* javascript */ `    const vscode = acquireVsC
     const form = document.querySelector('.composer');
     const textarea = document.querySelector('textarea');
     const slashMenuElement = document.querySelector('.composer__slash-menu');
+    const busySubmitElement = document.querySelector('.composer__busy-submit');
+    const busySubmitHintElement = document.querySelector('.composer__busy-submit-hint');
+    const streamingBehaviorButtonElements = Array.from(document.querySelectorAll('.composer__mode-button'));
     const newSessionButton = document.querySelector('.composer__add');
     const contextElement = document.querySelector('.composer__context');
     const contextValueElement = document.querySelector('.composer__context-value');
@@ -21,6 +24,8 @@ export const chatWebviewScript = /* javascript */ `    const vscode = acquireVsC
     let slashMenuActiveIndex = 0;
     let slashMenuItems = [];
     let slashCommandsRefreshRequested = false;
+    let streamingBehavior = 'steer';
+    let busySubmitHideTimeout;
     const localSlashCommands = [
       { name: 'model', description: 'Select model', source: 'builtin' },
       { name: 'name', description: 'Set or clear session name', source: 'builtin' },
@@ -87,12 +92,14 @@ export const chatWebviewScript = /* javascript */ `    const vscode = acquireVsC
       event.preventDefault();
       const text = textarea.value.trim();
 
-      if (!text || state.busy) {
+      if (!text) {
         return;
       }
 
       closeSlashMenu();
-      vscode.postMessage({ type: 'submit', text });
+      vscode.postMessage(state.busy
+        ? { type: 'submit', text, streamingBehavior }
+        : { type: 'submit', text });
       textarea.value = '';
       syncComposer({ preserveBottom: true });
       focusPromptInput();
@@ -108,6 +115,18 @@ export const chatWebviewScript = /* javascript */ `    const vscode = acquireVsC
       vscode.postMessage({ type: 'abort' });
       focusPromptInput();
     });
+
+    for (const button of streamingBehaviorButtonElements) {
+      button.addEventListener('click', () => {
+        const nextBehavior = button.getAttribute('data-streaming-behavior');
+
+        if (nextBehavior === 'steer' || nextBehavior === 'followUp') {
+          streamingBehavior = nextBehavior;
+          syncComposer({ preserveBottom: true });
+          focusPromptInput();
+        }
+      });
+    }
 
     newSessionButton?.addEventListener('click', startNewSession);
     modelElement?.addEventListener('click', toggleModelMenu);
@@ -410,14 +429,78 @@ export const chatWebviewScript = /* javascript */ `    const vscode = acquireVsC
       const isStopMode = isStopSubmitMode();
       const hasInput = textarea.value.length > 0;
       const hasSendableText = textarea.value.trim().length > 0;
-      submitButton.disabled = state.busy ? hasInput : !hasSendableText;
+      const label = getSubmitLabel(isStopMode);
+      submitButton.disabled = state.busy ? (hasInput && !hasSendableText) : !hasSendableText;
       submitButton.classList.toggle('composer__submit--stop', isStopMode);
-      submitButton.setAttribute('aria-label', isStopMode ? 'Stop current response' : 'Send message');
-      submitButton.title = isStopMode ? 'Stop current response' : 'Send message';
+      submitButton.setAttribute('aria-label', label);
+      submitButton.title = label;
+    }
+
+    function getSubmitLabel(isStopMode) {
+      if (isStopMode) {
+        return 'Stop current response';
+      }
+
+      if (state.busy) {
+        return streamingBehavior === 'followUp' ? 'Queue follow-up' : 'Steer current run';
+      }
+
+      return 'Send message';
     }
 
     function isStopSubmitMode() {
       return state.busy && textarea.value.length === 0;
+    }
+
+    function syncBusySubmitMode() {
+      if (!busySubmitElement || !busySubmitHintElement) {
+        return;
+      }
+
+      setBusySubmitVisible(state.busy);
+
+      if (!state.busy) {
+        return;
+      }
+
+      const hasSendableText = textarea.value.trim().length > 0;
+      busySubmitHintElement.textContent = hasSendableText
+        ? streamingBehavior === 'followUp'
+          ? 'This will run after Pi finishes the current task.'
+          : "This will steer the current run before Pi's next LLM call."
+        : 'Type to steer Pi, or leave empty to stop.';
+
+      for (const button of streamingBehaviorButtonElements) {
+        const isActive = button.getAttribute('data-streaming-behavior') === streamingBehavior;
+        button.classList.toggle('composer__mode-button--active', isActive);
+        button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      }
+    }
+
+    function setBusySubmitVisible(visible) {
+      if (!busySubmitElement) {
+        return;
+      }
+
+      if (busySubmitHideTimeout) {
+        clearTimeout(busySubmitHideTimeout);
+        busySubmitHideTimeout = undefined;
+      }
+
+      if (visible) {
+        busySubmitElement.hidden = false;
+        requestAnimationFrame(() => {
+          busySubmitElement.classList.add('composer__busy-submit--visible');
+        });
+        return;
+      }
+
+      busySubmitElement.classList.remove('composer__busy-submit--visible');
+      busySubmitHideTimeout = setTimeout(() => {
+        if (!state.busy) {
+          busySubmitElement.hidden = true;
+        }
+      }, 160);
     }
 
     function activityStatusLabel(status) {
@@ -921,6 +1004,7 @@ export const chatWebviewScript = /* javascript */ `    const vscode = acquireVsC
     function syncComposer(options = {}) {
       const shouldPreserveBottom = Boolean(options.preserveBottom) && isMessagesAtBottom();
       syncSubmit();
+      syncBusySubmitMode();
       syncTextareaHeight();
 
       if (shouldPreserveBottom) {

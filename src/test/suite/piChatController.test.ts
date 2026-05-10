@@ -127,6 +127,64 @@ suite('PiChatController', () => {
     harness.controller.dispose();
   });
 
+  test('busy submit defaults to steering and adds a compact queued notice', async () => {
+    const client = new FakePiClient();
+    const harness = createControllerHarness([client]);
+
+    await harness.controller.handleWebviewMessage({ type: 'submit', text: 'hello' });
+    await harness.controller.handleWebviewMessage({ type: 'submit', text: 'change direction' });
+
+    assert.deepStrictEqual(client.prompts, ['hello', 'change direction']);
+    assert.deepStrictEqual(client.promptStreamingBehaviors, [undefined, 'steer']);
+    assert.deepStrictEqual(lastState(harness).messages, [
+      { role: 'user', text: 'hello' },
+      {
+        role: 'assistant',
+        text: '',
+        activities: [
+          {
+            id: 'activity-0-1',
+            kind: 'queue',
+            title: 'Steering queued',
+            status: 'info',
+            summary: 'change direction'
+          }
+        ]
+      }
+    ]);
+    harness.controller.dispose();
+  });
+
+  test('busy submit can queue a follow-up', async () => {
+    const client = new FakePiClient();
+    const harness = createControllerHarness([client]);
+
+    await harness.controller.handleWebviewMessage({ type: 'submit', text: 'hello' });
+    await harness.controller.handleWebviewMessage({
+      type: 'submit',
+      text: 'afterwards do this',
+      streamingBehavior: 'followUp'
+    });
+
+    assert.deepStrictEqual(client.prompts, ['hello', 'afterwards do this']);
+    assert.deepStrictEqual(client.promptStreamingBehaviors, [undefined, 'followUp']);
+    assert.strictEqual(lastState(harness).messages[1].activities?.[0]?.title, 'Follow-up queued');
+    harness.controller.dispose();
+  });
+
+  test('local slash commands are blocked while busy', async () => {
+    const client = new FakePiClient();
+    const harness = createControllerHarness([client]);
+
+    await harness.controller.handleWebviewMessage({ type: 'submit', text: 'hello' });
+    await harness.controller.handleWebviewMessage({ type: 'submit', text: '/new' });
+
+    assert.deepStrictEqual(client.prompts, ['hello']);
+    assert.strictEqual(lastState(harness).messages[1].activities?.[0]?.title, '/new not queued');
+    assert.strictEqual(lastState(harness).messages[1].activities?.[0]?.status, 'error');
+    harness.controller.dispose();
+  });
+
   test('abort sends RPC abort while keeping the current turn busy until agent events arrive', async () => {
     const promptDeferred = createDeferred<void>();
     const client = new FakePiClient({ promptResult: promptDeferred.promise });
@@ -704,6 +762,7 @@ class FakePiClient implements PiRpcClientLike {
   public commandsCalls = 0;
   public abortCalls = 0;
   public prompts: string[] = [];
+  public promptStreamingBehaviors: Array<'steer' | 'followUp' | undefined> = [];
   public sessionNames: string[] = [];
   public extensionUiResponses: ExtensionUiResponse[] = [];
   public state: PiSessionState;
@@ -757,8 +816,9 @@ class FakePiClient implements PiRpcClientLike {
     };
   }
 
-  public async prompt(message: string): Promise<void> {
+  public async prompt(message: string, streamingBehavior?: 'steer' | 'followUp'): Promise<void> {
     this.prompts.push(message);
+    this.promptStreamingBehaviors.push(streamingBehavior);
 
     if (this.promptResult) {
       await this.promptResult;

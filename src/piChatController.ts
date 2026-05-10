@@ -27,6 +27,7 @@ import {
 import type {
   PiCommand,
   PiModel,
+  PiPromptStreamingBehavior,
   PiRpcClient,
   PiRpcClientOptions,
   PiSessionState,
@@ -194,6 +195,16 @@ export class PiChatController {
     }
 
     const localSlashCommand = parseLocalSlashCommand(message.text);
+
+    if (this.session.isBusy) {
+      if (localSlashCommand) {
+        this.addBusySlashCommandNotice(localSlashCommand.name);
+        return;
+      }
+
+      await this.queuePromptWhileBusy(message.text, message.streamingBehavior ?? 'steer');
+      return;
+    }
 
     if (localSlashCommand) {
       await this.handleLocalSlashCommand(localSlashCommand);
@@ -573,6 +584,57 @@ export class PiChatController {
     }
 
     this.slashCommandsRefreshing = value;
+    this.postState();
+  }
+
+  private async queuePromptWhileBusy(
+    text: string,
+    streamingBehavior: PiPromptStreamingBehavior
+  ): Promise<void> {
+    const trimmedText = text.trim();
+
+    if (!trimmedText || !this.session.isBusy) {
+      return;
+    }
+
+    const sessionGeneration = this.session.generation;
+
+    try {
+      await this.getClient().prompt(trimmedText, streamingBehavior);
+
+      if (sessionGeneration !== this.session.generation) {
+        return;
+      }
+
+      this.session.addActivity({
+        kind: 'queue',
+        title: streamingBehavior === 'followUp' ? 'Follow-up queued' : 'Steering queued',
+        status: 'info',
+        summary: trimmedText
+      });
+      this.postState();
+    } catch (error) {
+      if (sessionGeneration !== this.session.generation) {
+        return;
+      }
+
+      this.session.addActivity({
+        kind: 'queue',
+        title: streamingBehavior === 'followUp' ? 'Failed to queue follow-up' : 'Failed to queue steering',
+        status: 'error',
+        summary: getErrorMessage(error)
+      });
+      this.postState();
+    }
+  }
+
+  private addBusySlashCommandNotice(commandName: string): void {
+    this.session.addActivity({
+      kind: 'queue',
+      title: `/${commandName} not queued`,
+      status: 'error',
+      summary: 'Sidebar commands are not available while Pi is working.'
+    });
     this.postState();
   }
 

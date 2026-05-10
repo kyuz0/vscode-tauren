@@ -82,6 +82,8 @@ export type PiLastAssistantText = {
   text?: string | null;
 };
 
+export type PiPromptStreamingBehavior = 'steer' | 'followUp';
+
 type PendingRequest = {
   timeout: NodeJS.Timeout;
   resolve: (response: RpcResponse) => void;
@@ -146,8 +148,12 @@ export class PiRpcClient {
     };
   }
 
-  public async prompt(message: string): Promise<void> {
-    await this.send({ type: 'prompt', message });
+  public async prompt(message: string, streamingBehavior?: PiPromptStreamingBehavior): Promise<void> {
+    await this.send({
+      type: 'prompt',
+      message,
+      ...(streamingBehavior ? { streamingBehavior } : {})
+    });
   }
 
   public async abort(): Promise<void> {
