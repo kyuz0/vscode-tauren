@@ -66,11 +66,13 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
 
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration((event) => {
-        if (!event.affectsConfiguration('piui.fullRpcAgentCommunication')) {
-          return;
+        if (event.affectsConfiguration('piui.fullRpcAgentCommunication')) {
+          this.controller.setFullRpcAgentCommunication(getFullRpcAgentCommunicationSetting());
         }
 
-        this.controller.setFullRpcAgentCommunication(getFullRpcAgentCommunicationSetting());
+        if (event.affectsConfiguration('piui.piPath')) {
+          this.controller.handlePiPathChanged();
+        }
       })
     );
   }

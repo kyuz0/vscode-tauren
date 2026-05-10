@@ -135,6 +135,7 @@ export class PiChatController {
   private currentSessionFile: string | undefined;
   private nextClientSessionFile: string | undefined;
   private shouldRestoreInitialSessionHistory: boolean;
+  private restartClientWhenIdle = false;
   private abortRequested = false;
   private abortNoticeAdded = false;
   private metadataRefreshInFlight: { generation: number; promise: Promise<void> } | undefined;
@@ -296,6 +297,7 @@ export class PiChatController {
     this.sessions = this.sessions.map((session) => ({ ...session, current: false }));
     this.nextClientSessionFile = undefined;
     this.shouldRestoreInitialSessionHistory = false;
+    this.restartClientWhenIdle = false;
     this.options.onSessionFileChange?.(undefined);
     this.resetSessionMeta();
     this.disposeClient();
@@ -306,6 +308,23 @@ export class PiChatController {
   public setFullRpcAgentCommunication(value: boolean): void {
     this.fullRpcAgentCommunication = value;
     this.postState();
+  }
+
+  public handlePiPathChanged(): void {
+    if (!this.client) {
+      return;
+    }
+
+    this.restartClientWhenIdle = true;
+
+    if (this.session.isBusy) {
+      return;
+    }
+
+    void this.refreshSessionMeta({ force: true }).then(
+      () => this.restartClientForConfigurationChangeIfIdle(),
+      () => this.restartClientForConfigurationChangeIfIdle()
+    );
   }
 
   public postState(): void {
@@ -1277,7 +1296,10 @@ export class PiChatController {
         this.session.handleAgentEnd();
         this.resetAbortState();
         this.postState();
-        void this.refreshSessionMeta();
+        void this.refreshSessionMeta().then(
+          () => this.restartClientForConfigurationChangeIfIdle(),
+          () => this.restartClientForConfigurationChangeIfIdle()
+        );
         break;
       case 'turn_start':
       case 'turn_end':
@@ -1434,6 +1456,31 @@ export class PiChatController {
     this.metadataRefreshing = false;
     this.slashCommandsRefreshing = false;
     this.postState();
+    this.restartClientForConfigurationChangeIfIdle();
+  }
+
+  private restartClientForConfigurationChangeIfIdle(): void {
+    if (!this.restartClientWhenIdle || this.session.isBusy) {
+      return;
+    }
+
+    this.restartClientForConfigurationChange();
+  }
+
+  private restartClientForConfigurationChange(): void {
+    this.restartClientWhenIdle = false;
+    this.metadataRefreshSequence += 1;
+    this.slashCommandsRefreshSequence += 1;
+    this.metadataRefreshInFlight = undefined;
+    this.slashCommandsRefreshInFlight = undefined;
+    this.metadataRefreshing = false;
+    this.slashCommandsRefreshing = false;
+    this.disposeClient();
+    this.postState();
+    void Promise.all([
+      this.refreshSessionMeta({ startClient: true, force: true }),
+      this.refreshSlashCommands({ startClient: true, force: true })
+    ]).then(undefined, () => undefined);
   }
 }
 

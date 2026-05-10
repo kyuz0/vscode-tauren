@@ -217,6 +217,69 @@ suite('PiChatController', () => {
     harness.controller.dispose();
   });
 
+  test('pi path changes restart an idle client with the next configured path', async () => {
+    let piPath = 'old-pi';
+    const oldClient = new FakePiClient();
+    const newClient = new FakePiClient();
+    const harness = createControllerHarness([oldClient, newClient], {
+      cwd: '/workspace',
+      getPiPath: () => piPath
+    });
+
+    await harness.controller.handleWebviewMessage({ type: 'refreshMetadata' });
+
+    assert.deepStrictEqual(harness.clientOptions, [{ cwd: '/workspace', piPath: 'old-pi' }]);
+    assert.strictEqual(oldClient.disposed, false);
+
+    piPath = 'new-pi';
+    harness.controller.handlePiPathChanged();
+    await flushPromises();
+
+    assert.strictEqual(oldClient.disposed, true);
+    assert.strictEqual(harness.createCalls, 2);
+    assert.deepStrictEqual(harness.clientOptions[1], { cwd: '/workspace', piPath: 'new-pi' });
+    assert.strictEqual(newClient.stateCalls, 1);
+    assert.strictEqual(newClient.commandsCalls, 1);
+    harness.controller.dispose();
+  });
+
+  test('pi path changes wait for a busy run to publish its session file before reconnecting', async () => {
+    let piPath = 'old-pi';
+    const oldClient = new FakePiClient({
+      state: {
+        model: { provider: 'openai', id: 'gpt-test', reasoning: false },
+        thinkingLevel: 'off',
+        sessionFile: '/sessions/current.jsonl'
+      }
+    });
+    const newClient = new FakePiClient();
+    const harness = createControllerHarness([oldClient, newClient], {
+      cwd: '/workspace',
+      getPiPath: () => piPath
+    });
+
+    await harness.controller.handleWebviewMessage({ type: 'submit', text: 'hello Pi' });
+
+    piPath = 'new-pi';
+    harness.controller.handlePiPathChanged();
+
+    assert.strictEqual(oldClient.disposed, false);
+    assert.strictEqual(harness.createCalls, 1);
+
+    oldClient.emit({ type: 'agent_end' });
+    await flushPromises();
+
+    assert.strictEqual(oldClient.disposed, true);
+    assert.strictEqual(harness.createCalls, 2);
+    assert.deepStrictEqual(harness.clientOptions[1], {
+      cwd: '/workspace',
+      piPath: 'new-pi',
+      sessionFile: '/sessions/current.jsonl'
+    });
+    assert.strictEqual(newClient.stateCalls, 1);
+    harness.controller.dispose();
+  });
+
   test('submit creates a client and sends the trimmed prompt', async () => {
     const client = new FakePiClient();
     const harness = createControllerHarness([client], { cwd: '/workspace' });
@@ -958,6 +1021,7 @@ type ControllerHarness = {
 type ControllerHarnessOptions = {
   cwd?: string;
   piPath?: string;
+  getPiPath?: () => string | undefined;
   extensionUi?: PiChatControllerOptions['extensionUi'];
   fullRpcAgentCommunication?: boolean;
   stateScheduler?: StatePublisherScheduler;
@@ -987,7 +1051,7 @@ function createControllerHarness(
       return client;
     },
     getCwd: () => options.cwd,
-    getPiPath: () => options.piPath,
+    getPiPath: options.getPiPath ?? (() => options.piPath),
     postState: (message) => {
       states.push(message);
     },
