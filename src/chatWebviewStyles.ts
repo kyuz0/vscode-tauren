@@ -30,7 +30,7 @@ export const chatWebviewStyles = /* css */ `    :root {
 
     .messages {
       min-height: 0;
-      padding: 12px 12px calc(8px + 2lh);
+      padding: 12px 12px calc(8px + 4lh);
       overflow-y: auto;
     }
 
