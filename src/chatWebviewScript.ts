@@ -1137,6 +1137,7 @@ export const chatWebviewScript = /* javascript */ `    const vscode = acquireVsC
         return;
       }
 
+      closeModelMenu();
       vscode.postMessage({ type: 'setModel', provider, modelId });
     }
 
@@ -1147,6 +1148,7 @@ export const chatWebviewScript = /* javascript */ `    const vscode = acquireVsC
         return;
       }
 
+      closeModelMenu();
       vscode.postMessage({ type: 'setThinkingLevel', level });
     }
 
