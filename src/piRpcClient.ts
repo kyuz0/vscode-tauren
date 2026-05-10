@@ -1,4 +1,4 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
+import { spawn, type SpawnOptionsWithoutStdio } from 'child_process';
 import { attachJsonlLineReader, serializeJsonLine } from './piRpcProtocol';
 
 export type RpcEvent = {
@@ -51,12 +51,33 @@ type PendingRequest = {
   reject: (error: Error) => void;
 };
 
-export type PiRpcClientOptions = {
-  cwd?: string;
+type PiRpcProcess = {
+  stdin: NodeJS.WritableStream;
+  stdout: NodeJS.ReadableStream;
+  stderr: NodeJS.ReadableStream;
+  exitCode: number | null;
+  kill(signal?: NodeJS.Signals | number): boolean;
+  once(event: 'error', listener: (error: Error) => void): unknown;
+  once(event: 'exit', listener: (code: number | null, signal: NodeJS.Signals | null) => void): unknown;
 };
 
+type PiRpcSpawnFactory = (
+  command: string,
+  args: readonly string[],
+  options: SpawnOptionsWithoutStdio
+) => PiRpcProcess;
+
+export type PiRpcClientOptions = {
+  cwd?: string;
+  spawnFactory?: PiRpcSpawnFactory;
+  commandTimeoutMs?: number;
+};
+
+const defaultSpawnFactory: PiRpcSpawnFactory = (command, args, options) => spawn(command, args, options);
+const defaultCommandTimeoutMs = 30000;
+
 export class PiRpcClient {
-  private process: ChildProcessWithoutNullStreams | undefined;
+  private process: PiRpcProcess | undefined;
   private startPromise: Promise<void> | undefined;
   private removeStdoutReader: (() => void) | undefined;
   private requestId = 0;
@@ -140,7 +161,7 @@ export class PiRpcClient {
         reject(
           new Error(`Timed out waiting for Pi response to ${command.type}.${this.formatStderr()}`)
         );
-      }, 30000);
+      }, this.options.commandTimeoutMs ?? defaultCommandTimeoutMs);
 
       this.pendingRequests.set(id, { timeout, resolve, reject });
 
@@ -171,7 +192,7 @@ export class PiRpcClient {
     });
   }
 
-  private async ensureStarted(): Promise<ChildProcessWithoutNullStreams> {
+  private async ensureStarted(): Promise<PiRpcProcess> {
     if (this.process && this.process.exitCode === null) {
       return this.process;
     }
@@ -187,7 +208,7 @@ export class PiRpcClient {
     this.stderr = '';
     this.isDisposing = false;
 
-    const child = spawn('pi', ['--mode', 'rpc'], {
+    const child = (this.options.spawnFactory ?? defaultSpawnFactory)('pi', ['--mode', 'rpc'], {
       cwd: this.options.cwd,
       env: process.env,
       stdio: ['pipe', 'pipe', 'pipe']
@@ -230,7 +251,8 @@ export class PiRpcClient {
 
       child.once('error', (error) => {
         clearTimeout(startupTimer);
-        const message = `Failed to start Pi RPC process: ${error.message}`;
+        const stderr = this.formatStderr();
+        const message = `Failed to start Pi RPC process: ${error.message}${stderr ? `.${stderr}` : ''}`;
         this.handleProcessFailure(message);
         settleFailure(new Error(message));
       });
