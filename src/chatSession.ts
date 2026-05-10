@@ -220,6 +220,16 @@ export class ChatSession {
     this.transcript.push({ role: 'system', text: limitErrorMessage(message), error: true });
   }
 
+  public addSystemMessage(message: string): void {
+    const trimmedMessage = message.trim();
+
+    if (!trimmedMessage) {
+      return;
+    }
+
+    this.transcript.push({ role: 'system', text: trimmedMessage });
+  }
+
   private ensureActiveAssistantMessage(): number {
     if (this.activeAssistantIndex !== undefined) {
       return this.activeAssistantIndex;

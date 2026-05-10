@@ -328,6 +328,94 @@ export const chatWebviewStyles = /* css */ `    :root {
       box-shadow: inset 0 1px 0 color-mix(in srgb, var(--vscode-foreground) 8%, transparent);
     }
 
+    .composer__slash-menu {
+      position: absolute;
+      left: 9px;
+      bottom: calc(100% + 6px);
+      z-index: 3;
+      display: none;
+      width: min(360px, calc(100vw - 24px));
+      max-height: min(280px, 45vh);
+      overflow-y: auto;
+      padding: 4px;
+      color: var(--vscode-foreground);
+      background: var(--vscode-dropdown-background, var(--vscode-editorWidget-background));
+      border: 1px solid var(--vscode-dropdown-border, var(--vscode-input-border, transparent));
+      border-radius: 8px;
+      box-shadow: 0 4px 16px color-mix(in srgb, #000 38%, transparent);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .composer__slash-menu[open] {
+      display: grid;
+      gap: 2px;
+    }
+
+    .composer__slash-item {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 2px 8px;
+      width: 100%;
+      min-width: 0;
+      padding: 6px 7px;
+      color: inherit;
+      background: transparent;
+      border: 0;
+      border-radius: 5px;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .composer__slash-item:hover,
+    .composer__slash-item--active {
+      color: var(--vscode-list-activeSelectionForeground, var(--vscode-foreground));
+      background: var(--vscode-list-activeSelectionBackground, color-mix(in srgb, var(--vscode-foreground) 14%, transparent));
+    }
+
+    .composer__slash-label {
+      min-width: 0;
+      overflow: hidden;
+      font-weight: 600;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .composer__slash-source {
+      color: var(--vscode-descriptionForeground);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .composer__slash-item--active .composer__slash-source,
+    .composer__slash-item:hover .composer__slash-source {
+      color: inherit;
+      opacity: 0.78;
+    }
+
+    .composer__slash-description {
+      grid-column: 1 / -1;
+      min-width: 0;
+      overflow: hidden;
+      color: var(--vscode-descriptionForeground);
+      font-size: 11px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .composer__slash-item--active .composer__slash-description,
+    .composer__slash-item:hover .composer__slash-description {
+      color: inherit;
+      opacity: 0.78;
+    }
+
+    .composer__slash-empty {
+      padding: 7px 8px;
+      color: var(--vscode-descriptionForeground);
+      font-size: 12px;
+    }
+
     .composer__input {
       grid-column: 1 / -1;
       align-self: start;

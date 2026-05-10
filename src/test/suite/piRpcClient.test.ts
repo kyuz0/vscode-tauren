@@ -101,6 +101,35 @@ suite('PiRpcClient', () => {
     client.dispose();
   });
 
+  test('gets available slash commands', async () => {
+    const { client, fakeProcess } = createClient();
+
+    const commandsPromise = client.getCommands();
+    const command = await fakeProcess.nextCommand();
+
+    assert.strictEqual(command.type, 'get_commands');
+    assert.ok(typeof command.id === 'string');
+
+    fakeProcess.writeRecord({
+      type: 'response',
+      id: command.id,
+      command: 'get_commands',
+      success: true,
+      data: {
+        commands: [
+          { name: 'fix-tests', description: 'Fix failing tests', source: 'prompt', location: 'project' }
+        ]
+      }
+    });
+
+    assert.deepStrictEqual(await commandsPromise, {
+      commands: [
+        { name: 'fix-tests', description: 'Fix failing tests', source: 'prompt', location: 'project' }
+      ]
+    });
+    client.dispose();
+  });
+
   test('sends abort as a correlated RPC command', async () => {
     const { client, fakeProcess } = createClient();
 

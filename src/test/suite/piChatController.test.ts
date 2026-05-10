@@ -9,6 +9,7 @@ import type { WebviewStateMessage } from '../../chatWebview';
 import type { StatePublisherScheduler } from '../../statePublisher';
 import type {
   ExtensionUiResponse,
+  PiCommand,
   PiModel,
   PiRpcClientOptions,
   PiSessionState,
@@ -119,7 +120,9 @@ suite('PiChatController', () => {
       contextUsageLabel: '',
       contextUsageTitle: '',
       contextUsageLevel: '',
-      metadataRefreshing: false
+      metadataRefreshing: false,
+      slashCommands: [],
+      slashCommandsRefreshing: false
     });
     harness.controller.dispose();
   });
@@ -166,6 +169,35 @@ suite('PiChatController', () => {
 
     promptDeferred.resolve();
     await submitPromise;
+    harness.controller.dispose();
+  });
+
+  test('unsupported built-in slash commands are handled locally', async () => {
+    const client = new FakePiClient();
+    const harness = createControllerHarness([client]);
+
+    await harness.controller.handleWebviewMessage({ type: 'submit', text: '/settings' });
+
+    assert.strictEqual(harness.createCalls, 0);
+    assert.deepStrictEqual(client.prompts, []);
+    assert.deepStrictEqual(lastState(harness).messages, [
+      { role: 'system', text: '/settings is a Pi terminal command that is not supported in the VS Code sidebar yet.' }
+    ]);
+    harness.controller.dispose();
+  });
+
+  test('supported built-in slash commands route to RPC commands', async () => {
+    const client = new FakePiClient();
+    const harness = createControllerHarness([client]);
+
+    await harness.controller.handleWebviewMessage({ type: 'submit', text: '/name Feature work' });
+
+    assert.strictEqual(harness.createCalls, 1);
+    assert.deepStrictEqual(client.sessionNames, ['Feature work']);
+    assert.deepStrictEqual(client.prompts, []);
+    assert.deepStrictEqual(lastState(harness).messages, [
+      { role: 'system', text: 'Session name set to "Feature work".' }
+    ]);
     harness.controller.dispose();
   });
 
@@ -511,6 +543,46 @@ suite('PiChatController', () => {
     assert.strictEqual(lastState(harness).contextUsageLevel, 'medium');
     harness.controller.dispose();
   });
+
+  test('refresh slash commands includes filtered slash commands', async () => {
+    const client = new FakePiClient({
+      commands: [
+        { name: 'skill:search', description: 'Search docs', source: 'skill', location: 'user', path: '/skills/search/SKILL.md' },
+        { name: '', description: 'Invalid', source: 'prompt' },
+        { name: 'fix-tests', description: 'Fix failing tests', source: 'prompt', location: 'project' },
+        { name: 'session-name', description: 'Set session name', source: 'extension' }
+      ]
+    });
+    const harness = createControllerHarness([client]);
+
+    await harness.controller.handleWebviewMessage({ type: 'refreshSlashCommands' });
+
+    assert.strictEqual(client.commandsCalls, 1);
+    assert.deepStrictEqual(lastState(harness).slashCommands, [
+      { name: 'session-name', description: 'Set session name', source: 'extension', location: undefined, path: undefined },
+      { name: 'fix-tests', description: 'Fix failing tests', source: 'prompt', location: 'project', path: undefined },
+      { name: 'skill:search', description: 'Search docs', source: 'skill', location: 'user', path: '/skills/search/SKILL.md' }
+    ]);
+    assert.strictEqual(lastState(harness).slashCommandsRefreshing, false);
+    harness.controller.dispose();
+  });
+
+  test('failed slash command refresh preserves previous commands', async () => {
+    const client = new FakePiClient({
+      commands: [{ name: 'fix-tests', description: 'Fix failing tests', source: 'prompt' }]
+    });
+    const harness = createControllerHarness([client]);
+
+    await harness.controller.handleWebviewMessage({ type: 'refreshSlashCommands' });
+    client.commandsError = new Error('commands unavailable');
+    await harness.controller.refreshSlashCommands({ startClient: true, force: true });
+
+    assert.deepStrictEqual(lastState(harness).slashCommands, [
+      { name: 'fix-tests', description: 'Fix failing tests', source: 'prompt', location: undefined, path: undefined }
+    ]);
+    assert.strictEqual(lastState(harness).slashCommandsRefreshing, false);
+    harness.controller.dispose();
+  });
 });
 
 type ControllerHarness = {
@@ -582,6 +654,9 @@ type FakePiClientOptions = {
   stateResult?: Promise<PiSessionState>;
   modelsResult?: Promise<PiModel[]>;
   statsResult?: Promise<PiSessionStats>;
+  commands?: PiCommand[];
+  commandsResult?: Promise<PiCommand[]>;
+  commandsError?: unknown;
   promptResult?: Promise<void>;
   promptError?: unknown;
 };
@@ -626,15 +701,20 @@ class FakePiClient implements PiRpcClientLike {
   public stateCalls = 0;
   public modelsCalls = 0;
   public statsCalls = 0;
+  public commandsCalls = 0;
   public abortCalls = 0;
   public prompts: string[] = [];
+  public sessionNames: string[] = [];
   public extensionUiResponses: ExtensionUiResponse[] = [];
   public state: PiSessionState;
   public models: PiModel[];
   public stats: PiSessionStats;
+  public commands: PiCommand[];
   public stateResult: Promise<PiSessionState> | undefined;
   public modelsResult: Promise<PiModel[]> | undefined;
   public statsResult: Promise<PiSessionStats> | undefined;
+  public commandsResult: Promise<PiCommand[]> | undefined;
+  public commandsError: unknown;
   public promptResult: Promise<void> | undefined;
   public promptError: unknown;
   private readonly eventListeners = new Set<(event: RpcEvent) => void>();
@@ -647,9 +727,12 @@ class FakePiClient implements PiRpcClientLike {
     };
     this.models = options.models ?? [{ provider: 'openai', id: 'gpt-test', name: 'GPT Test', reasoning: false }];
     this.stats = options.stats ?? {};
+    this.commands = options.commands ?? [];
     this.stateResult = options.stateResult;
     this.modelsResult = options.modelsResult;
     this.statsResult = options.statsResult;
+    this.commandsResult = options.commandsResult;
+    this.commandsError = options.commandsError;
     this.promptResult = options.promptResult;
     this.promptError = options.promptError;
   }
@@ -705,11 +788,37 @@ class FakePiClient implements PiRpcClientLike {
     return { models: await (this.modelsResult ?? this.models) };
   }
 
+  public async getCommands(): Promise<{ commands?: PiCommand[] }> {
+    this.commandsCalls += 1;
+
+    if (this.commandsError) {
+      throw this.commandsError;
+    }
+
+    return { commands: await (this.commandsResult ?? this.commands) };
+  }
+
   public async setModel(_provider: string, _modelId: string): Promise<PiModel> {
     return {};
   }
 
   public async setThinkingLevel(_level: string): Promise<void> {}
+
+  public async setSessionName(name: string): Promise<void> {
+    this.sessionNames.push(name);
+  }
+
+  public async compact(): Promise<{}> {
+    return {};
+  }
+
+  public async exportHtml(): Promise<{}> {
+    return {};
+  }
+
+  public async getLastAssistantText(): Promise<{ text: null }> {
+    return { text: null };
+  }
 
   public async respondExtensionUiRequest(response: ExtensionUiResponse): Promise<void> {
     this.extensionUiResponses.push(response);

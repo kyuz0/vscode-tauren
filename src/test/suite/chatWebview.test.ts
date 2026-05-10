@@ -4,6 +4,7 @@ import {
   createWebviewStateMessage,
   parseWebviewMessage
 } from '../../chatWebview';
+import { chatWebviewScript } from '../../chatWebviewScript';
 import type { ChatState } from '../../chatSession';
 
 suite('Chat webview helpers', () => {
@@ -49,7 +50,9 @@ suite('Chat webview helpers', () => {
         contextUsageLabel: '30%',
         contextUsageTitle: '60,000 / 200,000 context tokens',
         contextUsageLevel: 'low',
-        metadataRefreshing: false
+        metadataRefreshing: false,
+        slashCommands: [],
+        slashCommandsRefreshing: false
       }
     );
   });
@@ -70,7 +73,9 @@ suite('Chat webview helpers', () => {
         contextUsageLabel: '',
         contextUsageTitle: '',
         contextUsageLevel: '',
-        metadataRefreshing: false
+        metadataRefreshing: false,
+        slashCommands: [],
+        slashCommandsRefreshing: false
       }
     );
   });
@@ -79,6 +84,7 @@ suite('Chat webview helpers', () => {
     assert.deepStrictEqual(parseWebviewMessage({ type: 'ready' }), { type: 'ready' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'newSession' }), { type: 'newSession' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'refreshMetadata' }), { type: 'refreshMetadata' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'refreshSlashCommands' }), { type: 'refreshSlashCommands' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'abort' }), { type: 'abort' });
     assert.deepStrictEqual(
       parseWebviewMessage({ type: 'submit', text: 'hello' }),
@@ -103,6 +109,10 @@ suite('Chat webview helpers', () => {
       { type: 'unknown' }
     );
     assert.deepStrictEqual(parseWebviewMessage({ type: 'futureMessage' }), { type: 'unknown' });
+  });
+
+  test('embedded webview script is valid JavaScript', () => {
+    assert.doesNotThrow(() => new Function(chatWebviewScript));
   });
 
   test('createWebviewHtml wires CSP nonce and stable composer markup', () => {
@@ -134,12 +144,15 @@ suite('Chat webview helpers', () => {
     assert.ok(html.includes('class="composer__context-tooltip"'));
     assert.ok(html.includes('class="composer__model"'));
     assert.ok(html.includes('class="composer__model-menu"'));
+    assert.ok(html.includes('class="composer__slash-menu"'));
+    assert.ok(html.includes('aria-autocomplete="list"'));
     assert.ok(html.includes('composer__model--refreshing'));
     assert.ok(html.includes('class="composer__select composer__thinking-select"'));
     assert.ok(html.includes('class="composer__select composer__model-select"'));
     assert.ok(html.includes('class="composer__button composer__submit"'));
     assert.ok(html.includes('state.modelOptions.length === 0 && !state.metadataRefreshing'));
     assert.ok(html.includes("vscode.postMessage({ type: 'refreshMetadata' });"));
+    assert.ok(html.includes("vscode.postMessage({ type: 'refreshSlashCommands' });"));
     assert.ok(html.includes("vscode.postMessage({ type: 'ready' });"));
   });
 });

@@ -40,6 +40,7 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
         void this.webviewView?.webview.postMessage(message);
       },
       showNotification: (message, notifyType) => this.showNotification(message, notifyType),
+      writeClipboard: (text) => vscode.env.clipboard.writeText(text),
       extensionUi: {
         notify: (message, notifyType) => this.showNotification(message, notifyType),
         select: (title, options) => vscode.window.showQuickPick(options, {

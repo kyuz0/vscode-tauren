@@ -7,6 +7,7 @@ export type WebviewMessage =
   | { type: 'ready' }
   | { type: 'newSession' }
   | { type: 'refreshMetadata' }
+  | { type: 'refreshSlashCommands' }
   | { type: 'abort' }
   | { type: 'submit'; text: string }
   | { type: 'setModel'; provider: string; modelId: string }
@@ -25,6 +26,8 @@ export function parseWebviewMessage(value: unknown): WebviewMessage {
       return { type: 'newSession' };
     case 'refreshMetadata':
       return { type: 'refreshMetadata' };
+    case 'refreshSlashCommands':
+      return { type: 'refreshSlashCommands' };
     case 'abort':
       return { type: 'abort' };
     case 'submit':
@@ -51,6 +54,14 @@ export type WebviewModelOption = {
   reasoning: boolean;
 };
 
+export type WebviewSlashCommand = {
+  name: string;
+  description: string;
+  source: string;
+  location?: string;
+  path?: string;
+};
+
 export type WebviewStateMessage = ChatState & {
   type: 'state';
   modelLabel: string;
@@ -63,6 +74,8 @@ export type WebviewStateMessage = ChatState & {
   contextUsageTitle: string;
   contextUsageLevel: string;
   metadataRefreshing: boolean;
+  slashCommands: WebviewSlashCommand[];
+  slashCommandsRefreshing: boolean;
 };
 
 type CreateWebviewStateMessageOptions = {
@@ -81,13 +94,17 @@ type CreateWebviewStateMessageOptions = {
     level?: string;
   };
   metadataRefreshing?: boolean;
+  slashCommands?: WebviewSlashCommand[];
+  slashCommandsRefreshing?: boolean;
 };
 
 export function createWebviewStateMessage({
   state,
   model = {},
   contextUsage = {},
-  metadataRefreshing = false
+  metadataRefreshing = false,
+  slashCommands = [],
+  slashCommandsRefreshing = false
 }: CreateWebviewStateMessageOptions): WebviewStateMessage {
   return {
     type: 'state',
@@ -102,7 +119,9 @@ export function createWebviewStateMessage({
     contextUsageLabel: contextUsage.label ?? '',
     contextUsageTitle: contextUsage.title ?? '',
     contextUsageLevel: contextUsage.level ?? '',
-    metadataRefreshing
+    metadataRefreshing,
+    slashCommands,
+    slashCommandsRefreshing
   };
 }
 
@@ -132,7 +151,8 @@ ${chatWebviewStyles}
       <p class="empty-state">Ask Pi about this workspace.</p>
     </section>
     <form class="composer" aria-label="Pi message input">
-      <textarea class="composer__input" rows="1" aria-label="Message"></textarea>
+      <div id="slash-command-list" class="composer__slash-menu" role="listbox" aria-label="Slash commands"></div>
+      <textarea class="composer__input" rows="1" aria-label="Message" aria-autocomplete="list" aria-controls="slash-command-list" aria-expanded="false"></textarea>
       <button class="composer__button composer__add" type="button" aria-label="New session" title="New session">
         <svg aria-hidden="true" width="19" height="19" viewBox="0 0 19 19" fill="none">
           <path d="M9.5 3.5V15.5M3.5 9.5H15.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>

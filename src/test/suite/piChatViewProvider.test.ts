@@ -298,11 +298,29 @@ class FakePiClient implements PiRpcClientLike {
     return { models: this.models };
   }
 
+  public async getCommands(): Promise<{ commands?: [] }> {
+    return { commands: [] };
+  }
+
   public async setModel(_provider: string, _modelId: string): Promise<PiModel> {
     return {};
   }
 
   public async setThinkingLevel(_level: string): Promise<void> {}
+
+  public async setSessionName(_name: string): Promise<void> {}
+
+  public async compact(): Promise<{}> {
+    return {};
+  }
+
+  public async exportHtml(): Promise<{}> {
+    return {};
+  }
+
+  public async getLastAssistantText(): Promise<{ text: null }> {
+    return { text: null };
+  }
 
   public async respondExtensionUiRequest(_response: ExtensionUiResponse): Promise<void> {}
 

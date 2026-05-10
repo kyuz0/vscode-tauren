@@ -28,18 +28,58 @@ export type PiModel = {
 export type PiSessionState = {
   model?: PiModel | null;
   thinkingLevel?: string;
+  sessionFile?: string;
+  sessionId?: string;
+  sessionName?: string;
+  messageCount?: number;
+  pendingMessageCount?: number;
 };
 
 export type PiAvailableModels = {
   models?: PiModel[];
 };
 
+export type PiCommand = {
+  name?: string;
+  description?: string;
+  source?: string;
+  location?: string;
+  path?: string;
+};
+
+export type PiAvailableCommands = {
+  commands?: PiCommand[];
+};
+
 export type PiSessionStats = {
+  sessionFile?: string;
+  sessionId?: string;
+  sessionName?: string;
+  userMessages?: number;
+  assistantMessages?: number;
+  toolCalls?: number;
+  totalMessages?: number;
+  cost?: number;
   contextUsage?: {
     tokens?: number | null;
     contextWindow?: number;
     percent?: number | null;
   };
+};
+
+export type PiCompactResult = {
+  summary?: string;
+  firstKeptEntryId?: string;
+  tokensBefore?: number;
+  details?: unknown;
+};
+
+export type PiExportHtmlResult = {
+  path?: string;
+};
+
+export type PiLastAssistantText = {
+  text?: string | null;
 };
 
 type PendingRequest = {
@@ -129,6 +169,11 @@ export class PiRpcClient {
     return isRecord(response.data) ? response.data : {};
   }
 
+  public async getCommands(): Promise<PiAvailableCommands> {
+    const response = await this.send({ type: 'get_commands' });
+    return isRecord(response.data) ? response.data : {};
+  }
+
   public async setModel(provider: string, modelId: string): Promise<PiModel> {
     const response = await this.send({ type: 'set_model', provider, modelId });
     return isRecord(response.data) ? response.data : {};
@@ -136,6 +181,31 @@ export class PiRpcClient {
 
   public async setThinkingLevel(level: string): Promise<void> {
     await this.send({ type: 'set_thinking_level', level });
+  }
+
+  public async setSessionName(name: string): Promise<void> {
+    await this.send({ type: 'set_session_name', name });
+  }
+
+  public async compact(customInstructions?: string): Promise<PiCompactResult> {
+    const response = await this.send({
+      type: 'compact',
+      ...(customInstructions ? { customInstructions } : {})
+    });
+    return isRecord(response.data) ? response.data : {};
+  }
+
+  public async exportHtml(outputPath?: string): Promise<PiExportHtmlResult> {
+    const response = await this.send({
+      type: 'export_html',
+      ...(outputPath ? { outputPath } : {})
+    });
+    return isRecord(response.data) ? response.data : {};
+  }
+
+  public async getLastAssistantText(): Promise<PiLastAssistantText> {
+    const response = await this.send({ type: 'get_last_assistant_text' });
+    return isRecord(response.data) ? response.data : {};
   }
 
   public respondExtensionUiRequest(response: ExtensionUiResponse): Promise<void> {

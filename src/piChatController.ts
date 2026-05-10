@@ -3,6 +3,7 @@ import {
   createWebviewStateMessage,
   type WebviewMessage,
   type WebviewModelOption,
+  type WebviewSlashCommand,
   type WebviewStateMessage
 } from './chatWebview';
 import {
@@ -24,6 +25,7 @@ import {
   type ActivityUpdateAction
 } from './piEventMapper';
 import type {
+  PiCommand,
   PiModel,
   PiRpcClient,
   PiRpcClientOptions,
@@ -42,8 +44,13 @@ export type PiRpcClientLike = Pick<
   | 'getState'
   | 'getSessionStats'
   | 'getAvailableModels'
+  | 'getCommands'
   | 'setModel'
   | 'setThinkingLevel'
+  | 'setSessionName'
+  | 'compact'
+  | 'exportHtml'
+  | 'getLastAssistantText'
   | 'respondExtensionUiRequest'
   | 'dispose'
 >;
@@ -80,6 +87,7 @@ export type PiChatControllerOptions = {
   stateScheduler?: StatePublisherScheduler;
   initialSessionMeta?: PiChatSessionMetaSnapshot;
   onSessionMetaChange?: (metadata: PiChatSessionMetaSnapshot) => void;
+  writeClipboard?: (text: string) => PromiseLike<void> | Promise<void> | void;
 };
 
 type DisposableLike = {
@@ -99,10 +107,14 @@ export class PiChatController {
   private contextUsageTitle = '';
   private contextUsageLevel = '';
   private metadataRefreshing = false;
+  private slashCommands: WebviewSlashCommand[] = [];
+  private slashCommandsRefreshing = false;
   private metadataRefreshSequence = 0;
+  private slashCommandsRefreshSequence = 0;
   private abortRequested = false;
   private abortNoticeAdded = false;
   private metadataRefreshInFlight: { generation: number; promise: Promise<void> } | undefined;
+  private slashCommandsRefreshInFlight: { generation: number; promise: Promise<void> } | undefined;
   private fullRpcAgentCommunication: boolean;
   private readonly session = new ChatSession();
   private readonly clientDisposables: DisposableLike[] = [];
@@ -154,6 +166,14 @@ export class PiChatController {
       return;
     }
 
+    if (message.type === 'refreshSlashCommands') {
+      if (!this.session.isBusy) {
+        await this.refreshSlashCommands({ startClient: true });
+      }
+
+      return;
+    }
+
     if (message.type === 'setModel') {
       await this.setModel(message.provider, message.modelId);
       return;
@@ -170,6 +190,13 @@ export class PiChatController {
     }
 
     if (message.type !== 'submit') {
+      return;
+    }
+
+    const localSlashCommand = parseLocalSlashCommand(message.text);
+
+    if (localSlashCommand) {
+      await this.handleLocalSlashCommand(localSlashCommand);
       return;
     }
 
@@ -225,6 +252,8 @@ export class PiChatController {
         thinkingLevel: this.thinkingLevel,
         options: this.modelOptions
       },
+      slashCommands: this.slashCommands,
+      slashCommandsRefreshing: this.slashCommandsRefreshing,
       contextUsage: {
         label: this.contextUsageLabel,
         title: this.contextUsageTitle,
@@ -253,6 +282,29 @@ export class PiChatController {
       });
 
     this.metadataRefreshInFlight = { generation: sessionGeneration, promise: refreshPromise };
+
+    return refreshPromise;
+  }
+
+  public refreshSlashCommands(options: { startClient?: boolean; force?: boolean } = {}): Promise<void> {
+    const sessionGeneration = this.session.generation;
+    const existingRefresh = this.slashCommandsRefreshInFlight;
+
+    if (!options.force && existingRefresh?.generation === sessionGeneration) {
+      return existingRefresh.promise;
+    }
+
+    const refreshId = ++this.slashCommandsRefreshSequence;
+    let refreshPromise!: Promise<void>;
+
+    refreshPromise = this.runSlashCommandsRefresh(options, sessionGeneration, refreshId)
+      .finally(() => {
+        if (this.slashCommandsRefreshInFlight?.promise === refreshPromise) {
+          this.slashCommandsRefreshInFlight = undefined;
+        }
+      });
+
+    this.slashCommandsRefreshInFlight = { generation: sessionGeneration, promise: refreshPromise };
 
     return refreshPromise;
   }
@@ -351,9 +403,58 @@ export class PiChatController {
     }
   }
 
+  private async runSlashCommandsRefresh(
+    options: { startClient?: boolean },
+    sessionGeneration: number,
+    refreshId: number
+  ): Promise<void> {
+    let client: PiRpcClientLike | undefined;
+
+    try {
+      client = options.startClient ? this.getClient() : this.getExistingClient();
+    } catch (error) {
+      if (sessionGeneration === this.session.generation) {
+        this.handleClientError(getErrorMessage(error));
+      }
+
+      return;
+    }
+
+    if (!client) {
+      return;
+    }
+
+    this.setSlashCommandsRefreshing(true);
+
+    try {
+      const availableCommands = await client.getCommands();
+
+      if (!this.isCurrentSlashCommandRefresh(sessionGeneration, refreshId)) {
+        return;
+      }
+
+      if (this.applySlashCommands(formatSlashCommands(availableCommands.commands))) {
+        this.postState();
+      }
+    } catch (error) {
+      if (this.isCurrentSlashCommandRefresh(sessionGeneration, refreshId)) {
+        this.handleClientError(getErrorMessage(error));
+      }
+    } finally {
+      if (this.isCurrentSlashCommandRefresh(sessionGeneration, refreshId)) {
+        this.setSlashCommandsRefreshing(false);
+      }
+    }
+  }
+
   private isCurrentMetadataRefresh(sessionGeneration: number, refreshId: number): boolean {
     return sessionGeneration === this.session.generation
       && refreshId === this.metadataRefreshSequence;
+  }
+
+  private isCurrentSlashCommandRefresh(sessionGeneration: number, refreshId: number): boolean {
+    return sessionGeneration === this.session.generation
+      && refreshId === this.slashCommandsRefreshSequence;
   }
 
   private applyModelMeta(modelMeta: PiChatModelMeta): boolean {
@@ -406,6 +507,15 @@ export class PiChatController {
     return true;
   }
 
+  private applySlashCommands(slashCommands: WebviewSlashCommand[]): boolean {
+    if (areSlashCommandsEqual(slashCommands, this.slashCommands)) {
+      return false;
+    }
+
+    this.slashCommands = slashCommands;
+    return true;
+  }
+
   private setSessionMetaFields(snapshot: PiChatSessionMetaSnapshot): void {
     if (snapshot.model) {
       this.setModelMetaFields(snapshot.model);
@@ -454,6 +564,144 @@ export class PiChatController {
     }
 
     this.metadataRefreshing = value;
+    this.postState();
+  }
+
+  private setSlashCommandsRefreshing(value: boolean): void {
+    if (this.slashCommandsRefreshing === value) {
+      return;
+    }
+
+    this.slashCommandsRefreshing = value;
+    this.postState();
+  }
+
+  private async handleLocalSlashCommand(command: { name: string; args: string }): Promise<void> {
+    if (!supportedBuiltinSlashCommandNames.has(command.name)) {
+      this.session.addSystemMessage(`/${command.name} is a Pi terminal command that is not supported in the VS Code sidebar yet.`);
+      this.postState();
+      return;
+    }
+
+    try {
+      switch (command.name) {
+        case 'new':
+          this.startNewSession();
+          return;
+        case 'model':
+          await this.handleModelSlashCommand(command.args);
+          return;
+        case 'name':
+          await this.handleNameSlashCommand(command.args);
+          return;
+        case 'session':
+          await this.handleSessionSlashCommand();
+          return;
+        case 'copy':
+          await this.handleCopySlashCommand();
+          return;
+        case 'compact':
+          await this.handleCompactSlashCommand(command.args);
+          return;
+        case 'export':
+          await this.handleExportSlashCommand(command.args);
+          return;
+        default:
+          return;
+      }
+    } catch (error) {
+      this.session.addErrorMessage(getErrorMessage(error));
+      this.postState();
+    }
+  }
+
+  private async handleModelSlashCommand(query: string): Promise<void> {
+    if (this.session.isBusy) {
+      return;
+    }
+
+    if (this.modelOptions.length === 0) {
+      await this.refreshSessionMeta({ startClient: true, force: true });
+    }
+
+    const matches = filterModelOptions(this.modelOptions, query);
+
+    if (matches.length === 0) {
+      this.session.addSystemMessage(query ? `No model matched "${query}".` : 'No models are available yet.');
+      this.postState();
+      return;
+    }
+
+    let selected = matches.length === 1 ? matches[0] : undefined;
+
+    if (!selected) {
+      const labels = matches.map(formatModelOptionLabel);
+      const picked = await this.options.extensionUi?.select?.('Select Pi model', labels);
+
+      if (!picked) {
+        return;
+      }
+
+      selected = matches[labels.indexOf(picked)];
+    }
+
+    if (!selected) {
+      return;
+    }
+
+    await this.setModel(selected.provider, selected.id);
+  }
+
+  private async handleNameSlashCommand(name: string): Promise<void> {
+    await this.getClient().setSessionName(name);
+    this.session.addSystemMessage(name ? `Session name set to "${name}".` : 'Session name cleared.');
+    this.postState();
+    void this.refreshSessionMeta({ startClient: true, force: true });
+  }
+
+  private async handleSessionSlashCommand(): Promise<void> {
+    const client = this.getClient();
+    const [state, stats] = await Promise.all([
+      client.getState(),
+      client.getSessionStats()
+    ]);
+
+    this.session.addSystemMessage(formatSessionInfo(state, stats));
+    this.postState();
+  }
+
+  private async handleCopySlashCommand(): Promise<void> {
+    const result = await this.getClient().getLastAssistantText();
+    const text = typeof result.text === 'string' ? result.text : '';
+
+    if (!text) {
+      this.options.showNotification('No assistant message to copy.', 'warning');
+      return;
+    }
+
+    if (!this.options.writeClipboard) {
+      this.options.showNotification('Copy is not available in this environment.', 'warning');
+      return;
+    }
+
+    await this.options.writeClipboard(text);
+    this.options.showNotification('Copied last Pi response.', 'info');
+  }
+
+  private async handleCompactSlashCommand(customInstructions: string): Promise<void> {
+    const result = await this.getClient().compact(customInstructions || undefined);
+    const summary = typeof result.summary === 'string' && result.summary
+      ? `\n\n${result.summary}`
+      : '';
+    this.session.addSystemMessage(`Compacted session context.${summary}`);
+    this.postState();
+    void this.refreshSessionMeta({ startClient: true, force: true });
+  }
+
+  private async handleExportSlashCommand(outputPath: string): Promise<void> {
+    const result = await this.getClient().exportHtml(outputPath || undefined);
+    const path = typeof result.path === 'string' && result.path ? result.path : 'HTML file';
+    this.session.addSystemMessage(`Exported session to ${path}.`);
     this.postState();
   }
 
@@ -719,6 +967,7 @@ export class PiChatController {
     this.session.addErrorMessage(message);
     this.session.setBusy(false);
     this.metadataRefreshing = false;
+    this.slashCommandsRefreshing = false;
     this.postState();
   }
 }
@@ -805,6 +1054,60 @@ function formatModelOptions(models: PiModel[] | undefined): WebviewModelOption[]
   });
 }
 
+const blacklistedSlashCommandNames = new Set<string>([
+  // Future: add commands known to be TUI-only or confusing in VS Code.
+]);
+
+function formatSlashCommands(commands: PiCommand[] | undefined): WebviewSlashCommand[] {
+  if (!Array.isArray(commands)) {
+    return [];
+  }
+
+  return commands
+    .flatMap((command) => {
+      const name = typeof command.name === 'string' ? command.name.trim() : '';
+
+      if (!name || isBlacklistedSlashCommand(command)) {
+        return [];
+      }
+
+      return [{
+        name,
+        description: typeof command.description === 'string' ? command.description : '',
+        source: typeof command.source === 'string' ? command.source : '',
+        location: typeof command.location === 'string' ? command.location : undefined,
+        path: typeof command.path === 'string' ? command.path : undefined
+      }];
+    })
+    .sort(compareSlashCommands);
+}
+
+function isBlacklistedSlashCommand(command: PiCommand): boolean {
+  const name = typeof command.name === 'string' ? command.name.trim() : '';
+  return blacklistedSlashCommandNames.has(name);
+}
+
+function compareSlashCommands(left: WebviewSlashCommand, right: WebviewSlashCommand): number {
+  return getSlashCommandSourceRank(left.source) - getSlashCommandSourceRank(right.source)
+    || left.name.localeCompare(right.name);
+}
+
+function getSlashCommandSourceRank(source: string): number {
+  if (source === 'extension') {
+    return 0;
+  }
+
+  if (source === 'prompt') {
+    return 1;
+  }
+
+  if (source === 'skill') {
+    return 2;
+  }
+
+  return 3;
+}
+
 function areModelOptionsEqual(left: WebviewModelOption[], right: WebviewModelOption[]): boolean {
   return left.length === right.length
     && left.every((model, index) => {
@@ -815,6 +1118,136 @@ function areModelOptionsEqual(left: WebviewModelOption[], right: WebviewModelOpt
         && model.name === other.name
         && model.reasoning === other.reasoning;
     });
+}
+
+function areSlashCommandsEqual(left: WebviewSlashCommand[], right: WebviewSlashCommand[]): boolean {
+  return left.length === right.length
+    && left.every((command, index) => {
+      const other = right[index];
+      return other
+        && command.name === other.name
+        && command.description === other.description
+        && command.source === other.source
+        && command.location === other.location
+        && command.path === other.path;
+    });
+}
+
+const builtinSlashCommandNames = new Set([
+  'settings',
+  'model',
+  'scoped-models',
+  'export',
+  'import',
+  'share',
+  'copy',
+  'name',
+  'session',
+  'changelog',
+  'hotkeys',
+  'fork',
+  'clone',
+  'tree',
+  'login',
+  'logout',
+  'new',
+  'compact',
+  'resume',
+  'reload',
+  'quit'
+]);
+
+const supportedBuiltinSlashCommandNames = new Set([
+  'model',
+  'export',
+  'copy',
+  'name',
+  'session',
+  'new',
+  'compact'
+]);
+
+function parseLocalSlashCommand(text: string): { name: string; args: string } | undefined {
+  const match = text.trim().match(/^\/([^\s]+)(?:\s+([\s\S]*))?$/);
+
+  if (!match) {
+    return undefined;
+  }
+
+  const name = match[1];
+
+  if (!builtinSlashCommandNames.has(name)) {
+    return undefined;
+  }
+
+  return { name, args: match[2]?.trim() ?? '' };
+}
+
+function filterModelOptions(modelOptions: WebviewModelOption[], query: string): WebviewModelOption[] {
+  const normalizedQuery = query.trim().toLowerCase();
+
+  if (!normalizedQuery) {
+    return modelOptions;
+  }
+
+  return modelOptions.filter((model) => {
+    const providerAndId = `${model.provider}/${model.id}`.toLowerCase();
+    const id = model.id.toLowerCase();
+    const name = model.name.toLowerCase();
+    return providerAndId === normalizedQuery
+      || id === normalizedQuery
+      || name === normalizedQuery
+      || providerAndId.includes(normalizedQuery)
+      || id.includes(normalizedQuery)
+      || name.includes(normalizedQuery);
+  });
+}
+
+function formatModelOptionLabel(model: WebviewModelOption): string {
+  return model.name && model.name !== model.id
+    ? `${model.name} (${model.provider}/${model.id})`
+    : `${model.provider}/${model.id}`;
+}
+
+function formatSessionInfo(state: PiSessionState, stats: PiSessionStats): string {
+  const lines = ['Session'];
+  const sessionName = state.sessionName ?? stats.sessionName;
+  const sessionId = state.sessionId ?? stats.sessionId;
+  const sessionFile = state.sessionFile ?? stats.sessionFile;
+
+  if (sessionName) {
+    lines.push(`Name: ${sessionName}`);
+  }
+
+  if (sessionId) {
+    lines.push(`ID: ${sessionId}`);
+  }
+
+  if (sessionFile) {
+    lines.push(`File: ${sessionFile}`);
+  }
+
+  if (typeof state.messageCount === 'number') {
+    lines.push(`Messages: ${formatInteger(state.messageCount)}`);
+  } else if (typeof stats.totalMessages === 'number') {
+    lines.push(`Messages: ${formatInteger(stats.totalMessages)}`);
+  }
+
+  if (typeof stats.toolCalls === 'number') {
+    lines.push(`Tool calls: ${formatInteger(stats.toolCalls)}`);
+  }
+
+  if (typeof stats.cost === 'number') {
+    lines.push(`Cost: $${stats.cost.toFixed(4)}`);
+  }
+
+  const contextUsage = formatContextUsage(stats);
+
+  if (contextUsage.label) {
+    lines.push(`Context used: ${contextUsage.label}`);
+  }
+
+  return lines.join('\n');
 }
 
 function formatThinkingLevel(level: string): string {

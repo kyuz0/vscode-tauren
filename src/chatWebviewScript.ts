@@ -2,6 +2,7 @@ export const chatWebviewScript = /* javascript */ `    const vscode = acquireVsC
     const messagesElement = document.querySelector('.messages');
     const form = document.querySelector('.composer');
     const textarea = document.querySelector('textarea');
+    const slashMenuElement = document.querySelector('.composer__slash-menu');
     const newSessionButton = document.querySelector('.composer__add');
     const contextElement = document.querySelector('.composer__context');
     const contextValueElement = document.querySelector('.composer__context-value');
@@ -15,7 +16,34 @@ export const chatWebviewScript = /* javascript */ `    const vscode = acquireVsC
     const maxTextareaHeight = 180;
     const minTextareaHeight = 22;
     const isMac = navigator.platform.toUpperCase().includes('MAC');
-    let state = { messages: [], busy: false, modelLabel: '', modelProvider: '', modelId: '', modelReasoning: false, thinkingLevel: '', modelOptions: [], contextUsageLabel: '', contextUsageTitle: '', contextUsageLevel: '', metadataRefreshing: false };
+    let state = { messages: [], busy: false, modelLabel: '', modelProvider: '', modelId: '', modelReasoning: false, thinkingLevel: '', modelOptions: [], contextUsageLabel: '', contextUsageTitle: '', contextUsageLevel: '', metadataRefreshing: false, slashCommands: [], slashCommandsRefreshing: false };
+    let slashMenuOpen = false;
+    let slashMenuActiveIndex = 0;
+    let slashMenuItems = [];
+    let slashCommandsRefreshRequested = false;
+    const localSlashCommands = [
+      { name: 'model', description: 'Select model', source: 'builtin' },
+      { name: 'name', description: 'Set or clear session name', source: 'builtin' },
+      { name: 'session', description: 'Show session info and stats', source: 'builtin' },
+      { name: 'compact', description: 'Manually compact context', source: 'builtin' },
+      { name: 'copy', description: 'Copy last Pi response', source: 'builtin' },
+      { name: 'export', description: 'Export session to HTML', source: 'builtin' },
+      { name: 'new', description: 'Start a new session', source: 'builtin' },
+      { name: 'settings', description: 'Terminal-only: use VS Code settings instead', source: 'unsupported' },
+      { name: 'scoped-models', description: 'Terminal-only: scoped model cycling is not supported here yet', source: 'unsupported' },
+      { name: 'import', description: 'Terminal-only: session import is not supported here yet', source: 'unsupported' },
+      { name: 'share', description: 'Not supported here yet', source: 'unsupported' },
+      { name: 'changelog', description: 'Not supported here yet', source: 'unsupported' },
+      { name: 'hotkeys', description: 'Terminal-only: use VS Code keybindings instead', source: 'unsupported' },
+      { name: 'fork', description: 'Not supported here yet', source: 'unsupported' },
+      { name: 'clone', description: 'Not supported here yet', source: 'unsupported' },
+      { name: 'tree', description: 'Terminal-only: session tree is not supported here yet', source: 'unsupported' },
+      { name: 'login', description: 'Terminal-only: run pi in a terminal to authenticate', source: 'unsupported' },
+      { name: 'logout', description: 'Terminal-only: run pi in a terminal to manage auth', source: 'unsupported' },
+      { name: 'resume', description: 'Terminal-only: session picker is not supported here yet', source: 'unsupported' },
+      { name: 'reload', description: 'Not supported here yet', source: 'unsupported' },
+      { name: 'quit', description: 'Not supported here', source: 'unsupported' }
+    ];
     const activityExpansion = new Map();
     const markdownRenderer = window.markdownit
       ? window.markdownit({
@@ -48,7 +76,9 @@ export const chatWebviewScript = /* javascript */ `    const vscode = acquireVsC
         contextUsageLabel: typeof event.data.contextUsageLabel === 'string' ? event.data.contextUsageLabel : '',
         contextUsageTitle: typeof event.data.contextUsageTitle === 'string' ? event.data.contextUsageTitle : '',
         contextUsageLevel: typeof event.data.contextUsageLevel === 'string' ? event.data.contextUsageLevel : '',
-        metadataRefreshing: Boolean(event.data.metadataRefreshing)
+        metadataRefreshing: Boolean(event.data.metadataRefreshing),
+        slashCommands: Array.isArray(event.data.slashCommands) ? event.data.slashCommands : [],
+        slashCommandsRefreshing: Boolean(event.data.slashCommandsRefreshing)
       };
       render();
     });
@@ -61,6 +91,7 @@ export const chatWebviewScript = /* javascript */ `    const vscode = acquireVsC
         return;
       }
 
+      closeSlashMenu();
       vscode.postMessage({ type: 'submit', text });
       textarea.value = '';
       syncComposer({ preserveBottom: true });
@@ -84,19 +115,22 @@ export const chatWebviewScript = /* javascript */ `    const vscode = acquireVsC
     thinkingSelectElement?.addEventListener('change', selectThinkingLevel);
 
     window.addEventListener('click', (event) => {
-      if (!modelMenuElement?.hasAttribute('open')) {
-        return;
+      if (modelMenuElement?.hasAttribute('open')) {
+        if (!modelMenuElement.contains(event.target) && !modelElement?.contains(event.target)) {
+          closeModelMenu();
+        }
       }
 
-      if (modelMenuElement.contains(event.target) || modelElement?.contains(event.target)) {
-        return;
+      if (slashMenuOpen) {
+        if (!slashMenuElement?.contains(event.target) && event.target !== textarea) {
+          closeSlashMenu();
+        }
       }
-
-      closeModelMenu();
     });
 
     window.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') {
+        closeSlashMenu();
         closeModelMenu();
         return;
       }
@@ -111,6 +145,10 @@ export const chatWebviewScript = /* javascript */ `    const vscode = acquireVsC
     }, true);
 
     textarea?.addEventListener('keydown', (event) => {
+      if (handleSlashMenuKeydown(event)) {
+        return;
+      }
+
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();
         form?.requestSubmit();
@@ -119,6 +157,33 @@ export const chatWebviewScript = /* javascript */ `    const vscode = acquireVsC
 
     textarea?.addEventListener('input', () => {
       syncComposer({ preserveBottom: true });
+      syncSlashMenu();
+    });
+
+    textarea?.addEventListener('click', syncSlashMenu);
+    textarea?.addEventListener('keyup', (event) => {
+      if (['ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) {
+        syncSlashMenu();
+      }
+    });
+
+    slashMenuElement?.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+    });
+
+    slashMenuElement?.addEventListener('click', (event) => {
+      const item = event.target?.closest?.('.composer__slash-item');
+
+      if (!item) {
+        return;
+      }
+
+      const index = Number(item.getAttribute('data-index'));
+      const command = slashMenuItems[index];
+
+      if (command) {
+        acceptSlashCommand(command);
+      }
     });
 
     function render() {
@@ -150,6 +215,7 @@ export const chatWebviewScript = /* javascript */ `    const vscode = acquireVsC
 
       syncModelLabel();
       syncComposer();
+      syncSlashMenu();
       if (shouldStickToBottom) {
         scrollMessagesToBottom();
       }
@@ -511,6 +577,290 @@ export const chatWebviewScript = /* javascript */ `    const vscode = acquireVsC
       }
 
       vscode.postMessage({ type: 'setThinkingLevel', level });
+    }
+
+    function handleSlashMenuKeydown(event) {
+      if (!slashMenuOpen) {
+        if (event.key === 'Escape') {
+          closeSlashMenu();
+        }
+
+        return false;
+      }
+
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        moveSlashMenuSelection(1);
+        return true;
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        moveSlashMenuSelection(-1);
+        return true;
+      }
+
+      if (event.key === 'Tab') {
+        event.preventDefault();
+        acceptActiveSlashCommand();
+        return true;
+      }
+
+      if (event.key === 'Enter' && !event.shiftKey && slashMenuItems.length > 0) {
+        event.preventDefault();
+        acceptActiveSlashCommand();
+        return true;
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        closeSlashMenu();
+        return true;
+      }
+
+      return false;
+    }
+
+    function syncSlashMenu() {
+      if (!shouldShowSlashMenu()) {
+        closeSlashMenu();
+        return;
+      }
+
+      closeModelMenu();
+      if (!state.slashCommandsRefreshing && !slashCommandsRefreshRequested) {
+        slashCommandsRefreshRequested = true;
+        vscode.postMessage({ type: 'refreshSlashCommands' });
+      }
+
+      const query = getSlashCommandQuery();
+      slashMenuItems = getFilteredSlashCommands(query);
+      slashMenuActiveIndex = Math.min(slashMenuActiveIndex, Math.max(0, slashMenuItems.length - 1));
+      renderSlashMenu(query);
+      openSlashMenu();
+    }
+
+    function shouldShowSlashMenu() {
+      if (!textarea || state.busy) {
+        return false;
+      }
+
+      const cursor = textarea.selectionStart;
+
+      if (cursor !== textarea.selectionEnd) {
+        return false;
+      }
+
+      const beforeCursor = textarea.value.slice(0, cursor);
+      return beforeCursor.startsWith('/')
+        && !Array.from(beforeCursor).some((character) => character.trim().length === 0);
+    }
+
+    function getSlashCommandQuery() {
+      return textarea.value.slice(1, textarea.selectionStart).toLowerCase();
+    }
+
+    function getFilteredSlashCommands(query) {
+      const commands = getAllSlashCommands();
+      const scored = [];
+
+      for (const command of commands) {
+        if (!command || typeof command.name !== 'string') {
+          continue;
+        }
+
+        const name = command.name.toLowerCase();
+        const description = typeof command.description === 'string' ? command.description.toLowerCase() : '';
+        const namePrefix = name.startsWith(query);
+        const nameMatch = name.includes(query);
+        const descriptionMatch = description.includes(query);
+
+        if (!nameMatch && !descriptionMatch) {
+          continue;
+        }
+
+        scored.push({
+          command,
+          score: namePrefix ? 0 : nameMatch ? 1 : 2
+        });
+      }
+
+      return scored
+        .sort((left, right) => left.score - right.score || getSlashCommandSourceRank(left.command.source) - getSlashCommandSourceRank(right.command.source) || left.command.name.localeCompare(right.command.name))
+        .slice(0, 8)
+        .map((item) => item.command);
+    }
+
+    function getAllSlashCommands() {
+      const commands = [...localSlashCommands];
+      const names = new Set(commands.map((command) => command.name));
+
+      if (Array.isArray(state.slashCommands)) {
+        for (const command of state.slashCommands) {
+          if (!command || typeof command.name !== 'string' || names.has(command.name)) {
+            continue;
+          }
+
+          names.add(command.name);
+          commands.push(command);
+        }
+      }
+
+      return commands;
+    }
+
+    function getSlashCommandSourceRank(source) {
+      if (source === 'builtin') {
+        return 0;
+      }
+
+      if (source === 'extension') {
+        return 1;
+      }
+
+      if (source === 'prompt') {
+        return 2;
+      }
+
+      if (source === 'skill') {
+        return 3;
+      }
+
+      if (source === 'unsupported') {
+        return 4;
+      }
+
+      return 5;
+    }
+
+    function renderSlashMenu(query) {
+      slashMenuElement.replaceChildren();
+
+      if (state.slashCommandsRefreshing && slashMenuItems.length === 0) {
+        slashMenuElement.append(createSlashMenuEmptyElement('Loading commands...'));
+        return;
+      }
+
+      if (slashMenuItems.length === 0) {
+        slashMenuElement.append(createSlashMenuEmptyElement(query ? 'No matching slash commands' : 'No slash commands available'));
+        return;
+      }
+
+      for (let index = 0; index < slashMenuItems.length; index += 1) {
+        slashMenuElement.append(createSlashMenuItemElement(slashMenuItems[index], index));
+      }
+
+      syncSlashMenuActiveDescendant();
+    }
+
+    function createSlashMenuEmptyElement(text) {
+      const empty = document.createElement('div');
+      empty.className = 'composer__slash-empty';
+      empty.textContent = text;
+      return empty;
+    }
+
+    function createSlashMenuItemElement(command, index) {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.id = 'slash-command-' + index;
+      item.className = 'composer__slash-item' + (index === slashMenuActiveIndex ? ' composer__slash-item--active' : '');
+      item.setAttribute('role', 'option');
+      item.setAttribute('aria-selected', index === slashMenuActiveIndex ? 'true' : 'false');
+      item.setAttribute('data-index', String(index));
+
+      const label = document.createElement('span');
+      label.className = 'composer__slash-label';
+      label.textContent = '/' + command.name;
+      item.append(label);
+
+      const meta = formatSlashCommandMeta(command);
+      if (meta) {
+        const source = document.createElement('span');
+        source.className = 'composer__slash-source';
+        source.textContent = meta;
+        item.append(source);
+      }
+
+      if (command.description) {
+        const description = document.createElement('span');
+        description.className = 'composer__slash-description';
+        description.textContent = command.description;
+        item.append(description);
+      }
+
+      return item;
+    }
+
+    function formatSlashCommandMeta(command) {
+      const source = typeof command.source === 'string' ? command.source : '';
+      const location = typeof command.location === 'string' ? command.location : '';
+
+      if (source && location) {
+        return source + ' · ' + location;
+      }
+
+      return source || location;
+    }
+
+    function openSlashMenu() {
+      if (!slashMenuElement) {
+        return;
+      }
+
+      slashMenuOpen = true;
+      slashMenuElement.setAttribute('open', '');
+      textarea?.setAttribute('aria-expanded', 'true');
+      syncSlashMenuActiveDescendant();
+    }
+
+    function closeSlashMenu() {
+      slashMenuOpen = false;
+      slashMenuItems = [];
+      slashMenuActiveIndex = 0;
+      slashMenuElement?.removeAttribute('open');
+      textarea?.setAttribute('aria-expanded', 'false');
+      textarea?.removeAttribute('aria-activedescendant');
+    }
+
+    function moveSlashMenuSelection(delta) {
+      if (slashMenuItems.length === 0) {
+        return;
+      }
+
+      slashMenuActiveIndex = (slashMenuActiveIndex + delta + slashMenuItems.length) % slashMenuItems.length;
+      renderSlashMenu(getSlashCommandQuery());
+    }
+
+    function syncSlashMenuActiveDescendant() {
+      if (!slashMenuOpen || slashMenuItems.length === 0) {
+        textarea?.removeAttribute('aria-activedescendant');
+        return;
+      }
+
+      textarea?.setAttribute('aria-activedescendant', 'slash-command-' + slashMenuActiveIndex);
+      slashMenuElement?.querySelector('.composer__slash-item--active')?.scrollIntoView({ block: 'nearest' });
+    }
+
+    function acceptActiveSlashCommand() {
+      const command = slashMenuItems[slashMenuActiveIndex];
+
+      if (command) {
+        acceptSlashCommand(command);
+      }
+    }
+
+    function acceptSlashCommand(command) {
+      const cursor = textarea.selectionStart;
+      const after = textarea.value.slice(cursor).trimStart();
+      const value = '/' + command.name + ' ' + after;
+      const nextCursor = command.name.length + 2;
+      textarea.value = value;
+      textarea.setSelectionRange(nextCursor, nextCursor);
+      closeSlashMenu();
+      syncComposer({ preserveBottom: true });
+      focusPromptInput();
     }
 
     function modelKey(provider, id) {
