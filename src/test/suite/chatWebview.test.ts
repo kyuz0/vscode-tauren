@@ -7,7 +7,7 @@ import {
 import type { ChatState } from '../../chatSession';
 
 suite('Chat webview helpers', () => {
-  test('createWebviewStateMessage adds message type, model label, and context usage', () => {
+  test('createWebviewStateMessage adds message type, model metadata, and context usage', () => {
     const state: ChatState = {
       messages: [
         { role: 'user', text: 'hello' },
@@ -15,26 +15,47 @@ suite('Chat webview helpers', () => {
       ],
       busy: true
     };
+    const modelOptions = [
+      { provider: 'openai', id: 'gpt-test', name: 'GPT Test', reasoning: true }
+    ];
 
-    assert.deepStrictEqual(createWebviewStateMessage(state, 'gpt-test High', '30%', '60,000 / 200,000 context tokens', 'low'), {
-      type: 'state',
-      messages: state.messages,
-      busy: true,
-      modelLabel: 'gpt-test High',
-      modelProvider: '',
-      modelId: '',
-      modelReasoning: false,
-      thinkingLevel: '',
-      modelOptions: [],
-      contextUsageLabel: '30%',
-      contextUsageTitle: '60,000 / 200,000 context tokens',
-      contextUsageLevel: 'low'
-    });
+    assert.deepStrictEqual(
+      createWebviewStateMessage({
+        state,
+        model: {
+          label: 'gpt-test High',
+          provider: 'openai',
+          id: 'gpt-test',
+          reasoning: true,
+          thinkingLevel: 'high',
+          options: modelOptions
+        },
+        contextUsage: {
+          label: '30%',
+          title: '60,000 / 200,000 context tokens',
+          level: 'low'
+        }
+      }),
+      {
+        type: 'state',
+        messages: state.messages,
+        busy: true,
+        modelLabel: 'gpt-test High',
+        modelProvider: 'openai',
+        modelId: 'gpt-test',
+        modelReasoning: true,
+        thinkingLevel: 'high',
+        modelOptions,
+        contextUsageLabel: '30%',
+        contextUsageTitle: '60,000 / 200,000 context tokens',
+        contextUsageLevel: 'low'
+      }
+    );
   });
 
-  test('createWebviewStateMessage defaults to an empty model label', () => {
+  test('createWebviewStateMessage defaults to empty metadata', () => {
     assert.deepStrictEqual(
-      createWebviewStateMessage({ messages: [], busy: false }),
+      createWebviewStateMessage({ state: { messages: [], busy: false } }),
       {
         type: 'state',
         messages: [],

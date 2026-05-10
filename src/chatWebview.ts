@@ -58,31 +58,41 @@ export type WebviewStateMessage = ChatState & {
   contextUsageLevel: string;
 };
 
-export function createWebviewStateMessage(
-  state: ChatState,
-  modelLabel = '',
-  contextUsageLabel = '',
-  contextUsageTitle = '',
-  contextUsageLevel = '',
-  modelProvider = '',
-  modelId = '',
-  modelReasoning = false,
-  thinkingLevel = '',
-  modelOptions: WebviewModelOption[] = []
-): WebviewStateMessage {
+type CreateWebviewStateMessageOptions = {
+  state: ChatState;
+  model?: {
+    label?: string;
+    provider?: string;
+    id?: string;
+    reasoning?: boolean;
+    thinkingLevel?: string;
+    options?: WebviewModelOption[];
+  };
+  contextUsage?: {
+    label?: string;
+    title?: string;
+    level?: string;
+  };
+};
+
+export function createWebviewStateMessage({
+  state,
+  model = {},
+  contextUsage = {}
+}: CreateWebviewStateMessageOptions): WebviewStateMessage {
   return {
     type: 'state',
     messages: state.messages,
     busy: state.busy,
-    modelLabel,
-    modelProvider,
-    modelId,
-    modelReasoning,
-    thinkingLevel,
-    modelOptions,
-    contextUsageLabel,
-    contextUsageTitle,
-    contextUsageLevel
+    modelLabel: model.label ?? '',
+    modelProvider: model.provider ?? '',
+    modelId: model.id ?? '',
+    modelReasoning: model.reasoning ?? false,
+    thinkingLevel: model.thinkingLevel ?? '',
+    modelOptions: model.options ?? [],
+    contextUsageLabel: contextUsage.label ?? '',
+    contextUsageTitle: contextUsage.title ?? '',
+    contextUsageLevel: contextUsage.level ?? ''
   };
 }
 

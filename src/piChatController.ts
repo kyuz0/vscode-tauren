@@ -161,18 +161,22 @@ export class PiChatController {
   }
 
   public getStateMessage(): WebviewStateMessage {
-    return createWebviewStateMessage(
-      this.session.snapshot(),
-      this.modelLabel,
-      this.contextUsageLabel,
-      this.contextUsageTitle,
-      this.contextUsageLevel,
-      this.modelProvider,
-      this.modelId,
-      this.modelReasoning,
-      this.thinkingLevel,
-      this.modelOptions
-    );
+    return createWebviewStateMessage({
+      state: this.session.snapshot(),
+      model: {
+        label: this.modelLabel,
+        provider: this.modelProvider,
+        id: this.modelId,
+        reasoning: this.modelReasoning,
+        thinkingLevel: this.thinkingLevel,
+        options: this.modelOptions
+      },
+      contextUsage: {
+        label: this.contextUsageLabel,
+        title: this.contextUsageTitle,
+        level: this.contextUsageLevel
+      }
+    });
   }
 
   public async refreshSessionMeta(options: { startClient?: boolean } = {}): Promise<void> {
