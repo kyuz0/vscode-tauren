@@ -351,6 +351,10 @@ class FakePiClient implements PiRpcClientLike {
     return { cancelled: false };
   }
 
+  public async navigateTree(_entryId: string): Promise<{ editorText?: string; cancelled?: boolean; aborted?: boolean }> {
+    return { cancelled: false };
+  }
+
   public async getForkMessages(): Promise<{ messages?: [] }> {
     return { messages: [] };
   }

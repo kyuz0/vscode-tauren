@@ -18,6 +18,7 @@ export type WebviewMessage =
   | { type: 'hideSessions' }
   | { type: 'refreshSessions' }
   | { type: 'selectSession'; sessionPath: string }
+  | { type: 'selectTreeEntry'; entryId: string }
   | { type: 'refreshMetadata' }
   | { type: 'refreshSlashCommands' }
   | { type: 'removePromptContext'; id: string }
@@ -46,6 +47,10 @@ export function parseWebviewMessage(value: unknown): WebviewMessage {
     case 'selectSession':
       return typeof value.sessionPath === 'string' && value.sessionPath
         ? { type: 'selectSession', sessionPath: value.sessionPath }
+        : { type: 'unknown' };
+    case 'selectTreeEntry':
+      return typeof value.entryId === 'string' && value.entryId
+        ? { type: 'selectTreeEntry', entryId: value.entryId }
         : { type: 'unknown' };
     case 'refreshMetadata':
       return { type: 'refreshMetadata' };
@@ -100,7 +105,7 @@ export type WebviewSlashCommand = {
   path?: string;
 };
 
-export type WebviewViewMode = 'chat' | 'sessions';
+export type WebviewViewMode = 'chat' | 'sessions' | 'tree';
 
 export type WebviewSessionItem = {
   path: string;
@@ -112,6 +117,16 @@ export type WebviewSessionItem = {
   modified: string;
   messageCount: number;
   firstMessage: string;
+  depth: number;
+  isLast: boolean;
+  ancestorContinues: boolean[];
+  current: boolean;
+};
+
+export type WebviewTreeItem = {
+  entryId: string;
+  role: string;
+  text: string;
   depth: number;
   isLast: boolean;
   ancestorContinues: boolean[];
@@ -140,6 +155,9 @@ export type WebviewStateMessage = ChatState & {
   sessionsRefreshing?: boolean;
   sessionsError?: string;
   currentSessionFile?: string;
+  treeItems?: WebviewTreeItem[];
+  treeRefreshing?: boolean;
+  treeError?: string;
 };
 
 type CreateWebviewStateMessageOptions = {
@@ -171,6 +189,9 @@ type CreateWebviewStateMessageOptions = {
     refreshing?: boolean;
     error?: string;
     currentSessionFile?: string;
+    treeItems?: WebviewTreeItem[];
+    treeRefreshing?: boolean;
+    treeError?: string;
   };
 };
 
@@ -221,6 +242,9 @@ export function createWebviewStateMessage({
     message.sessionsRefreshing = sessionView.refreshing ?? false;
     message.sessionsError = sessionView.error ?? '';
     message.currentSessionFile = sessionView.currentSessionFile ?? '';
+    message.treeItems = sessionView.treeItems ?? [];
+    message.treeRefreshing = sessionView.treeRefreshing ?? false;
+    message.treeError = sessionView.treeError ?? '';
   }
 
   return message;
@@ -261,7 +285,7 @@ ${chatWebviewStyles}
     <section class="messages" aria-live="polite" aria-label="Pi conversation">
       <p class="empty-state">Ask Pi about this workspace.</p>
     </section>
-    <section class="sessions" aria-label="Pi sessions" role="listbox" tabindex="0" hidden></section>
+    <section class="sessions" aria-label="Pi sessions and tree" role="listbox" tabindex="0" hidden></section>
     <form class="composer" aria-label="Pi message input">
       <div id="slash-command-list" class="composer__slash-menu" role="listbox" aria-label="Slash commands"></div>
       <div class="composer__context-badges" aria-label="Attached context" hidden></div>

@@ -1,0 +1,210 @@
+import { readFile } from 'fs/promises';
+
+export type PiSessionTreeItem = {
+  entryId: string;
+  role: string;
+  text: string;
+  depth: number;
+  isLast: boolean;
+  ancestorContinues: boolean[];
+  current: boolean;
+};
+
+type RawEntry = Record<string, unknown> & {
+  id?: string;
+  parentId?: string | null;
+  type?: string;
+};
+
+type TreeNode = {
+  entry: RawEntry;
+  children: TreeNode[];
+};
+
+export async function listPiSessionTree(sessionFile: string | undefined): Promise<PiSessionTreeItem[]> {
+  if (!sessionFile) {
+    return [];
+  }
+
+  const content = await readFile(sessionFile, 'utf8');
+  return flattenTree(parseTreeEntries(content));
+}
+
+function parseTreeEntries(content: string): RawEntry[] {
+  const entries: RawEntry[] = [];
+  const labels = new Map<string, string>();
+
+  for (const line of content.split('\n')) {
+    if (!line.trim()) {
+      continue;
+    }
+
+    let parsed: unknown;
+
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      continue;
+    }
+
+    if (!isRecord(parsed) || typeof parsed.type !== 'string') {
+      continue;
+    }
+
+    if (parsed.type === 'label') {
+      const targetId = typeof parsed.targetId === 'string' ? parsed.targetId : '';
+      const label = typeof parsed.label === 'string' ? parsed.label.trim() : '';
+
+      if (targetId && label) {
+        labels.set(targetId, label);
+      } else if (targetId) {
+        labels.delete(targetId);
+      }
+
+      continue;
+    }
+
+    if (parsed.type === 'session' || typeof parsed.id !== 'string') {
+      continue;
+    }
+
+    if (parsed.type === 'model_change' || parsed.type === 'thinking_level_change') {
+      continue;
+    }
+
+    entries.push(parsed as RawEntry);
+  }
+
+  return entries.map((entry) => {
+    const label = labels.get(entry.id ?? '');
+    return label ? { ...entry, resolvedLabel: label } : entry;
+  });
+}
+
+function flattenTree(entries: RawEntry[]): PiSessionTreeItem[] {
+  const nodesById = new Map<string, TreeNode>();
+
+  for (const entry of entries) {
+    if (entry.id) {
+      nodesById.set(entry.id, { entry, children: [] });
+    }
+  }
+
+  const roots: TreeNode[] = [];
+
+  for (const entry of entries) {
+    const node = entry.id ? nodesById.get(entry.id) : undefined;
+
+    if (!node) {
+      continue;
+    }
+
+    const parentId = typeof entry.parentId === 'string' ? entry.parentId : undefined;
+    const parent = parentId ? nodesById.get(parentId) : undefined;
+
+    if (parent) {
+      parent.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+
+  const result: PiSessionTreeItem[] = [];
+  const currentEntryId = entries.length > 0 ? entries[entries.length - 1].id : undefined;
+
+  const walk = (node: TreeNode, depth: number, ancestorContinues: boolean[], isLast: boolean): void => {
+    const formatted = formatEntry(node.entry);
+    result.push({
+      entryId: node.entry.id ?? '',
+      role: formatted.role,
+      text: formatted.text,
+      depth,
+      isLast,
+      ancestorContinues,
+      current: Boolean(currentEntryId && node.entry.id === currentEntryId)
+    });
+
+    node.children.forEach((child, index) => {
+      walk(child, depth + 1, [...ancestorContinues, depth > 0 ? !isLast : false], index === node.children.length - 1);
+    });
+  };
+
+  roots.forEach((root, index) => walk(root, 0, [], index === roots.length - 1));
+  return result;
+}
+
+function formatEntry(entry: RawEntry): { role: string; text: string } {
+  const label = typeof entry.resolvedLabel === 'string' ? `[${entry.resolvedLabel}] ` : '';
+
+  if (entry.type === 'message' && isRecord(entry.message)) {
+    const role = typeof entry.message.role === 'string' ? entry.message.role : 'message';
+    return { role, text: label + summarizeMessage(entry.message) };
+  }
+
+  if (entry.type === 'branch_summary') {
+    return { role: 'summary', text: label + summarizeText(entry.summary) };
+  }
+
+  if (entry.type === 'compaction') {
+    return { role: 'compaction', text: label + summarizeText(entry.summary) };
+  }
+
+  if (entry.type === 'custom_message') {
+    const customType = typeof entry.customType === 'string' ? entry.customType : 'custom';
+    return { role: customType, text: label + summarizeText(entry.content) };
+  }
+
+  if (entry.type === 'model_change') {
+    return { role: 'model', text: label + summarizeText(entry.modelId) };
+  }
+
+  if (entry.type === 'thinking_level_change') {
+    return { role: 'thinking', text: label + summarizeText(entry.thinkingLevel) };
+  }
+
+  return { role: entry.type ?? 'entry', text: label + entry.type };
+}
+
+function summarizeMessage(message: Record<string, unknown>): string {
+  if (message.role === 'assistant' && Array.isArray(message.content)) {
+    const text = message.content.flatMap((item) => {
+      if (!isRecord(item)) {
+        return [];
+      }
+
+      if (item.type === 'text' && typeof item.text === 'string') {
+        return [item.text];
+      }
+
+      if (item.type === 'toolCall' && typeof item.name === 'string') {
+        return [`${item.name}()`];
+      }
+
+      return [];
+    }).join(' ');
+    return truncate(text || '(no text)');
+  }
+
+  return truncate(summarizeText(message.content));
+}
+
+function summarizeText(value: unknown): string {
+  if (typeof value === 'string') {
+    return truncate(value);
+  }
+
+  if (Array.isArray(value)) {
+    return truncate(value.flatMap((item) => isRecord(item) && typeof item.text === 'string' ? [item.text] : []).join(' '));
+  }
+
+  return '';
+}
+
+function truncate(value: string): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  return normalized.length > 120 ? `${normalized.slice(0, 117)}...` : normalized;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}

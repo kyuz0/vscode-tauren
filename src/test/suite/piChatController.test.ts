@@ -598,6 +598,18 @@ suite('PiChatController', () => {
     harness.controller.dispose();
   });
 
+  test('tree slash command opens the session tree', async () => {
+    const client = new FakePiClient();
+    const harness = createControllerHarness([client]);
+
+    await harness.controller.handleWebviewMessage({ type: 'submit', text: '/tree' });
+
+    assert.strictEqual(harness.createCalls, 0);
+    assert.deepStrictEqual(client.prompts, []);
+    assert.strictEqual(lastState(harness).viewMode, 'tree');
+    harness.controller.dispose();
+  });
+
   test('resume slash command opens the session switcher', async () => {
     const client = new FakePiClient();
     const harness = createControllerHarness([client]);
@@ -1496,6 +1508,10 @@ class FakePiClient implements PiRpcClientLike {
     }
 
     return this.switchSessionResult;
+  }
+
+  public async navigateTree(_entryId: string): Promise<{ editorText?: string; cancelled?: boolean; aborted?: boolean }> {
+    return { cancelled: false };
   }
 
   public async getForkMessages(): Promise<{ messages?: Array<{ entryId?: string; text?: string }> }> {

@@ -238,6 +238,29 @@ suite('PiRpcClient', () => {
     client.dispose();
   });
 
+  test('navigates the current session tree', async () => {
+    const { client, fakeProcess } = createClient();
+
+    const navigatePromise = client.navigateTree('entry-1', { summarize: false });
+    const command = await fakeProcess.nextCommand();
+
+    assert.strictEqual(command.type, 'navigate_tree');
+    assert.strictEqual(command.entryId, 'entry-1');
+    assert.strictEqual(command.summarize, false);
+    assert.ok(typeof command.id === 'string');
+
+    fakeProcess.writeRecord({
+      type: 'response',
+      id: command.id,
+      command: 'navigate_tree',
+      success: true,
+      data: { editorText: 'Original prompt', cancelled: false }
+    });
+
+    assert.deepStrictEqual(await navigatePromise, { editorText: 'Original prompt', cancelled: false });
+    client.dispose();
+  });
+
   test('gets forkable messages', async () => {
     const { client, fakeProcess } = createClient();
 

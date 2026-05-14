@@ -21,7 +21,7 @@ export const localSlashCommands: SlashCommand[] = [
   { name: 'hotkeys', description: 'Terminal-only: use VS Code keybindings instead', source: 'unsupported' },
   { name: 'fork', description: 'Fork from a previous user message', source: 'builtin' },
   { name: 'clone', description: 'Duplicate the current session', source: 'builtin' },
-  { name: 'tree', description: 'Open session switcher', source: 'builtin' },
+  { name: 'tree', description: 'Navigate session tree', source: 'builtin' },
   { name: 'login', description: 'Terminal-only: run pi in a terminal to authenticate', source: 'unsupported' },
   { name: 'logout', description: 'Terminal-only: run pi in a terminal to manage auth', source: 'unsupported' },
   { name: 'resume', description: 'Resume a different session', source: 'builtin' },

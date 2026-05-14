@@ -290,7 +290,7 @@
     { name: "hotkeys", description: "Terminal-only: use VS Code keybindings instead", source: "unsupported" },
     { name: "fork", description: "Fork from a previous user message", source: "builtin" },
     { name: "clone", description: "Duplicate the current session", source: "builtin" },
-    { name: "tree", description: "Open session switcher", source: "builtin" },
+    { name: "tree", description: "Navigate session tree", source: "builtin" },
     { name: "login", description: "Terminal-only: run pi in a terminal to authenticate", source: "unsupported" },
     { name: "logout", description: "Terminal-only: run pi in a terminal to manage auth", source: "unsupported" },
     { name: "resume", description: "Resume a different session", source: "builtin" },
@@ -325,7 +325,7 @@
     submitButton
   } = getWebviewDom();
   var isMac = navigator.platform.toUpperCase().includes("MAC");
-  var state = { messages: [], busy: false, modelLabel: "", modelProvider: "", modelId: "", modelReasoning: false, thinkingLevel: "", modelOptions: [], contextUsageLabel: "", contextUsageTitle: "", contextUsageLevel: "", metadataRefreshing: false, slashCommands: [], slashCommandsRefreshing: false, promptContext: [], composerText: "", composerTextRevision: 0, viewMode: "chat", sessions: [], sessionsRefreshing: false, sessionsError: "", currentSessionFile: "" };
+  var state = { messages: [], busy: false, modelLabel: "", modelProvider: "", modelId: "", modelReasoning: false, thinkingLevel: "", modelOptions: [], contextUsageLabel: "", contextUsageTitle: "", contextUsageLevel: "", metadataRefreshing: false, slashCommands: [], slashCommandsRefreshing: false, promptContext: [], composerText: "", composerTextRevision: 0, viewMode: "chat", sessions: [], sessionsRefreshing: false, sessionsError: "", currentSessionFile: "", treeItems: [], treeRefreshing: false, treeError: "" };
   var appliedComposerTextRevision = 0;
   var slashMenuOpen = false;
   var slashMenuActiveIndex = 0;
@@ -336,6 +336,7 @@
   var streamingBehavior = "steer";
   var busySubmitHideTimeout;
   var sessionListSelectedIndex = 0;
+  var treeListSelectedIndex = 0;
   var sessionMenuOpen = false;
   var sessionMenuItems = [];
   window.addEventListener("message", (event) => {
@@ -349,6 +350,7 @@
     const previousViewMode = state.viewMode;
     const previousCurrentSessionFile = state.currentSessionFile;
     const previousSessionCount = Array.isArray(state.sessions) ? state.sessions.length : 0;
+    const previousTreeCount = Array.isArray(state.treeItems) ? state.treeItems.length : 0;
     state = {
       messages: Array.isArray(event.data.messages) ? event.data.messages : [],
       busy: Boolean(event.data.busy),
@@ -367,14 +369,20 @@
       promptContext: Array.isArray(event.data.promptContext) ? event.data.promptContext : [],
       composerText: typeof event.data.composerText === "string" ? event.data.composerText : "",
       composerTextRevision: typeof event.data.composerTextRevision === "number" ? event.data.composerTextRevision : 0,
-      viewMode: event.data.viewMode === "sessions" ? "sessions" : "chat",
+      viewMode: event.data.viewMode === "sessions" || event.data.viewMode === "tree" ? event.data.viewMode : "chat",
       sessions: Array.isArray(event.data.sessions) ? event.data.sessions : [],
       sessionsRefreshing: Boolean(event.data.sessionsRefreshing),
       sessionsError: typeof event.data.sessionsError === "string" ? event.data.sessionsError : "",
-      currentSessionFile: typeof event.data.currentSessionFile === "string" ? event.data.currentSessionFile : ""
+      currentSessionFile: typeof event.data.currentSessionFile === "string" ? event.data.currentSessionFile : "",
+      treeItems: Array.isArray(event.data.treeItems) ? event.data.treeItems : [],
+      treeRefreshing: Boolean(event.data.treeRefreshing),
+      treeError: typeof event.data.treeError === "string" ? event.data.treeError : ""
     };
     if (state.viewMode === "sessions" && (previousViewMode !== "sessions" || previousCurrentSessionFile !== state.currentSessionFile || previousSessionCount === 0)) {
       selectCurrentSession();
+    }
+    if (state.viewMode === "tree" && (previousViewMode !== "tree" || previousTreeCount === 0)) {
+      selectCurrentTreeEntry();
     }
     render();
     applyComposerTextFromState();
@@ -436,7 +444,7 @@
       return;
     }
     const index = Number(item.getAttribute("data-index"));
-    selectSessionIndex(index);
+    state.viewMode === "tree" ? selectTreeIndex(index) : selectSessionIndex(index);
   });
   modelElement?.addEventListener("click", toggleModelMenu);
   modelSelectElement?.addEventListener("change", selectModel);
@@ -460,7 +468,7 @@
     }
   });
   window.addEventListener("keydown", (event) => {
-    if (state.viewMode === "sessions" && handleSessionListKeydown(event)) {
+    if ((state.viewMode === "sessions" || state.viewMode === "tree") && handleSessionListKeydown(event)) {
       return;
     }
     if (event.key === "Escape") {
@@ -529,23 +537,23 @@
     focusPromptInput();
   });
   function render() {
-    const isSessionView = state.viewMode === "sessions";
-    const shouldStickToBottom = !isSessionView && isMessagesAtBottom();
-    messagesElement.hidden = isSessionView;
-    sessionsElement.hidden = !isSessionView;
-    form.hidden = isSessionView;
-    const toolbarTitle = isSessionView ? "Sessions" : getCurrentSessionTitle();
+    const isListView = state.viewMode === "sessions" || state.viewMode === "tree";
+    const shouldStickToBottom = !isListView && isMessagesAtBottom();
+    messagesElement.hidden = isListView;
+    sessionsElement.hidden = !isListView;
+    form.hidden = isListView;
+    const toolbarTitle = state.viewMode === "sessions" ? "Sessions" : state.viewMode === "tree" ? "Session tree" : getCurrentSessionTitle();
     if (toolbarTitleTextElement) {
       toolbarTitleTextElement.textContent = toolbarTitle;
     }
-    toolbarTitleElement.title = isSessionView ? "Sessions" : toolbarTitle;
-    toolbarTitleElement.disabled = isSessionView;
-    sessionToggleButton.title = isSessionView ? "Back to chat" : "Show sessions";
+    toolbarTitleElement.title = toolbarTitle;
+    toolbarTitleElement.disabled = isListView;
+    sessionToggleButton.title = isListView ? "Back to chat" : "Show sessions";
     sessionToggleButton.setAttribute("aria-label", sessionToggleButton.title);
-    sessionToggleButton.classList.toggle("pi-toolbar__sessions--back", isSessionView);
+    sessionToggleButton.classList.toggle("pi-toolbar__sessions--back", isListView);
     renderSessionMenu();
-    if (isSessionView) {
-      renderSessions();
+    if (isListView) {
+      state.viewMode === "tree" ? renderTree() : renderSessions();
       closeSlashMenu();
       closeModelMenu();
       closeSessionMenu();
@@ -645,6 +653,47 @@
     }
     return item;
   }
+  function renderTree() {
+    sessionsElement.replaceChildren();
+    treeListSelectedIndex = clampTreeIndex(treeListSelectedIndex);
+    const header = document.createElement("div");
+    header.className = "sessions__header";
+    const count = Array.isArray(state.treeItems) ? state.treeItems.length : 0;
+    header.textContent = state.treeRefreshing ? "Loading session tree..." : count === 1 ? "1 tree entry" : count + " tree entries";
+    sessionsElement.append(header);
+    if (state.treeError) {
+      const error = document.createElement("div");
+      error.className = "sessions__error";
+      error.textContent = state.treeError;
+      sessionsElement.append(error);
+    }
+    if (state.treeRefreshing && count === 0) {
+      sessionsElement.append(createSessionEmptyElement("Loading session tree..."));
+      return;
+    }
+    if (count === 0) {
+      sessionsElement.append(createSessionEmptyElement("No persisted tree entries found for this session."));
+      return;
+    }
+    for (let index = 0; index < state.treeItems.length; index += 1) {
+      sessionsElement.append(createTreeItemElement(state.treeItems[index], index));
+    }
+  }
+  function createTreeItemElement(treeItem, index) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.id = "tree-" + index;
+    item.className = "sessions__item" + (index === treeListSelectedIndex ? " sessions__item--active" : "") + (treeItem.current ? " sessions__item--current" : "");
+    item.setAttribute("role", "option");
+    item.setAttribute("aria-selected", index === treeListSelectedIndex ? "true" : "false");
+    item.setAttribute("data-index", String(index));
+    item.disabled = state.busy || state.treeRefreshing;
+    const title = document.createElement("span");
+    title.className = "sessions__title";
+    title.textContent = treeItem.role + ": " + (treeItem.text || "(empty)");
+    item.append(title);
+    return item;
+  }
   function getCurrentSessionTitle() {
     const session = getCurrentSession();
     if (session) {
@@ -662,7 +711,7 @@
     return state.sessions.find((session) => session.path === state.currentSessionFile) ?? state.sessions.find((session) => session.current);
   }
   function handleSessionListKeydown(event) {
-    if (state.viewMode !== "sessions") {
+    if (state.viewMode !== "sessions" && state.viewMode !== "tree") {
       return false;
     }
     if (event.key === "Escape") {
@@ -675,19 +724,19 @@
     if (event.key === "ArrowDown") {
       event.preventDefault();
       event.stopPropagation();
-      moveSessionSelection(1);
+      state.viewMode === "tree" ? moveTreeSelection(1) : moveSessionSelection(1);
       return true;
     }
     if (event.key === "ArrowUp") {
       event.preventDefault();
       event.stopPropagation();
-      moveSessionSelection(-1);
+      state.viewMode === "tree" ? moveTreeSelection(-1) : moveSessionSelection(-1);
       return true;
     }
     if (event.key === "Enter") {
       event.preventDefault();
       event.stopPropagation();
-      selectSessionIndex(sessionListSelectedIndex);
+      state.viewMode === "tree" ? selectTreeIndex(treeListSelectedIndex) : selectSessionIndex(sessionListSelectedIndex);
       return true;
     }
     return false;
@@ -720,6 +769,32 @@
     }
     return Math.max(0, Math.min(index, count - 1));
   }
+  function moveTreeSelection(delta) {
+    if (!Array.isArray(state.treeItems) || state.treeItems.length === 0) {
+      return;
+    }
+    treeListSelectedIndex = clampTreeIndex(treeListSelectedIndex + delta);
+    renderTree();
+    document.getElementById("tree-" + treeListSelectedIndex)?.scrollIntoView({ block: "nearest" });
+  }
+  function selectTreeIndex(index) {
+    const treeItem = Array.isArray(state.treeItems) ? state.treeItems[index] : void 0;
+    if (!treeItem?.entryId || state.busy || state.treeRefreshing) {
+      return;
+    }
+    vscode.postMessage({ type: "selectTreeEntry", entryId: treeItem.entryId });
+  }
+  function clampTreeIndex(index) {
+    const count = Array.isArray(state.treeItems) ? state.treeItems.length : 0;
+    if (count === 0) {
+      return 0;
+    }
+    return Math.max(0, Math.min(index, count - 1));
+  }
+  function selectCurrentTreeEntry() {
+    const currentIndex = Array.isArray(state.treeItems) ? state.treeItems.findIndex((item) => item.current) : -1;
+    treeListSelectedIndex = currentIndex >= 0 ? currentIndex : 0;
+  }
   function selectCurrentSession() {
     const currentIndex = Array.isArray(state.sessions) ? state.sessions.findIndex((session) => session.current || session.path === state.currentSessionFile) : -1;
     sessionListSelectedIndex = currentIndex >= 0 ? currentIndex : 0;
@@ -727,7 +802,7 @@
   function toggleSessionMenu(event) {
     event?.preventDefault();
     event?.stopPropagation();
-    if (state.viewMode === "sessions") {
+    if (state.viewMode === "sessions" || state.viewMode === "tree") {
       return;
     }
     if (sessionMenuOpen) {
@@ -805,7 +880,7 @@
     return empty;
   }
   function toggleSessionView() {
-    if (state.viewMode === "sessions") {
+    if (state.viewMode === "sessions" || state.viewMode === "tree") {
       vscode.postMessage({ type: "hideSessions" });
       focusPromptInput();
       return;

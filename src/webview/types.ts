@@ -1,5 +1,5 @@
 export type WebviewStreamingBehavior = 'steer' | 'followUp';
-export type ViewMode = 'chat' | 'sessions';
+export type ViewMode = 'chat' | 'sessions' | 'tree';
 
 export type WebviewApi = {
   postMessage(message: unknown): void;
@@ -37,6 +37,16 @@ export type SessionItem = {
   modified: string;
   messageCount: number;
   firstMessage: string;
+  depth: number;
+  isLast: boolean;
+  ancestorContinues: boolean[];
+  current: boolean;
+};
+
+export type TreeItem = {
+  entryId: string;
+  role: string;
+  text: string;
   depth: number;
   isLast: boolean;
   ancestorContinues: boolean[];
@@ -84,6 +94,9 @@ export type WebviewState = {
   sessionsRefreshing: boolean;
   sessionsError: string;
   currentSessionFile: string;
+  treeItems: TreeItem[];
+  treeRefreshing: boolean;
+  treeError: string;
 };
 
 export type MarkdownRenderer = {

@@ -1,4 +1,5 @@
 import { ChatSession, type ChatMessage } from './chatSession';
+import { listPiSessionTree } from './piSessionTree';
 import {
   createWebviewStateMessage,
   type WebviewMessage,
@@ -6,7 +7,8 @@ import {
   type WebviewPromptContextAttachment,
   type WebviewSessionItem,
   type WebviewSlashCommand,
-  type WebviewStateMessage
+  type WebviewStateMessage,
+  type WebviewTreeItem
 } from './chatWebview';
 import {
   StatePublisher,
@@ -59,6 +61,7 @@ export type PiRpcClientLike = Pick<
   | 'getLastAssistantText'
   | 'getMessages'
   | 'switchSession'
+  | 'navigateTree'
   | 'getForkMessages'
   | 'fork'
   | 'clone'
@@ -143,10 +146,13 @@ export class PiChatController {
   private slashCommandsRefreshing = false;
   private promptContextSequence = 0;
   private promptContext: PiPromptContextAttachment[] = [];
-  private sessionViewMode: 'chat' | 'sessions' = 'chat';
+  private sessionViewMode: 'chat' | 'sessions' | 'tree' = 'chat';
   private sessions: WebviewSessionItem[] = [];
   private sessionsRefreshing = false;
   private sessionsError = '';
+  private treeItems: WebviewTreeItem[] = [];
+  private treeRefreshing = false;
+  private treeError = '';
   private pendingComposerText: { text: string; revision: number } | undefined;
   private composerTextRevision = 0;
   private sessionsRefreshSequence = 0;
@@ -227,6 +233,11 @@ export class PiChatController {
 
     if (message.type === 'selectSession') {
       await this.switchSession(message.sessionPath);
+      return;
+    }
+
+    if (message.type === 'selectTreeEntry') {
+      await this.navigateTree(message.entryId);
       return;
     }
 
@@ -323,6 +334,8 @@ export class PiChatController {
     this.session.startNewSession();
     this.sessionViewMode = 'chat';
     this.sessionsError = '';
+    this.treeItems = [];
+    this.treeError = '';
     this.currentSessionFile = undefined;
     this.sessions = this.sessions.map((session) => ({ ...session, current: false }));
     this.nextClientSessionFile = undefined;
@@ -420,11 +433,14 @@ export class PiChatController {
       metadataRefreshing: this.metadataRefreshing,
       sessionView: this.shouldPublishSessionView()
         ? {
-          viewMode: this.sessionViewMode === 'sessions' ? this.sessionViewMode : undefined,
+          viewMode: this.sessionViewMode === 'sessions' || this.sessionViewMode === 'tree' ? this.sessionViewMode : undefined,
           sessions: this.sessions,
           refreshing: this.sessionsRefreshing,
           error: this.sessionsError,
-          currentSessionFile: this.currentSessionFile
+          currentSessionFile: this.currentSessionFile,
+          treeItems: this.treeItems,
+          treeRefreshing: this.treeRefreshing,
+          treeError: this.treeError
         }
         : undefined
     });
@@ -432,10 +448,14 @@ export class PiChatController {
 
   private shouldPublishSessionView(): boolean {
     return this.sessionViewMode === 'sessions'
+      || this.sessionViewMode === 'tree'
       || this.sessions.length > 0
       || this.sessionsRefreshing
       || Boolean(this.sessionsError)
-      || Boolean(this.currentSessionFile);
+      || Boolean(this.currentSessionFile)
+      || this.treeItems.length > 0
+      || this.treeRefreshing
+      || Boolean(this.treeError);
   }
 
   private createPromptContextAttachment(input: PiPromptContextInput): PiPromptContextAttachment[] {
@@ -582,6 +602,13 @@ export class PiChatController {
     void this.refreshSessions();
   }
 
+  private showTree(): void {
+    this.sessionViewMode = 'tree';
+    this.treeError = '';
+    this.postState();
+    void this.refreshTree();
+  }
+
   private hideSessions(): void {
     if (this.sessionViewMode === 'chat') {
       return;
@@ -589,6 +616,7 @@ export class PiChatController {
 
     this.sessionViewMode = 'chat';
     this.sessionsError = '';
+    this.treeError = '';
     this.postState();
   }
 
@@ -614,6 +642,58 @@ export class PiChatController {
     } finally {
       if (refreshId === this.sessionsRefreshSequence) {
         this.sessionsRefreshing = false;
+        this.postState();
+      }
+    }
+  }
+
+  private async refreshTree(): Promise<void> {
+    this.treeRefreshing = true;
+    this.treeError = '';
+    this.postState();
+
+    try {
+      this.treeItems = await listPiSessionTree(this.currentSessionFile);
+    } catch (error) {
+      this.treeError = getErrorMessage(error);
+    } finally {
+      this.treeRefreshing = false;
+      this.postState();
+    }
+  }
+
+  private async navigateTree(entryId: string): Promise<void> {
+    if (this.session.isBusy) {
+      this.options.showNotification('Wait for Pi to finish before navigating the session tree.', 'warning');
+      return;
+    }
+
+    this.treeError = '';
+    this.treeRefreshing = true;
+    this.postState();
+
+    try {
+      const result = await this.getClient().navigateTree(entryId, { summarize: false });
+
+      if (result.cancelled) {
+        return;
+      }
+
+      if (result.editorText) {
+        this.setComposerText(result.editorText);
+      }
+
+      await this.adoptReplacedSession();
+      void this.refreshTree();
+    } catch (error) {
+      const message = getErrorMessage(error);
+      this.treeError = message.includes('Unknown command') || message.includes('Unsupported command')
+        ? 'This Pi version does not expose session tree navigation over RPC yet.'
+        : message;
+      this.postState();
+    } finally {
+      this.treeRefreshing = false;
+      if (this.sessionViewMode === 'tree') {
         this.postState();
       }
     }
@@ -1130,6 +1210,8 @@ export class PiChatController {
           await this.handleSessionSlashCommand();
           return;
         case 'tree':
+          this.showTree();
+          return;
         case 'resume':
           this.showSessions();
           return;

@@ -65,7 +65,7 @@ Do not add transient notes, guesses, one-off debugging observations, or broad ge
 - Keep the sidebar simple, clean, and VS Code-native.
 - Use VS Code theme CSS variables for colors, fonts, focus, inputs, buttons, and borders.
 - Keep transcript state in memory until persistence is explicitly requested.
-- The sidebar `/tree` command currently opens the session switcher screen for switching session files; true in-session branch-tree navigation is not implemented yet.
+- The sidebar `/resume` command opens the session switcher for switching session files. `/tree` opens a first-version in-session session tree view backed by the persisted JSONL session file and attempts navigation through Pi RPC `navigate_tree`; keep a graceful unsupported-RPC error until Pi exposes that command in released RPC builds.
 - Disable submit while Pi is streaming; do not invent steering or follow-up queue behavior without a specific iteration goal.
 - Avoid broad frontend rewrites. Preserve the existing webview structure unless the task requires changing it.
 

@@ -104,6 +104,12 @@ export type PiCloneResult = {
   cancelled?: boolean;
 };
 
+export type PiNavigateTreeResult = {
+  editorText?: string;
+  cancelled?: boolean;
+  aborted?: boolean;
+};
+
 export type PiAgentMessage = {
   role?: string;
   content?: unknown;
@@ -262,6 +268,19 @@ export class PiRpcClient {
 
   public async switchSession(sessionPath: string): Promise<PiSwitchSessionResult> {
     const response = await this.send({ type: 'switch_session', sessionPath });
+    return isRecord(response.data) ? response.data : {};
+  }
+
+  public async navigateTree(
+    entryId: string,
+    options: { summarize?: boolean; customInstructions?: string } = {}
+  ): Promise<PiNavigateTreeResult> {
+    const response = await this.send({
+      type: 'navigate_tree',
+      entryId,
+      summarize: options.summarize ?? false,
+      ...(options.customInstructions ? { customInstructions: options.customInstructions } : {})
+    });
     return isRecord(response.data) ? response.data : {};
   }
 

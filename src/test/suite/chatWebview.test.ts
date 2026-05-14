@@ -103,6 +103,10 @@ suite('Chat webview helpers', () => {
       parseWebviewMessage({ type: 'selectSession', sessionPath: '/sessions/current.jsonl' }),
       { type: 'selectSession', sessionPath: '/sessions/current.jsonl' }
     );
+    assert.deepStrictEqual(
+      parseWebviewMessage({ type: 'selectTreeEntry', entryId: 'entry-1' }),
+      { type: 'selectTreeEntry', entryId: 'entry-1' }
+    );
     assert.deepStrictEqual(parseWebviewMessage({ type: 'refreshMetadata' }), { type: 'refreshMetadata' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'refreshSlashCommands' }), { type: 'refreshSlashCommands' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'removePromptContext', id: 'context-1' }), { type: 'removePromptContext', id: 'context-1' });
@@ -176,7 +180,7 @@ suite('Chat webview helpers', () => {
     assert.ok(html.includes('<script nonce="' + nonce + '" src="vscode-resource://chat.js"></script>'));
     assert.ok(html.includes('class="pi-toolbar__sessions"'));
     assert.ok(html.includes('class="messages" aria-live="polite" aria-label="Pi conversation"'));
-    assert.ok(html.includes('class="sessions" aria-label="Pi sessions" role="listbox"'));
+    assert.ok(html.includes('class="sessions" aria-label="Pi sessions and tree" role="listbox"'));
     assert.ok(html.includes('<form class="composer" aria-label="Pi message input">'));
     assert.ok(!html.includes('Full RPC Agent communication'));
     assert.ok(!html.includes('setFullRpcAgentCommunication'));
