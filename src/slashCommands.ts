@@ -37,6 +37,9 @@ const supportedBuiltinSlashCommandNames = new Set(
 );
 
 export const localSlashCommands = localSlashCommandDefinitions.map(({ supported: _supported, ...command }) => command);
+export const localSlashMenuCommands = localSlashCommandDefinitions
+  .filter((command) => command.supported)
+  .map(({ supported: _supported, ...command }) => command);
 
 export function isBuiltinSlashCommand(name: string): boolean {
   return builtinSlashCommandNames.has(name);

@@ -393,9 +393,10 @@
     localSlashCommandDefinitions.filter((command) => command.supported).map((command) => command.name)
   );
   var localSlashCommands = localSlashCommandDefinitions.map(({ supported: _supported, ...command }) => command);
+  var localSlashMenuCommands = localSlashCommandDefinitions.filter((command) => command.supported).map(({ supported: _supported, ...command }) => command);
 
   // src/webview/constants.ts
-  var localSlashCommands2 = localSlashCommands.map((command) => ({ ...command }));
+  var localSlashCommands2 = localSlashMenuCommands.map((command) => ({ ...command }));
   var messagesBottomThreshold = 4;
   var maxTextareaHeight = 180;
   var minTextareaHeight = 22;

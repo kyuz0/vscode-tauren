@@ -2,7 +2,8 @@ import * as assert from 'assert';
 import {
   isBuiltinSlashCommand,
   isSupportedBuiltinSlashCommand,
-  localSlashCommands
+  localSlashCommands,
+  localSlashMenuCommands
 } from '../../slashCommands';
 
 suite('Slash commands', () => {
@@ -15,6 +16,16 @@ suite('Slash commands', () => {
 
     for (const command of localSlashCommands) {
       assert.strictEqual(isBuiltinSlashCommand(command.name), true);
+      assert.strictEqual('supported' in command, false);
+    }
+
+    const menuNames = localSlashMenuCommands.map((command) => command.name);
+    assert.ok(menuNames.includes('model'));
+    assert.ok(!menuNames.includes('settings'));
+
+    for (const command of localSlashMenuCommands) {
+      assert.strictEqual(isBuiltinSlashCommand(command.name), true);
+      assert.strictEqual(isSupportedBuiltinSlashCommand(command.name), true);
       assert.strictEqual('supported' in command, false);
     }
 
