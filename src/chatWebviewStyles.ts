@@ -608,7 +608,7 @@ export const chatWebviewStyles = /* css */ `    :root {
     .composer {
       position: relative;
       display: grid;
-      grid-template-columns: 36px minmax(0, 1fr) 36px;
+      grid-template-columns: auto minmax(0, 1fr) 36px;
       grid-template-rows: minmax(22px, auto) 36px;
       align-items: end;
       gap: 4px 8px;
@@ -876,11 +876,20 @@ export const chatWebviewStyles = /* css */ `    :root {
       outline: none;
     }
 
+    .composer__session-actions {
+      grid-column: 1;
+      display: flex;
+      align-items: center;
+      gap: 1px;
+      padding-bottom: 2px;
+    }
+
     .composer__button {
+      position: relative;
       display: grid;
       place-items: center;
-      width: 32px;
-      height: 32px;
+      width: 30px;
+      height: 30px;
       padding: 0;
       color: var(--vscode-descriptionForeground);
       background: transparent;
@@ -897,12 +906,43 @@ export const chatWebviewStyles = /* css */ `    :root {
         0 0 7px color-mix(in srgb, var(--vscode-foreground) 12%, transparent);
     }
 
+    .composer__button:disabled {
+      cursor: default;
+      opacity: 0.46;
+    }
+
     .composer__button:focus-visible {
       outline: 1px solid var(--vscode-focusBorder);
       outline-offset: 1px;
     }
 
     .composer__button svg {
+      display: block;
+    }
+
+    .composer__button-tooltip {
+      position: absolute;
+      left: 0;
+      bottom: calc(100% + 8px);
+      z-index: 1;
+      display: none;
+      width: max-content;
+      max-width: min(260px, 70vw);
+      padding: 7px 9px;
+      color: var(--vscode-editorHoverWidget-foreground);
+      background: var(--vscode-editorHoverWidget-background);
+      border: 1px solid var(--vscode-editorHoverWidget-border, var(--vscode-input-border, transparent));
+      border-radius: 4px;
+      box-shadow: 0 2px 8px color-mix(in srgb, #000 35%, transparent);
+      font-size: 12px;
+      font-weight: 400;
+      line-height: 1.35;
+      white-space: pre-line;
+      pointer-events: none;
+    }
+
+    .composer__button:hover:not(:disabled) .composer__button-tooltip,
+    .composer__button:focus-visible:not(:disabled) .composer__button-tooltip {
       display: block;
     }
 

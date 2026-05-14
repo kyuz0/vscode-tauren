@@ -17,6 +17,8 @@
       busySubmitHintElement: queryRequired(".composer__busy-submit-hint"),
       streamingBehaviorButtonElements: queryAll(".composer__mode-button"),
       newSessionButton: queryRequired(".composer__add"),
+      forkSessionButton: queryRequired(".composer__fork"),
+      cloneSessionButton: queryRequired(".composer__clone"),
       contextElement: queryRequired(".composer__context"),
       contextValueElement: queryRequired(".composer__context-value"),
       contextTooltipElement: queryRequired(".composer__context-tooltip"),
@@ -315,6 +317,8 @@
     busySubmitHintElement,
     streamingBehaviorButtonElements,
     newSessionButton,
+    forkSessionButton,
+    cloneSessionButton,
     contextElement,
     contextValueElement,
     contextTooltipElement,
@@ -420,6 +424,8 @@
     });
   }
   newSessionButton?.addEventListener("click", startNewSession);
+  forkSessionButton?.addEventListener("click", () => runSessionSlashCommand("fork"));
+  cloneSessionButton?.addEventListener("click", () => runSessionSlashCommand("clone"));
   sessionToggleButton?.addEventListener("click", toggleSessionView);
   toolbarTitleElement?.addEventListener("click", toggleSessionMenu);
   sessionMenuElement?.addEventListener("mousedown", (event) => {
@@ -893,6 +899,8 @@
     const hasSendableText = textarea.value.trim().length > 0;
     const label = getSubmitLabel(isStopMode);
     submitButton.disabled = state.busy ? hasInput && !hasSendableText : !hasSendableText;
+    forkSessionButton.disabled = state.busy;
+    cloneSessionButton.disabled = state.busy;
     submitButton.classList.toggle("composer__submit--stop", isStopMode);
     submitButton.setAttribute("aria-label", label);
     submitButton.title = label;
@@ -1391,6 +1399,15 @@
   }
   function startNewSession() {
     vscode.postMessage({ type: "newSession" });
+    focusPromptInput();
+  }
+  function runSessionSlashCommand(command) {
+    if (state.busy) {
+      return;
+    }
+    closeSlashMenu();
+    closeSessionMenu();
+    vscode.postMessage({ type: "submit", text: "/" + command });
     focusPromptInput();
   }
   function isNewSessionShortcut(event) {

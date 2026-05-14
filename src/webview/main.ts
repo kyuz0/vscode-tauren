@@ -34,6 +34,8 @@ const {
   busySubmitHintElement,
   streamingBehaviorButtonElements,
   newSessionButton,
+  forkSessionButton,
+  cloneSessionButton,
   contextElement,
   contextValueElement,
   contextTooltipElement,
@@ -157,6 +159,8 @@ for (const button of streamingBehaviorButtonElements) {
 }
 
 newSessionButton?.addEventListener('click', startNewSession);
+forkSessionButton?.addEventListener('click', () => runSessionSlashCommand('fork'));
+cloneSessionButton?.addEventListener('click', () => runSessionSlashCommand('clone'));
 sessionToggleButton?.addEventListener('click', toggleSessionView);
 toolbarTitleElement?.addEventListener('click', toggleSessionMenu);
 sessionMenuElement?.addEventListener('mousedown', (event) => {
@@ -764,6 +768,8 @@ function syncSubmit() {
   const hasSendableText = textarea.value.trim().length > 0;
   const label = getSubmitLabel(isStopMode);
   submitButton.disabled = state.busy ? (hasInput && !hasSendableText) : !hasSendableText;
+  forkSessionButton.disabled = state.busy;
+  cloneSessionButton.disabled = state.busy;
   submitButton.classList.toggle('composer__submit--stop', isStopMode);
   submitButton.setAttribute('aria-label', label);
   submitButton.title = label;
@@ -1417,6 +1423,17 @@ function syncComposer(options: { preserveBottom?: boolean } = {}): void {
 
 function startNewSession() {
   vscode.postMessage({ type: 'newSession' });
+  focusPromptInput();
+}
+
+function runSessionSlashCommand(command: 'fork' | 'clone') {
+  if (state.busy) {
+    return;
+  }
+
+  closeSlashMenu();
+  closeSessionMenu();
+  vscode.postMessage({ type: 'submit', text: '/' + command });
   focusPromptInput();
 }
 

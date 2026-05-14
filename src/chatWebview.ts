@@ -297,11 +297,32 @@ ${chatWebviewStyles}
           <button class="composer__mode-button" type="button" data-streaming-behavior="followUp">Follow-up</button>
         </span>
       </div>
-      <button class="composer__button composer__add" type="button" aria-label="New session" title="New session">
-        <svg aria-hidden="true" width="19" height="19" viewBox="0 0 19 19" fill="none">
-          <path d="M9.5 3.5V15.5M3.5 9.5H15.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-        </svg>
-      </button>
+      <div class="composer__session-actions" role="group" aria-label="Session actions">
+        <button class="composer__button composer__add" type="button" aria-label="New session">
+          <svg aria-hidden="true" width="19" height="19" viewBox="0 0 19 19" fill="none">
+            <path d="M4.25 5.25C4.25 4.42 4.92 3.75 5.75 3.75H11.9C12.73 3.75 13.4 4.42 13.4 5.25V9.8C13.4 10.63 12.73 11.3 11.9 11.3H8.2L5.25 14.05V11.3C4.7 11.3 4.25 10.85 4.25 10.3V5.25Z" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/>
+            <path d="M14.6 12.2L15.15 13.35L16.3 13.9L15.15 14.45L14.6 15.6L14.05 14.45L12.9 13.9L14.05 13.35L14.6 12.2Z" fill="currentColor"/>
+          </svg>
+          <span class="composer__button-tooltip">New session</span>
+        </button>
+        <button class="composer__button composer__fork" type="button" aria-label="Fork session">
+          <svg aria-hidden="true" width="19" height="19" viewBox="0 0 19 19" fill="none">
+            <path d="M5.5 4.25V8.5C5.5 10.16 6.84 11.5 8.5 11.5H10.5" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M5.5 4.25V14.75" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/>
+            <path d="M10.25 8.5L13.25 11.5L10.25 14.5" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="5.5" cy="4.25" r="1.55" fill="currentColor"/>
+            <circle cx="5.5" cy="14.75" r="1.55" fill="currentColor"/>
+          </svg>
+          <span class="composer__button-tooltip">Fork session</span>
+        </button>
+        <button class="composer__button composer__clone" type="button" aria-label="Clone session">
+          <svg aria-hidden="true" width="19" height="19" viewBox="0 0 19 19" fill="none">
+            <rect x="4.25" y="6.25" width="8.5" height="8.5" rx="1.5" stroke="currentColor" stroke-width="1.35"/>
+            <path d="M7.25 4.25H13.25C14.08 4.25 14.75 4.92 14.75 5.75V11.75" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="composer__button-tooltip">Clone session</span>
+        </button>
+      </div>
       <div class="composer__info">
         <span class="composer__context"><span class="composer__context-value"></span><span class="composer__context-tooltip"></span></span>
         <button class="composer__model" type="button" aria-haspopup="true" aria-expanded="false"></button>
