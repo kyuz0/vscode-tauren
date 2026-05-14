@@ -686,6 +686,7 @@ suite('PiChatController', () => {
       { role: 'assistant', text: 'Hi there' }
     ]);
     assert.strictEqual(lastState(harness).currentSessionFile, '/sessions/cloned.jsonl');
+    assert.deepStrictEqual(harness.toasts, ['Cloned current session.']);
     harness.controller.dispose();
   });
 
@@ -1229,6 +1230,7 @@ type ControllerHarness = {
   controller: PiChatController;
   states: WebviewStateMessage[];
   notifications: { message: string; type: string }[];
+  toasts: string[];
   clientOptions: PiRpcClientOptions[];
   readonly createCalls: number;
 };
@@ -1253,6 +1255,7 @@ function createControllerHarness(
 ): ControllerHarness {
   const states: WebviewStateMessage[] = [];
   const notifications: { message: string; type: string }[] = [];
+  const toasts: string[] = [];
   const clientOptions: PiRpcClientOptions[] = [];
   const pendingClients = [...clients];
   let createCalls = 0;
@@ -1273,6 +1276,9 @@ function createControllerHarness(
     showNotification: (message, type) => {
       notifications.push({ message, type });
     },
+    showToast: (message) => {
+      toasts.push(message);
+    },
     extensionUi: options.extensionUi,
     fullRpcAgentCommunication: options.fullRpcAgentCommunication ?? false,
     stateScheduler: options.stateScheduler,
@@ -1289,6 +1295,7 @@ function createControllerHarness(
     controller,
     states,
     notifications,
+    toasts,
     clientOptions,
     get createCalls(): number {
       return createCalls;

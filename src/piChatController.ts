@@ -112,6 +112,7 @@ export type PiChatControllerOptions = {
   createClient: PiRpcClientFactory;
   postState: (message: WebviewStateMessage) => void;
   showNotification: (message: string, notifyType: string) => void;
+  showToast?: (message: string) => void;
   extensionUi?: ExtensionUiRequestUi;
   getCwd?: () => string | undefined;
   getPiPath?: () => string | undefined;
@@ -1355,6 +1356,7 @@ export class PiChatController {
     }
 
     await this.adoptReplacedSession({ refreshSessions: true });
+    this.options.showToast?.('Cloned current session.');
   }
 
   private async handleCopySlashCommand(): Promise<void> {

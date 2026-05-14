@@ -24,6 +24,7 @@ const {
   toolbarTitleTextElement,
   sessionToggleButton,
   sessionMenuElement,
+  toastElement,
   messagesElement,
   sessionsElement,
   form,
@@ -56,6 +57,7 @@ let slashMenuDismissedQuery: string | undefined;
 let slashCommandsRefreshRequested = false;
 let streamingBehavior: WebviewStreamingBehavior = 'steer';
 let busySubmitHideTimeout: ReturnType<typeof setTimeout> | undefined;
+let toastHideTimeout: ReturnType<typeof setTimeout> | undefined;
 let sessionListSelectedIndex = 0;
 let treeListSelectedIndex = 0;
 let sessionMenuOpen = false;
@@ -63,6 +65,11 @@ let sessionMenuItems: SessionItem[] = [];
 window.addEventListener('message', (event) => {
   if (event.data?.type === 'focusInput') {
     focusPromptInput();
+    return;
+  }
+
+  if (event.data?.type === 'toast') {
+    showToast(typeof event.data.message === 'string' ? event.data.message : 'Done.');
     return;
   }
 
@@ -305,6 +312,25 @@ contextBadgesElement?.addEventListener('click', (event) => {
   vscode.postMessage({ type: 'removePromptContext', id });
   focusPromptInput();
 });
+
+function showToast(message: string): void {
+  if (!toastElement) {
+    return;
+  }
+
+  if (toastHideTimeout) {
+    clearTimeout(toastHideTimeout);
+  }
+
+  toastElement.textContent = message;
+  toastElement.hidden = false;
+  toastElement.classList.add('pi-toast--visible');
+  toastHideTimeout = setTimeout(() => {
+    toastElement.classList.remove('pi-toast--visible');
+    toastElement.hidden = true;
+    toastHideTimeout = undefined;
+  }, 2500);
+}
 
 function render() {
   const isListView = state.viewMode === 'sessions' || state.viewMode === 'tree';

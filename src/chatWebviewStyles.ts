@@ -31,6 +31,7 @@ export const chatWebviewStyles = /* css */ `    :root {
     }
 
     .pi-view {
+      position: relative;
       display: grid;
       grid-template-rows: auto minmax(0, 1fr) auto;
       width: 100%;
@@ -174,6 +175,39 @@ export const chatWebviewStyles = /* css */ `    :root {
     .pi-toolbar__session-menu[open] {
       display: grid;
       gap: 2px;
+    }
+
+    .pi-toast {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      top: 42px;
+      z-index: 5;
+      justify-self: center;
+      width: max-content;
+      max-width: calc(100% - 24px);
+      padding: 6px 10px;
+      color: var(--vscode-notifications-foreground, var(--vscode-foreground));
+      background: var(--vscode-notifications-background, var(--vscode-editorWidget-background));
+      border: 1px solid var(--vscode-notifications-border, var(--vscode-input-border, transparent));
+      border-radius: 999px;
+      box-shadow: 0 4px 16px color-mix(in srgb, #000 28%, transparent);
+      font-size: 12px;
+      line-height: 1.35;
+      text-align: center;
+      opacity: 0;
+      transform: translateY(-4px);
+      transition: opacity 120ms ease, transform 120ms ease;
+      pointer-events: none;
+    }
+
+    .pi-toast[hidden] {
+      display: none;
+    }
+
+    .pi-toast--visible {
+      opacity: 1;
+      transform: translateY(0);
     }
 
     .pi-toolbar__session-item {

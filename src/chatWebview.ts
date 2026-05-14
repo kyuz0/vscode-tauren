@@ -282,6 +282,7 @@ ${chatWebviewStyles}
       <button class="pi-toolbar__title" type="button" aria-haspopup="listbox" aria-expanded="false"><span class="pi-toolbar__title-text">Pi</span></button>
       <div class="pi-toolbar__session-menu" role="listbox" aria-label="Recent sessions"></div>
     </header>
+    <div class="pi-toast" role="status" aria-live="polite" hidden></div>
     <section class="messages" aria-live="polite" aria-label="Pi conversation">
       <p class="empty-state">Ask Pi about this workspace.</p>
     </section>

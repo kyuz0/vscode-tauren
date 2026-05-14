@@ -7,6 +7,7 @@
       toolbarTitleTextElement: queryRequired(".pi-toolbar__title-text"),
       sessionToggleButton: queryRequired(".pi-toolbar__sessions"),
       sessionMenuElement: queryRequired(".pi-toolbar__session-menu"),
+      toastElement: queryRequired(".pi-toast"),
       messagesElement: queryRequired(".messages"),
       sessionsElement: queryRequired(".sessions"),
       form: queryRequired(".composer"),
@@ -307,6 +308,7 @@
     toolbarTitleTextElement,
     sessionToggleButton,
     sessionMenuElement,
+    toastElement,
     messagesElement,
     sessionsElement,
     form,
@@ -339,6 +341,7 @@
   var slashCommandsRefreshRequested = false;
   var streamingBehavior = "steer";
   var busySubmitHideTimeout;
+  var toastHideTimeout;
   var sessionListSelectedIndex = 0;
   var treeListSelectedIndex = 0;
   var sessionMenuOpen = false;
@@ -346,6 +349,10 @@
   window.addEventListener("message", (event) => {
     if (event.data?.type === "focusInput") {
       focusPromptInput();
+      return;
+    }
+    if (event.data?.type === "toast") {
+      showToast(typeof event.data.message === "string" ? event.data.message : "Done.");
       return;
     }
     if (event.data?.type !== "state") {
@@ -542,6 +549,22 @@
     vscode.postMessage({ type: "removePromptContext", id });
     focusPromptInput();
   });
+  function showToast(message) {
+    if (!toastElement) {
+      return;
+    }
+    if (toastHideTimeout) {
+      clearTimeout(toastHideTimeout);
+    }
+    toastElement.textContent = message;
+    toastElement.hidden = false;
+    toastElement.classList.add("pi-toast--visible");
+    toastHideTimeout = setTimeout(() => {
+      toastElement.classList.remove("pi-toast--visible");
+      toastElement.hidden = true;
+      toastHideTimeout = void 0;
+    }, 2500);
+  }
   function render() {
     const isListView = state.viewMode === "sessions" || state.viewMode === "tree";
     const shouldStickToBottom = !isListView && isMessagesAtBottom();
