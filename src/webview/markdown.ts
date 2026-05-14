@@ -48,7 +48,7 @@ function shouldLinkifyTextNode(node: Node): boolean {
     return false;
   }
 
-  return !parent.closest('a, code, pre, kbd, samp');
+  return !parent.closest('a, pre, kbd, samp');
 }
 
 function replaceFileReferences(node: Text): void {

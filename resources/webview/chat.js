@@ -80,7 +80,7 @@
     if (!parent || !node.textContent?.trim()) {
       return false;
     }
-    return !parent.closest("a, code, pre, kbd, samp");
+    return !parent.closest("a, pre, kbd, samp");
   }
   function replaceFileReferences(node) {
     const text = node.textContent ?? "";

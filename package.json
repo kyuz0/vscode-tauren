@@ -93,7 +93,7 @@
         },
         "tau.systemPrompt": {
           "type": "string",
-          "default": "When referencing workspace files in responses, prefer clickable-friendly paths like `src/file.ts`, `src/file.ts:12`, or `src/file.ts:12:5`.",
+          "default": "When referencing workspace files in responses, prefer clickable-friendly plain-text paths such as src/file.ts, src/file.ts:12, or src/file.ts:12:5.",
           "editPresentation": "multilineText",
           "markdownDescription": "Additional user-visible instructions Tau sends with each prompt. Keep this visible and editable so Pi's behavior remains transparent."
         }

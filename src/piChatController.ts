@@ -2002,20 +2002,28 @@ function formatPromptWithVisibleSystemPrompt(userText: string, systemPrompt: str
   ].join('\n');
 }
 
-function stripIdeContextFromPrompt(text: string): string {
-  const startIndex = text.indexOf(ideContextStartMarker);
+function stripTauPromptMetadata(text: string): string {
+  return stripLeadingMarkedBlock(
+    stripLeadingMarkedBlock(text, '<!-- tau:visible-system-prompt:start -->', '<!-- tau:visible-system-prompt:end -->'),
+    ideContextStartMarker,
+    ideContextEndMarker
+  );
+}
+
+function stripLeadingMarkedBlock(text: string, startMarker: string, endMarker: string): string {
+  const startIndex = text.indexOf(startMarker);
 
   if (startIndex === -1 || text.slice(0, startIndex).trim()) {
     return text;
   }
 
-  const endIndex = text.indexOf(ideContextEndMarker, startIndex + ideContextStartMarker.length);
+  const endIndex = text.indexOf(endMarker, startIndex + startMarker.length);
 
   if (endIndex === -1) {
     return text;
   }
 
-  return text.slice(endIndex + ideContextEndMarker.length).replace(/^\s+/, '');
+  return text.slice(endIndex + endMarker.length).replace(/^\s+/, '');
 }
 
 function formatPromptContextAttachment(attachment: PiPromptContextAttachment): string | undefined {
@@ -2120,7 +2128,7 @@ function formatAgentMessages(messages: PiAgentMessage[] | undefined): ChatMessag
     }
 
     if (message.role === 'user') {
-      const text = stripIdeContextFromPrompt(extractMessageText(message.content));
+      const text = stripTauPromptMetadata(extractMessageText(message.content));
       return text.trim() ? [{ role: 'user', text }] : [];
     }
 
