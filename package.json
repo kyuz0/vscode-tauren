@@ -9,6 +9,7 @@
     "url": "https://github.com/kaiwood/vscode-tau.git"
   },
   "license": "MIT",
+  "icon": "resources/icon.png",
   "engines": {
     "vscode": "^1.118.0"
   },
