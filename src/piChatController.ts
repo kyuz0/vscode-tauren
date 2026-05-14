@@ -242,6 +242,11 @@ export class PiChatController {
       return;
     }
 
+    if (message.type === 'setSessionName') {
+      await this.setSessionNameFromWebview(message.name);
+      return;
+    }
+
     if (message.type === 'refreshMetadata') {
       if (!this.session.isBusy) {
         await this.refreshSessionMeta({ startClient: true });
@@ -1080,6 +1085,26 @@ export class PiChatController {
     return true;
   }
 
+  private applySessionNameToCurrentSession(name: string): boolean {
+    const nextName = name.trim() || undefined;
+    let changed = false;
+
+    this.sessions = this.sessions.map((session) => {
+      const isCurrent = Boolean(this.currentSessionFile)
+        ? session.path === this.currentSessionFile
+        : session.current;
+
+      if (!isCurrent || session.name === nextName) {
+        return session;
+      }
+
+      changed = true;
+      return { ...session, name: nextName };
+    });
+
+    return changed;
+  }
+
   private setSessionMetaFields(snapshot: PiChatSessionMetaSnapshot): void {
     if (snapshot.model) {
       this.setModelMetaFields(snapshot.model);
@@ -1290,10 +1315,38 @@ export class PiChatController {
   }
 
   private async handleNameSlashCommand(name: string): Promise<void> {
-    await this.getClient().setSessionName(name);
-    this.session.addSystemMessage(name ? `Session name set to "${name}".` : 'Session name cleared.');
+    await this.setCurrentSessionName(name, { announce: true });
+  }
+
+  private async setSessionNameFromWebview(name: string): Promise<void> {
+    if (this.session.isBusy) {
+      this.options.showNotification('Wait for Pi to finish before renaming the session.', 'warning');
+      return;
+    }
+
+    try {
+      await this.setCurrentSessionName(name, { announce: false });
+    } catch (error) {
+      this.session.addErrorMessage(getErrorMessage(error));
+      this.postState();
+    }
+  }
+
+  private async setCurrentSessionName(name: string, options: { announce: boolean }): Promise<void> {
+    const trimmedName = name.trim();
+    await this.getClient().setSessionName(trimmedName);
+    this.applySessionNameToCurrentSession(trimmedName);
+
+    if (options.announce) {
+      this.session.addSystemMessage(trimmedName ? `Session name set to "${trimmedName}".` : 'Session name cleared.');
+    }
+
     this.postState();
     void this.refreshSessionMeta({ startClient: true, force: true });
+
+    if (this.currentSessionFile || this.sessions.length > 0) {
+      void this.refreshSessions();
+    }
   }
 
   private async handleSessionSlashCommand(): Promise<void> {

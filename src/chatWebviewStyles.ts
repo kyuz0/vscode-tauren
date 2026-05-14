@@ -89,14 +89,13 @@ export const chatWebviewStyles = /* css */ `    :root {
     .pi-toolbar__title {
       position: relative;
       display: block;
-      appearance: none;
       flex: 1 1 0;
       width: 0;
       min-width: 0;
       max-width: none;
       contain: inline-size;
       height: 26px;
-      padding: 0 21px 0 5px;
+      padding: 0 5px;
       overflow: hidden;
       color: var(--vscode-foreground);
       background: transparent;
@@ -109,7 +108,6 @@ export const chatWebviewStyles = /* css */ `    :root {
       text-align: left;
       text-overflow: ellipsis;
       white-space: nowrap;
-      cursor: pointer;
     }
 
     .pi-toolbar__title-text {
@@ -122,60 +120,65 @@ export const chatWebviewStyles = /* css */ `    :root {
       white-space: nowrap;
     }
 
-    .pi-toolbar__title::after {
-      content: '';
-      position: absolute;
-      right: 7px;
-      top: 50%;
-      width: 5px;
-      height: 5px;
-      border-right: 1.5px solid currentColor;
-      border-bottom: 1.5px solid currentColor;
-      transform: translateY(-70%) rotate(45deg);
-      opacity: 0.8;
-      pointer-events: none;
+    .pi-toolbar__title-input {
+      width: 100%;
+      height: 24px;
+      margin: 1px 0;
+      padding: 0 5px;
+      color: var(--vscode-input-foreground, var(--vscode-foreground));
+      background: var(--vscode-input-background, transparent);
+      border: 1px solid var(--vscode-focusBorder, var(--vscode-input-border, transparent));
+      border-radius: 4px;
+      font: inherit;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 22px;
+      outline: none;
     }
 
-    .pi-toolbar__title:hover:not(:disabled),
-    .pi-toolbar__title:focus-visible,
-    .pi-toolbar__title[aria-expanded="true"] {
+    .pi-toolbar__title-input[hidden] {
+      display: none;
+    }
+
+    .pi-toolbar__title--editing {
+      padding: 0;
+      overflow: visible;
+      contain: none;
+    }
+
+    .pi-toolbar__title--editing .pi-toolbar__title-text {
+      display: none;
+    }
+
+    .pi-toolbar__edit {
+      display: grid;
+      place-items: center;
+      flex: 0 0 26px;
+      width: 26px;
+      max-width: 26px;
+      height: 26px;
+      padding: 0;
+      color: inherit;
+      background: transparent;
+      border: 0;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+
+    .pi-toolbar__edit:hover:not(:disabled),
+    .pi-toolbar__edit:focus-visible {
       color: var(--vscode-foreground);
       background: color-mix(in srgb, var(--vscode-foreground) 8%, transparent);
       outline: none;
     }
 
-    .pi-toolbar__title:disabled {
-      padding-right: 7px;
-      color: var(--vscode-descriptionForeground);
+    .pi-toolbar__edit:disabled {
+      opacity: 0.45;
       cursor: default;
     }
 
-    .pi-toolbar__title:disabled::after {
+    .pi-toolbar__edit[hidden] {
       display: none;
-    }
-
-    .pi-toolbar__session-menu {
-      position: absolute;
-      left: 2px;
-      right: 2px;
-      top: calc(100% + 4px);
-      z-index: 4;
-      display: none;
-      max-height: min(300px, 48vh);
-      overflow-y: auto;
-      padding: 4px;
-      color: var(--vscode-foreground);
-      background: var(--vscode-dropdown-background, var(--vscode-editorWidget-background));
-      border: 1px solid var(--vscode-dropdown-border, var(--vscode-input-border, transparent));
-      border-radius: 8px;
-      box-shadow: 0 4px 16px color-mix(in srgb, #000 38%, transparent);
-      font-size: 12px;
-      line-height: 1.35;
-    }
-
-    .pi-toolbar__session-menu[open] {
-      display: grid;
-      gap: 2px;
     }
 
     .pi-toast {
@@ -211,53 +214,6 @@ export const chatWebviewStyles = /* css */ `    :root {
       transform: translateY(0);
     }
 
-    .pi-toolbar__session-item {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 2px 8px;
-      width: 100%;
-      min-width: 0;
-      padding: 6px 7px;
-      color: inherit;
-      background: transparent;
-      border: 0;
-      border-radius: 5px;
-      font: inherit;
-      text-align: left;
-      cursor: pointer;
-    }
-
-    .pi-toolbar__session-item:hover,
-    .pi-toolbar__session-item--current {
-      color: var(--vscode-list-activeSelectionForeground, var(--vscode-foreground));
-      background: var(--vscode-list-activeSelectionBackground, color-mix(in srgb, var(--vscode-foreground) 14%, transparent));
-    }
-
-    .pi-toolbar__session-title {
-      min-width: 0;
-      overflow: hidden;
-      font-weight: 600;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .pi-toolbar__session-meta {
-      color: var(--vscode-descriptionForeground);
-      font-size: 11px;
-      white-space: nowrap;
-    }
-
-    .pi-toolbar__session-item:hover .pi-toolbar__session-meta,
-    .pi-toolbar__session-item--current .pi-toolbar__session-meta {
-      color: inherit;
-      opacity: 0.78;
-    }
-
-    .pi-toolbar__session-empty {
-      padding: 7px 8px;
-      color: var(--vscode-descriptionForeground);
-      font-size: 12px;
-    }
 
     .messages {
       max-width: 100vw;

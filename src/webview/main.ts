@@ -3,7 +3,6 @@ import { createMessageElement } from './renderMessages';
 import { buildSessionTreePrefix, formatSessionMeta, getSessionDisplayName, shortenPath } from './sessionFormat';
 import {
   localSlashCommands,
-  maxSessionMenuItems,
   maxTextareaHeight,
   messagesBottomThreshold,
   minTextareaHeight
@@ -22,8 +21,9 @@ const vscode = acquireVsCodeApi();
 const {
   toolbarTitleElement,
   toolbarTitleTextElement,
+  sessionNameInputElement,
   sessionToggleButton,
-  sessionMenuElement,
+  sessionEditButton,
   toastElement,
   messagesElement,
   sessionsElement,
@@ -60,8 +60,8 @@ let busySubmitHideTimeout: ReturnType<typeof setTimeout> | undefined;
 let toastHideTimeout: ReturnType<typeof setTimeout> | undefined;
 let sessionListSelectedIndex = 0;
 let treeListSelectedIndex = 0;
-let sessionMenuOpen = false;
-let sessionMenuItems: SessionItem[] = [];
+let sessionNameEditing = false;
+let sessionNameEditInitialValue = '';
 window.addEventListener('message', (event) => {
   if (event.data?.type === 'focusInput') {
     focusPromptInput();
@@ -133,7 +133,7 @@ form?.addEventListener('submit', (event) => {
   }
 
   closeSlashMenu();
-  closeSessionMenu();
+  cancelSessionNameEdit();
   vscode.postMessage(state.busy
     ? { type: 'submit', text, streamingBehavior }
     : { type: 'submit', text });
@@ -169,25 +169,8 @@ newSessionButton?.addEventListener('click', startNewSession);
 forkSessionButton?.addEventListener('click', () => runSessionSlashCommand('fork'));
 cloneSessionButton?.addEventListener('click', () => runSessionSlashCommand('clone'));
 sessionToggleButton?.addEventListener('click', toggleSessionView);
-toolbarTitleElement?.addEventListener('click', toggleSessionMenu);
-sessionMenuElement?.addEventListener('mousedown', (event) => {
-  event.preventDefault();
-});
-sessionMenuElement?.addEventListener('click', (event) => {
-  const item = eventTargetElement(event)?.closest('.pi-toolbar__session-item');
-
-  if (!item) {
-    return;
-  }
-
-  const index = Number(item.getAttribute('data-index'));
-  const session = sessionMenuItems[index];
-
-  if (session?.path) {
-    closeSessionMenu();
-    selectSessionByPath(session.path);
-  }
-});
+sessionEditButton?.addEventListener('click', startSessionNameEdit);
+sessionNameInputElement?.addEventListener('blur', () => cancelSessionNameEdit());
 sessionsElement?.addEventListener('keydown', handleSessionListKeydown);
 sessionsElement?.addEventListener('click', (event) => {
   const item = eventTargetElement(event)?.closest('.sessions__item');
@@ -217,15 +200,27 @@ window.addEventListener('click', (event) => {
       closeSlashMenu();
     }
   }
-
-  if (sessionMenuOpen) {
-    if (!sessionMenuElement?.contains(target) && !toolbarTitleElement?.contains(target)) {
-      closeSessionMenu();
-    }
-  }
 });
 
 window.addEventListener('keydown', (event) => {
+  if (sessionNameEditing && event.target === sessionNameInputElement) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      commitSessionNameEdit();
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      cancelSessionNameEdit({ focusPrompt: true });
+      return;
+    }
+
+    return;
+  }
+
   if ((state.viewMode === 'sessions' || state.viewMode === 'tree') && handleSessionListKeydown(event)) {
     return;
   }
@@ -233,7 +228,7 @@ window.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     dismissSlashMenu();
     closeModelMenu();
-    closeSessionMenu();
+    cancelSessionNameEdit();
     return;
   }
 
@@ -339,21 +334,25 @@ function render() {
   sessionsElement.hidden = !isListView;
   form.hidden = isListView;
   const toolbarTitle = state.viewMode === 'sessions' ? 'Sessions' : state.viewMode === 'tree' ? 'Session tree' : getCurrentSessionTitle();
-  if (toolbarTitleTextElement) {
-    toolbarTitleTextElement.textContent = toolbarTitle;
+  if ((isListView || state.busy) && sessionNameEditing) {
+    cancelSessionNameEdit();
   }
+  toolbarTitleTextElement.textContent = toolbarTitle;
   toolbarTitleElement.title = toolbarTitle;
-  toolbarTitleElement.disabled = isListView;
+  toolbarTitleElement.classList.toggle('pi-toolbar__title--editing', sessionNameEditing);
+  toolbarTitleTextElement.hidden = sessionNameEditing;
+  sessionNameInputElement.hidden = !sessionNameEditing;
+  sessionEditButton.hidden = isListView;
+  sessionEditButton.disabled = state.busy || sessionNameEditing;
   sessionToggleButton.title = isListView ? 'Back to chat' : 'Show sessions';
   sessionToggleButton.setAttribute('aria-label', sessionToggleButton.title);
   sessionToggleButton.classList.toggle('pi-toolbar__sessions--back', isListView);
-  renderSessionMenu();
 
   if (isListView) {
     state.viewMode === 'tree' ? renderTree() : renderSessions();
     closeSlashMenu();
     closeModelMenu();
-    closeSessionMenu();
+    cancelSessionNameEdit();
     requestAnimationFrame(() => sessionsElement?.focus({ preventScroll: true }));
     return;
   }
@@ -674,111 +673,80 @@ function selectCurrentSession() {
   sessionListSelectedIndex = currentIndex >= 0 ? currentIndex : 0;
 }
 
-function toggleSessionMenu(event: MouseEvent): void {
+function startSessionNameEdit(event?: MouseEvent): void {
   event?.preventDefault();
   event?.stopPropagation();
 
-  if (state.viewMode === 'sessions' || state.viewMode === 'tree') {
-    return;
-  }
-
-  if (sessionMenuOpen) {
-    closeSessionMenu();
-    return;
-  }
-
-  openSessionMenu();
-}
-
-function openSessionMenu() {
-  if (!sessionMenuElement) {
+  if (state.viewMode === 'sessions' || state.viewMode === 'tree' || state.busy) {
     return;
   }
 
   closeSlashMenu();
   closeModelMenu();
 
-  if (!state.sessionsRefreshing && (!Array.isArray(state.sessions) || state.sessions.length === 0)) {
-    vscode.postMessage({ type: 'refreshSessions' });
-  }
+  const initialName = getCurrentSessionName();
+  sessionNameEditing = true;
+  sessionNameEditInitialValue = initialName;
+  sessionNameInputElement.value = initialName;
+  sessionNameInputElement.placeholder = initialName ? '' : getCurrentSessionTitle();
+  syncSessionNameEditor();
 
-  sessionMenuOpen = true;
-  sessionMenuElement.setAttribute('open', '');
-  toolbarTitleElement?.setAttribute('aria-expanded', 'true');
-  renderSessionMenu();
+  requestAnimationFrame(() => {
+    sessionNameInputElement.focus({ preventScroll: true });
+    sessionNameInputElement.select();
+  });
 }
 
-function closeSessionMenu() {
-  sessionMenuOpen = false;
-  sessionMenuItems = [];
-  sessionMenuElement?.removeAttribute('open');
-  toolbarTitleElement?.setAttribute('aria-expanded', 'false');
+function commitSessionNameEdit(): void {
+  if (!sessionNameEditing) {
+    return;
+  }
+
+  const nextName = sessionNameInputElement.value.trim();
+  const previousName = sessionNameEditInitialValue;
+  stopSessionNameEdit();
+
+  if (nextName !== previousName) {
+    vscode.postMessage({ type: 'setSessionName', name: nextName });
+  }
+
+  focusPromptInput();
 }
 
-function renderSessionMenu() {
-  if (!sessionMenuElement) {
+function cancelSessionNameEdit(options: { focusPrompt?: boolean } = {}): void {
+  if (!sessionNameEditing) {
     return;
   }
 
-  sessionMenuElement.replaceChildren();
+  stopSessionNameEdit();
 
-  if (!sessionMenuOpen) {
-    return;
-  }
-
-  if (state.sessionsRefreshing && (!Array.isArray(state.sessions) || state.sessions.length === 0)) {
-    sessionMenuElement.append(createSessionMenuEmptyElement('Loading sessions...'));
-    return;
-  }
-
-  if (state.sessionsError) {
-    sessionMenuElement.append(createSessionMenuEmptyElement(state.sessionsError));
-    return;
-  }
-
-  sessionMenuItems = Array.isArray(state.sessions)
-    ? state.sessions.slice(0, maxSessionMenuItems)
-    : [];
-
-  if (sessionMenuItems.length === 0) {
-    sessionMenuElement.append(createSessionMenuEmptyElement('No sessions found for this workspace.'));
-    return;
-  }
-
-  for (let index = 0; index < sessionMenuItems.length; index += 1) {
-    sessionMenuElement.append(createSessionMenuItemElement(sessionMenuItems[index], index));
+  if (options.focusPrompt) {
+    focusPromptInput();
   }
 }
 
-function createSessionMenuItemElement(session: SessionItem, index: number): HTMLElement {
-  const item = document.createElement('button');
-  item.type = 'button';
-  item.className = 'pi-toolbar__session-item' + (session.current || session.path === state.currentSessionFile ? ' pi-toolbar__session-item--current' : '');
-  item.setAttribute('role', 'option');
-  item.setAttribute('aria-selected', session.current || session.path === state.currentSessionFile ? 'true' : 'false');
-  item.setAttribute('data-index', String(index));
-
-  const title = document.createElement('span');
-  title.className = 'pi-toolbar__session-title';
-  title.textContent = getSessionDisplayName(session);
-  item.append(title);
-
-  const meta = document.createElement('span');
-  meta.className = 'pi-toolbar__session-meta';
-  meta.textContent = formatSessionMeta(session);
-  item.append(meta);
-
-  return item;
+function stopSessionNameEdit(): void {
+  sessionNameEditing = false;
+  sessionNameEditInitialValue = '';
+  sessionNameInputElement.value = '';
+  sessionNameInputElement.placeholder = '';
+  syncSessionNameEditor();
 }
 
-function createSessionMenuEmptyElement(text: string): HTMLElement {
-  const empty = document.createElement('div');
-  empty.className = 'pi-toolbar__session-empty';
-  empty.textContent = text;
-  return empty;
+function syncSessionNameEditor(): void {
+  toolbarTitleElement.classList.toggle('pi-toolbar__title--editing', sessionNameEditing);
+  toolbarTitleTextElement.hidden = sessionNameEditing;
+  sessionNameInputElement.hidden = !sessionNameEditing;
+  sessionEditButton.disabled = state.busy || sessionNameEditing;
+}
+
+function getCurrentSessionName(): string {
+  return (getCurrentSession()?.name ?? '').trim();
 }
 
 function toggleSessionView() {
+  cancelSessionNameEdit();
+
   if (state.viewMode === 'sessions' || state.viewMode === 'tree') {
     vscode.postMessage({ type: 'hideSessions' });
     focusPromptInput();
@@ -1027,7 +995,7 @@ function toggleModelMenu() {
     vscode.postMessage({ type: 'refreshMetadata' });
   }
 
-  closeSessionMenu();
+  cancelSessionNameEdit();
   const open = !modelMenuElement.hasAttribute('open');
   modelMenuElement.toggleAttribute('open', open);
   modelElement.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -1110,7 +1078,7 @@ function syncSlashMenu() {
   }
 
   closeModelMenu();
-  closeSessionMenu();
+  cancelSessionNameEdit();
   if (
     state.slashCommands.length === 0
     && !state.slashCommandsRefreshing
@@ -1448,6 +1416,7 @@ function syncComposer(options: { preserveBottom?: boolean } = {}): void {
 }
 
 function startNewSession() {
+  cancelSessionNameEdit();
   vscode.postMessage({ type: 'newSession' });
   focusPromptInput();
 }
@@ -1458,7 +1427,7 @@ function runSessionSlashCommand(command: 'fork' | 'clone') {
   }
 
   closeSlashMenu();
-  closeSessionMenu();
+  cancelSessionNameEdit();
   vscode.postMessage({ type: 'submit', text: '/' + command });
   focusPromptInput();
 }

@@ -107,6 +107,10 @@ suite('Chat webview helpers', () => {
       parseWebviewMessage({ type: 'selectTreeEntry', entryId: 'entry-1' }),
       { type: 'selectTreeEntry', entryId: 'entry-1' }
     );
+    assert.deepStrictEqual(
+      parseWebviewMessage({ type: 'setSessionName', name: 'Feature work' }),
+      { type: 'setSessionName', name: 'Feature work' }
+    );
     assert.deepStrictEqual(parseWebviewMessage({ type: 'refreshMetadata' }), { type: 'refreshMetadata' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'refreshSlashCommands' }), { type: 'refreshSlashCommands' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'removePromptContext', id: 'context-1' }), { type: 'removePromptContext', id: 'context-1' });
@@ -138,6 +142,7 @@ suite('Chat webview helpers', () => {
     assert.deepStrictEqual(parseWebviewMessage({}), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'submit', text: 42 }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'selectSession', sessionPath: '' }), { type: 'unknown' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'setSessionName', name: 42 }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'removePromptContext', id: '' }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'submit', text: 'hello', streamingBehavior: 'later' }), { type: 'unknown' });
     assert.deepStrictEqual(
@@ -173,12 +178,16 @@ suite('Chat webview helpers', () => {
         `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">`
       )
     );
-    assert.ok(html.includes('    .pi-view {\n      display: grid;'));
+    assert.ok(html.includes('    .pi-view {'));
+    assert.ok(html.includes('      display: grid;'));
     assert.ok(html.includes('<script nonce="' + nonce + '" src="vscode-resource://highlight.js"></script>'));
     assert.ok(html.includes('<script nonce="' + nonce + '" src="vscode-resource://markdown-it.js"></script>'));
     assert.ok(html.includes('<script nonce="' + nonce + '" src="vscode-resource://dompurify.js"></script>'));
     assert.ok(html.includes('<script nonce="' + nonce + '" src="vscode-resource://chat.js"></script>'));
     assert.ok(html.includes('class="pi-toolbar__sessions"'));
+    assert.ok(html.includes('class="pi-toolbar__edit"'));
+    assert.ok(html.includes('class="pi-toolbar__title-input"'));
+    assert.ok(!html.includes('pi-toolbar__session-menu'));
     assert.ok(html.includes('class="messages" aria-live="polite" aria-label="Pi conversation"'));
     assert.ok(html.includes('class="sessions" aria-label="Pi sessions and tree" role="listbox"'));
     assert.ok(html.includes('<form class="composer" aria-label="Pi message input">'));

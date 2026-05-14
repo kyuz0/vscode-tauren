@@ -3,7 +3,6 @@ import type { SlashCommand } from './types';
 export const messagesBottomThreshold = 4;
 export const maxTextareaHeight = 180;
 export const minTextareaHeight = 22;
-export const maxSessionMenuItems = 20;
 
 export const localSlashCommands: SlashCommand[] = [
   { name: 'model', description: 'Select model', source: 'builtin' },

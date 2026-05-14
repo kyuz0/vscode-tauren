@@ -19,6 +19,7 @@ export type WebviewMessage =
   | { type: 'refreshSessions' }
   | { type: 'selectSession'; sessionPath: string }
   | { type: 'selectTreeEntry'; entryId: string }
+  | { type: 'setSessionName'; name: string }
   | { type: 'refreshMetadata' }
   | { type: 'refreshSlashCommands' }
   | { type: 'removePromptContext'; id: string }
@@ -51,6 +52,10 @@ export function parseWebviewMessage(value: unknown): WebviewMessage {
     case 'selectTreeEntry':
       return typeof value.entryId === 'string' && value.entryId
         ? { type: 'selectTreeEntry', entryId: value.entryId }
+        : { type: 'unknown' };
+    case 'setSessionName':
+      return typeof value.name === 'string'
+        ? { type: 'setSessionName', name: value.name }
         : { type: 'unknown' };
     case 'refreshMetadata':
       return { type: 'refreshMetadata' };
@@ -279,8 +284,13 @@ ${chatWebviewStyles}
           <path d="M11.25 4.5L6.75 9L11.25 13.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
-      <button class="pi-toolbar__title" type="button" aria-haspopup="listbox" aria-expanded="false"><span class="pi-toolbar__title-text">Pi</span></button>
-      <div class="pi-toolbar__session-menu" role="listbox" aria-label="Recent sessions"></div>
+      <div class="pi-toolbar__title"><span class="pi-toolbar__title-text">Pi</span><input class="pi-toolbar__title-input" type="text" aria-label="Session name" spellcheck="false" hidden></div>
+      <button class="pi-toolbar__edit" type="button" aria-label="Edit session name" title="Edit session name">
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M4.25 11.75L5.7 11.45L11.45 5.7C11.83 5.32 11.83 4.7 11.45 4.32L11.18 4.05C10.8 3.67 10.18 3.67 9.8 4.05L4.05 9.8L3.75 11.25C3.69 11.55 3.95 11.81 4.25 11.75Z" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M9.15 4.7L10.8 6.35" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/>
+        </svg>
+      </button>
     </header>
     <div class="pi-toast" role="status" aria-live="polite" hidden></div>
     <section class="messages" aria-live="polite" aria-label="Pi conversation">
