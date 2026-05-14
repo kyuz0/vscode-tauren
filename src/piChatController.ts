@@ -40,6 +40,10 @@ import type {
   PiSessionStats,
   RpcEvent
 } from './piRpcClient';
+import {
+  isBuiltinSlashCommand,
+  isSupportedBuiltinSlashCommand
+} from './slashCommands';
 
 export type PiRpcClientLike = Pick<
   PiRpcClient,
@@ -1285,7 +1289,7 @@ export class PiChatController {
   }
 
   private async handleLocalSlashCommand(command: { name: string; args: string }): Promise<void> {
-    if (!supportedBuiltinSlashCommandNames.has(command.name)) {
+    if (!isSupportedBuiltinSlashCommand(command.name)) {
       this.session.addSystemMessage(`/${command.name} is a Pi terminal command that is not supported in the VS Code sidebar yet.`);
       this.postState();
       return;
@@ -2331,45 +2335,6 @@ function areSlashCommandsEqual(left: WebviewSlashCommand[], right: WebviewSlashC
     });
 }
 
-const builtinSlashCommandNames = new Set([
-  'settings',
-  'model',
-  'scoped-models',
-  'export',
-  'import',
-  'share',
-  'copy',
-  'name',
-  'session',
-  'changelog',
-  'hotkeys',
-  'fork',
-  'clone',
-  'tree',
-  'login',
-  'logout',
-  'new',
-  'compact',
-  'resume',
-  'reload',
-  'quit'
-]);
-
-const supportedBuiltinSlashCommandNames = new Set([
-  'model',
-  'export',
-  'copy',
-  'name',
-  'session',
-  'tree',
-  'resume',
-  'fork',
-  'clone',
-  'new',
-  'compact',
-  'reload'
-]);
-
 function parseLocalSlashCommand(text: string): { name: string; args: string } | undefined {
   const match = text.trim().match(/^\/([^\s]+)(?:\s+([\s\S]*))?$/);
 
@@ -2379,7 +2344,7 @@ function parseLocalSlashCommand(text: string): { name: string; args: string } | 
 
   const name = match[1];
 
-  if (!builtinSlashCommandNames.has(name)) {
+  if (!isBuiltinSlashCommand(name)) {
     return undefined;
   }
 
