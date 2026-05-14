@@ -44,6 +44,7 @@ import {
   isBuiltinSlashCommand,
   isSupportedBuiltinSlashCommand
 } from './slashCommands';
+import { stripTauPromptMetadata } from './tauPromptMetadata';
 
 export type PiRpcClientLike = Pick<
   PiRpcClient,
@@ -662,7 +663,18 @@ export class PiChatController {
         return;
       }
 
-      this.sessions = sessions.map((session) => ({ ...session }));
+      this.sessions = sessions.map((session) => {
+        const sessionWithoutName = { ...session };
+        delete sessionWithoutName.name;
+        const cleanName = typeof session.name === 'string'
+          ? stripTauPromptMetadata(session.name).trim()
+          : '';
+        return {
+          ...sessionWithoutName,
+          ...(cleanName ? { name: cleanName } : {}),
+          firstMessage: stripTauPromptMetadata(session.firstMessage).trim()
+        };
+      });
       const currentSession = this.sessions.find((session) => this.currentSessionFile
         ? session.path === this.currentSessionFile
         : session.current);
@@ -1131,7 +1143,7 @@ export class PiChatController {
       return false;
     }
 
-    const nextName = name.trim();
+    const nextName = stripTauPromptMetadata(name).trim();
 
     const sessionsChanged = this.applySessionNameToCurrentSession(nextName);
 
@@ -1461,8 +1473,12 @@ export class PiChatController {
       return;
     }
 
+    const forkText = typeof result.text === 'string'
+      ? stripTauPromptMetadata(result.text).trim()
+      : selected.text;
+
     await this.adoptReplacedSession({ refreshSessions: true });
-    this.setComposerText(typeof result.text === 'string' ? result.text : selected.text);
+    this.setComposerText(forkText);
     this.postState();
   }
 
@@ -2031,30 +2047,6 @@ function formatPromptWithVisibleSystemPrompt(userText: string, systemPrompt: str
   ].join('\n');
 }
 
-function stripTauPromptMetadata(text: string): string {
-  return stripLeadingMarkedBlock(
-    stripLeadingMarkedBlock(text, '<!-- tau:visible-system-prompt:start -->', '<!-- tau:visible-system-prompt:end -->'),
-    ideContextStartMarker,
-    ideContextEndMarker
-  );
-}
-
-function stripLeadingMarkedBlock(text: string, startMarker: string, endMarker: string): string {
-  const startIndex = text.indexOf(startMarker);
-
-  if (startIndex === -1 || text.slice(0, startIndex).trim()) {
-    return text;
-  }
-
-  const endIndex = text.indexOf(endMarker, startIndex + startMarker.length);
-
-  if (endIndex === -1) {
-    return text;
-  }
-
-  return text.slice(endIndex + endMarker.length).replace(/^\s+/, '');
-}
-
 function formatPromptContextAttachment(attachment: PiPromptContextAttachment): string | undefined {
   if (attachment.kind === 'file') {
     return `<file path="${escapeXmlAttribute(attachment.path)}" />`;
@@ -2126,7 +2118,9 @@ function formatForkMessages(messages: PiForkMessage[] | undefined): ForkMessageO
 
   return messages.flatMap((message) => {
     const entryId = typeof message.entryId === 'string' ? message.entryId : '';
-    const text = typeof message.text === 'string' ? message.text.trim() : '';
+    const text = typeof message.text === 'string'
+      ? stripTauPromptMetadata(message.text).trim()
+      : '';
 
     return entryId && text ? [{ entryId, text }] : [];
   });

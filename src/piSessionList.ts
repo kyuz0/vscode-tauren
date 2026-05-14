@@ -2,6 +2,7 @@ import { existsSync } from 'fs';
 import { readdir, readFile, stat } from 'fs/promises';
 import { homedir } from 'os';
 import { dirname, isAbsolute, join, resolve } from 'path';
+import { stripTauPromptMetadata } from './tauPromptMetadata';
 
 export type PiSessionListItem = {
   path: string;
@@ -195,7 +196,10 @@ async function buildSessionInfo(filePath: string): Promise<RawSessionInfo | unde
       }
 
       if (entry.type === 'session_info') {
-        name = typeof entry.name === 'string' && entry.name.trim() ? entry.name.trim() : undefined;
+        const cleanName = typeof entry.name === 'string'
+          ? stripTauPromptMetadata(entry.name).trim()
+          : '';
+        name = cleanName || undefined;
         continue;
       }
 
@@ -215,7 +219,7 @@ async function buildSessionInfo(filePath: string): Promise<RawSessionInfo | unde
       }
 
       if (role === 'user' && !firstMessage) {
-        firstMessage = extractTextContent(entry.message.content).trim();
+        firstMessage = stripTauPromptMetadata(extractTextContent(entry.message.content)).trim();
       }
     }
 

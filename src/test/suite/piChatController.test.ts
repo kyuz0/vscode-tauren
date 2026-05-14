@@ -701,6 +701,35 @@ suite('PiChatController', () => {
     harness.controller.dispose();
   });
 
+  test('session switcher strips Tau metadata from displayed sessions', async () => {
+    const client = new FakePiClient();
+    const skillPrompt = '<skill name="plan" location="/skills/plan/SKILL.md">\nSkill instructions\n</skill>\n\nBuild this feature';
+    const wrappedName = '<!-- tau:visible-system-prompt:start -->\n<system_prompt source="vscode-tau-settings" visibility="user-editable">\nSettings prompt\n</system_prompt>\n<!-- tau:visible-system-prompt:end -->\n\nSession title';
+    const harness = createControllerHarness([client], {
+      listSessions: async () => [{
+        path: '/sessions/current.jsonl',
+        id: 'current',
+        cwd: '/workspace',
+        name: wrappedName,
+        created: '2026-01-01T00:00:00.000Z',
+        modified: '2026-01-01T00:01:00.000Z',
+        messageCount: 1,
+        firstMessage: skillPrompt,
+        depth: 0,
+        isLast: true,
+        ancestorContinues: [],
+        current: true
+      }]
+    });
+
+    await harness.controller.handleWebviewMessage({ type: 'submit', text: '/resume' });
+    await flushPromises();
+
+    assert.strictEqual(lastState(harness).sessions?.[0]?.name, 'Session title');
+    assert.strictEqual(lastState(harness).sessions?.[0]?.firstMessage, 'Build this feature');
+    harness.controller.dispose();
+  });
+
   test('fork slash command selects a message, switches to forked session, and prefills composer', async () => {
     const client = new FakePiClient({
       state: {
@@ -739,6 +768,43 @@ suite('PiChatController', () => {
     const composerState = harness.states.find((state) => state.composerTextRevision === 1);
     assert.ok(composerState);
     assert.strictEqual(composerState.composerText, 'Second prompt');
+    harness.controller.dispose();
+  });
+
+  test('fork slash command strips skill wrapper from selected message and composer prefill', async () => {
+    const skillPrompt = '<skill name="plan" location="/skills/plan/SKILL.md">\nSkill instructions\n</skill>\n\nBuild this feature';
+    const client = new FakePiClient({
+      state: {
+        model: { provider: 'openai', id: 'gpt-test', reasoning: false },
+        thinkingLevel: 'off',
+        sessionFile: '/sessions/forked.jsonl'
+      },
+      forkMessages: [
+        { entryId: 'u1', text: skillPrompt }
+      ],
+      forkResult: { text: skillPrompt, cancelled: false },
+      messages: [{ role: 'user', content: skillPrompt }]
+    });
+    const harness = createControllerHarness([client], {
+      extensionUi: {
+        notify: () => {},
+        select: async (_title, options) => {
+          assert.deepStrictEqual(options, ['1. Build this feature']);
+          return options[0];
+        },
+        confirm: async () => undefined,
+        input: async () => undefined
+      }
+    });
+
+    await harness.controller.handleWebviewMessage({ type: 'submit', text: '/fork' });
+
+    assert.deepStrictEqual(lastState(harness).messages, [
+      { role: 'user', text: 'Build this feature' }
+    ]);
+    const composerState = harness.states.find((state) => state.composerTextRevision === 1);
+    assert.ok(composerState);
+    assert.strictEqual(composerState.composerText, 'Build this feature');
     harness.controller.dispose();
   });
 
