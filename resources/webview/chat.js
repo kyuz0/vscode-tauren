@@ -22,8 +22,6 @@
       busySubmitHintElement: queryRequired(".composer__busy-submit-hint"),
       streamingBehaviorButtonElements: queryAll(".composer__mode-button"),
       newSessionButton: queryRequired(".composer__add"),
-      forkSessionButton: queryRequired(".composer__fork"),
-      cloneSessionButton: queryRequired(".composer__clone"),
       contextElement: queryRequired(".composer__context"),
       contextValueElement: queryRequired(".composer__context-value"),
       contextTooltipElement: queryRequired(".composer__context-tooltip"),
@@ -555,8 +553,6 @@
     busySubmitHintElement,
     streamingBehaviorButtonElements,
     newSessionButton,
-    forkSessionButton,
-    cloneSessionButton,
     contextElement,
     contextValueElement,
     contextTooltipElement,
@@ -691,14 +687,16 @@
     });
   }
   newSessionButton?.addEventListener("click", startNewSession);
-  forkSessionButton?.addEventListener("click", () => runSessionSlashCommand("fork"));
-  cloneSessionButton?.addEventListener("click", () => runSessionSlashCommand("clone"));
   messagesElement?.addEventListener("click", handleMessageClick);
   sessionToggleButton?.addEventListener("click", toggleSessionView);
   toolbarTitleElement?.addEventListener("dblclick", startSessionNameEdit);
   sessionMenuButton?.addEventListener("click", toggleSessionCommandMenu);
   for (const item of sessionMenuItemElements) {
     item.addEventListener("click", () => runSessionMenuCommand(item.getAttribute("data-session-command")));
+    item.addEventListener("pointerenter", () => setSessionMenuItemHover(item, true));
+    item.addEventListener("pointerleave", () => setSessionMenuItemHover(item, false));
+    item.addEventListener("focus", () => setSessionMenuItemHover(item, true));
+    item.addEventListener("blur", () => setSessionMenuItemHover(item, false));
   }
   sessionNameInputElement?.addEventListener("blur", () => cancelSessionNameEdit());
   sessionsElement?.addEventListener("keydown", handleSessionListKeydown);
@@ -859,9 +857,7 @@
     sessionNameInputElement.hidden = !sessionNameEditing;
     sessionMenuWrapElement.hidden = isListView;
     sessionMenuButton.disabled = state.busy || sessionNameEditing;
-    for (const item of sessionMenuItemElements) {
-      item.disabled = state.busy || sessionNameEditing;
-    }
+    syncSessionCommandMenuItems();
     if (isListView || state.busy || sessionNameEditing) {
       closeSessionCommandMenu();
     }
@@ -1117,10 +1113,10 @@
     return state.messages.length === 0 ? "New session" : "Current session";
   }
   function getCurrentSession() {
-    if (!Array.isArray(state.sessions) || state.sessions.length === 0 || !state.currentSessionFile) {
+    if (!Array.isArray(state.sessions) || state.sessions.length === 0) {
       return void 0;
     }
-    return state.sessions.find((session) => session.path === state.currentSessionFile) ?? state.sessions.find((session) => session.current);
+    return (state.currentSessionFile ? state.sessions.find((session) => session.path === state.currentSessionFile) : void 0) ?? state.sessions.find((session) => session.current);
   }
   function handleChatEscape(event) {
     const hadSlashMenu = slashMenuOpen;
@@ -1358,11 +1354,33 @@
   function closeSessionCommandMenu() {
     sessionMenuElement.hidden = true;
     sessionMenuButton.setAttribute("aria-expanded", "false");
+    for (const item of sessionMenuItemElements) {
+      setSessionMenuItemHover(item, false);
+    }
+  }
+  function syncSessionCommandMenuItems() {
+    for (const item of sessionMenuItemElements) {
+      const command = item.getAttribute("data-session-command");
+      item.disabled = state.busy || sessionNameEditing || command === "delete" && !getCurrentSessionPath();
+    }
+  }
+  function setSessionMenuItemHover(item, hovered) {
+    item.classList.toggle("pi-toolbar__menu-item--hover", hovered);
   }
   function runSessionMenuCommand(command) {
     if (command === "rename") {
       closeSessionCommandMenu();
       startSessionNameEdit();
+      return;
+    }
+    if (command === "fork" || command === "clone") {
+      closeSessionCommandMenu();
+      runSessionSlashCommand(command);
+      return;
+    }
+    if (command === "delete") {
+      closeSessionCommandMenu();
+      deleteCurrentSession();
       return;
     }
     if (command !== "reload" && command !== "compact" && command !== "export") {
@@ -1374,6 +1392,17 @@
   }
   function getCurrentSessionName() {
     return (getCurrentSession()?.name ?? state.currentSessionName ?? "").trim();
+  }
+  function getCurrentSessionPath() {
+    return (getCurrentSession()?.path ?? state.currentSessionFile ?? "").trim();
+  }
+  function deleteCurrentSession() {
+    const sessionPath = getCurrentSessionPath();
+    if (!sessionPath) {
+      return;
+    }
+    vscode.postMessage({ type: "deleteSession", sessionPath });
+    focusPromptInput();
   }
   function toggleSessionView() {
     cancelSessionNameEdit();
@@ -1391,8 +1420,6 @@
     const label = getSubmitLabel(isStopMode);
     submitButton.disabled = state.busy ? hasInput && !hasSendableText : !hasSendableText;
     newSessionButton.disabled = false;
-    forkSessionButton.disabled = state.busy;
-    cloneSessionButton.disabled = state.busy;
     submitButton.classList.toggle("composer__submit--stop", isStopMode);
     submitButton.setAttribute("aria-label", label);
     submitButton.title = label;

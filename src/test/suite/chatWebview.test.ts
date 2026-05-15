@@ -199,7 +199,13 @@ suite('Chat webview helpers', () => {
     assert.ok(!html.includes('class="pi-toolbar__edit"'));
     assert.ok(html.includes('class="pi-toolbar__title-input"'));
     assert.ok(html.includes('data-session-command="rename"'));
+    assert.ok(html.includes('data-session-command="fork"'));
+    assert.ok(html.includes('data-session-command="clone"'));
+    assert.ok(html.includes('data-session-command="delete"'));
     assert.ok(html.includes('<span class="pi-toolbar__menu-label">Rename session</span>'));
+    assert.ok(html.includes('<span class="pi-toolbar__menu-label">Fork session</span>'));
+    assert.ok(html.includes('<span class="pi-toolbar__menu-label">Clone session</span>'));
+    assert.ok(html.includes('<span class="pi-toolbar__menu-label">Move session to trash</span>'));
     assert.ok(html.includes('class="pi-toolbar__menu-icon"'));
     assert.ok(!html.includes('pi-toolbar__session-menu'));
     assert.ok(html.includes('class="messages" aria-live="polite" aria-label="Pi conversation"'));
@@ -208,6 +214,8 @@ suite('Chat webview helpers', () => {
     assert.ok(!html.includes('Full RPC Agent communication'));
     assert.ok(!html.includes('setFullRpcAgentCommunication'));
     assert.ok(html.includes('class="composer__button composer__add"'));
+    assert.ok(!html.includes('class="composer__button composer__fork"'));
+    assert.ok(!html.includes('class="composer__button composer__clone"'));
     assert.ok(html.includes('class="composer__context-badges"'));
     assert.ok(html.includes('class="composer__context"'));
     assert.ok(html.includes('class="composer__context-tooltip"'));

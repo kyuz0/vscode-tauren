@@ -346,6 +346,23 @@ ${chatWebviewStyles}
               <path d="M8.85 4.8L10.55 6.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/>
             </svg>
           </button>
+          <button class="pi-toolbar__menu-item" type="button" role="menuitem" data-session-command="fork">
+            <span class="pi-toolbar__menu-label">Fork session</span>
+            <svg class="pi-toolbar__menu-icon" aria-hidden="true" width="14" height="14" viewBox="0 0 19 19" fill="none">
+              <path d="M5.5 4.25V8.5C5.5 10.16 6.84 11.5 8.5 11.5H10.5" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M5.5 4.25V14.75" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/>
+              <path d="M10.25 8.5L13.25 11.5L10.25 14.5" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="5.5" cy="4.25" r="1.55" fill="currentColor"/>
+              <circle cx="5.5" cy="14.75" r="1.55" fill="currentColor"/>
+            </svg>
+          </button>
+          <button class="pi-toolbar__menu-item" type="button" role="menuitem" data-session-command="clone">
+            <span class="pi-toolbar__menu-label">Clone session</span>
+            <svg class="pi-toolbar__menu-icon" aria-hidden="true" width="14" height="14" viewBox="0 0 19 19" fill="none">
+              <rect x="4.25" y="6.25" width="8.5" height="8.5" rx="1.5" stroke="currentColor" stroke-width="1.35"/>
+              <path d="M7.25 4.25H13.25C14.08 4.25 14.75 4.92 14.75 5.75V11.75" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
           <button class="pi-toolbar__menu-item" type="button" role="menuitem" data-session-command="compact">
             <span class="pi-toolbar__menu-label">Compact session</span>
             <svg class="pi-toolbar__menu-icon" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none">
@@ -362,6 +379,12 @@ ${chatWebviewStyles}
               <path d="M8 3.5V10" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/>
               <path d="M5.6 5.9L8 3.5L10.4 5.9" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/>
               <path d="M4 9.5V11.6C4 12.1 4.4 12.5 4.9 12.5H11.1C11.6 12.5 12 12.1 12 11.6V9.5" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button class="pi-toolbar__menu-item" type="button" role="menuitem" data-session-command="delete">
+            <span class="pi-toolbar__menu-label">Move session to trash</span>
+            <svg class="pi-toolbar__menu-icon" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16">
+              <path fill="currentColor" d="M6 2h4l1 1h3v1H2V3h3l1-1Zm-2 3h8l-.6 9.2A2 2 0 0 1 9.4 16H6.6a2 2 0 0 1-2-1.8L4 5Zm2 1v8h1V6H6Zm3 0v8h1V6H9Z"/>
             </svg>
           </button>
         </div>
@@ -390,23 +413,6 @@ ${chatWebviewStyles}
             <path d="M14.6 12.2L15.15 13.35L16.3 13.9L15.15 14.45L14.6 15.6L14.05 14.45L12.9 13.9L14.05 13.35L14.6 12.2Z" fill="currentColor"/>
           </svg>
           <span class="composer__button-tooltip">New session</span>
-        </button>
-        <button class="composer__button composer__fork" type="button" aria-label="Fork session">
-          <svg aria-hidden="true" width="19" height="19" viewBox="0 0 19 19" fill="none">
-            <path d="M5.5 4.25V8.5C5.5 10.16 6.84 11.5 8.5 11.5H10.5" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M5.5 4.25V14.75" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/>
-            <path d="M10.25 8.5L13.25 11.5L10.25 14.5" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/>
-            <circle cx="5.5" cy="4.25" r="1.55" fill="currentColor"/>
-            <circle cx="5.5" cy="14.75" r="1.55" fill="currentColor"/>
-          </svg>
-          <span class="composer__button-tooltip">Fork session</span>
-        </button>
-        <button class="composer__button composer__clone" type="button" aria-label="Clone session">
-          <svg aria-hidden="true" width="19" height="19" viewBox="0 0 19 19" fill="none">
-            <rect x="4.25" y="6.25" width="8.5" height="8.5" rx="1.5" stroke="currentColor" stroke-width="1.35"/>
-            <path d="M7.25 4.25H13.25C14.08 4.25 14.75 4.92 14.75 5.75V11.75" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span class="composer__button-tooltip">Clone session</span>
         </button>
       </div>
       <div class="composer__info">

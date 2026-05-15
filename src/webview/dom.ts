@@ -18,8 +18,6 @@ export type WebviewDom = {
   busySubmitHintElement: HTMLElement;
   streamingBehaviorButtonElements: HTMLButtonElement[];
   newSessionButton: HTMLButtonElement;
-  forkSessionButton: HTMLButtonElement;
-  cloneSessionButton: HTMLButtonElement;
   contextElement: HTMLElement;
   contextValueElement: HTMLElement;
   contextTooltipElement: HTMLElement;
@@ -51,8 +49,6 @@ export function getWebviewDom(): WebviewDom {
     busySubmitHintElement: queryRequired<HTMLElement>('.composer__busy-submit-hint'),
     streamingBehaviorButtonElements: queryAll<HTMLButtonElement>('.composer__mode-button'),
     newSessionButton: queryRequired<HTMLButtonElement>('.composer__add'),
-    forkSessionButton: queryRequired<HTMLButtonElement>('.composer__fork'),
-    cloneSessionButton: queryRequired<HTMLButtonElement>('.composer__clone'),
     contextElement: queryRequired<HTMLElement>('.composer__context'),
     contextValueElement: queryRequired<HTMLElement>('.composer__context-value'),
     contextTooltipElement: queryRequired<HTMLElement>('.composer__context-tooltip'),

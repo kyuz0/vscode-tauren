@@ -231,10 +231,17 @@ export const chatWebviewStyles = /* css */ `    :root {
     }
 
     .pi-toolbar__menu-item:hover:not(:disabled),
-    .pi-toolbar__menu-item:focus-visible {
-      color: var(--vscode-list-activeSelectionForeground, var(--vscode-foreground));
-      background: var(--vscode-list-hoverBackground, color-mix(in srgb, var(--vscode-foreground) 8%, transparent));
+    .pi-toolbar__menu-item:focus-visible,
+    .pi-toolbar__menu-item--hover:not(:disabled) {
+      color: var(--vscode-foreground);
+      background: rgba(127, 127, 127, 0.18);
       outline: none;
+    }
+
+    .pi-toolbar__menu-item:hover:not(:disabled) .pi-toolbar__menu-icon,
+    .pi-toolbar__menu-item:focus-visible .pi-toolbar__menu-icon,
+    .pi-toolbar__menu-item--hover:not(:disabled) .pi-toolbar__menu-icon {
+      opacity: 1;
     }
 
     .pi-toolbar__menu-item:disabled {
