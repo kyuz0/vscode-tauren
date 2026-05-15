@@ -58,6 +58,8 @@ Useful commands are also available from the Command Palette:
 
 You can also right-click in an editor and choose `Add Context`. If text is selected, Tau attaches the selection. If nothing is selected, it attaches the current file.
 
+Double-click the session title in Tau's toolbar to rename the current session inline.
+
 ## Keyboard navigation
 
 Tau-specific keys inside the sidebar:

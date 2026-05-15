@@ -695,6 +695,7 @@
   cloneSessionButton?.addEventListener("click", () => runSessionSlashCommand("clone"));
   messagesElement?.addEventListener("click", handleMessageClick);
   sessionToggleButton?.addEventListener("click", toggleSessionView);
+  toolbarTitleElement?.addEventListener("dblclick", startSessionNameEdit);
   sessionMenuButton?.addEventListener("click", toggleSessionCommandMenu);
   for (const item of sessionMenuItemElements) {
     item.addEventListener("click", () => runSessionMenuCommand(item.getAttribute("data-session-command")));
