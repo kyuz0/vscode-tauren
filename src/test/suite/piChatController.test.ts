@@ -524,6 +524,20 @@ suite('PiChatController', () => {
     harness.controller.dispose();
   });
 
+  test('new session action is blocked while busy', async () => {
+    const client = new FakePiClient();
+    const harness = createControllerHarness([client]);
+
+    await harness.controller.handleWebviewMessage({ type: 'submit', text: 'hello' });
+    await harness.controller.handleWebviewMessage({ type: 'newSession' });
+
+    assert.deepStrictEqual(client.prompts, ['hello']);
+    assert.strictEqual(lastState(harness).busy, true);
+    assert.strictEqual(lastState(harness).messages[1].activities?.[0]?.title, '/new not queued');
+    assert.strictEqual(lastState(harness).messages[1].activities?.[0]?.status, 'error');
+    harness.controller.dispose();
+  });
+
   test('/compact shows busy compaction activity and blocks prompt queueing', async () => {
     const compactDeferred = createDeferred<{}>();
     const client = new FakePiClient({ compactResult: compactDeferred.promise });
@@ -1120,15 +1134,10 @@ suite('PiChatController', () => {
     harness.controller.dispose();
   });
 
-  test('stale prompt failure is ignored after a new session', async () => {
+  test('prompt failure is surfaced when new session is blocked while busy', async () => {
     const deferred = createDeferred<void>();
     const client = new FakePiClient({ promptResult: deferred.promise });
-    const nextClient = new FakePiClient({
-      stateResult: createDeferred<PiSessionState>().promise,
-      statsResult: createDeferred<PiSessionStats>().promise,
-      modelsResult: createDeferred<PiModel[]>().promise
-    });
-    const harness = createControllerHarness([client, nextClient]);
+    const harness = createControllerHarness([client]);
 
     const submit = harness.controller.handleWebviewMessage({ type: 'submit', text: 'hello' });
     assert.strictEqual(lastState(harness).busy, true);
@@ -1137,7 +1146,23 @@ suite('PiChatController', () => {
     deferred.reject(new Error('late failure'));
     await submit;
 
-    assert.deepStrictEqual(lastState(harness).messages, []);
+    assert.deepStrictEqual(lastState(harness).messages, [
+      { role: 'user', text: 'hello' },
+      {
+        role: 'assistant',
+        text: 'late failure',
+        error: true,
+        activities: [
+          {
+            id: 'activity-0-1',
+            kind: 'queue',
+            title: '/new not queued',
+            status: 'error',
+            summary: 'Sidebar commands are not available while Pi is working.'
+          }
+        ]
+      }
+    ]);
     assert.strictEqual(lastState(harness).busy, false);
     harness.controller.dispose();
   });

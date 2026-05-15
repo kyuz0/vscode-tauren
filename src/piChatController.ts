@@ -363,6 +363,11 @@ export class PiChatController {
   }
 
   public startNewSession(): void {
+    if (this.session.isBusy) {
+      this.addBusySlashCommandNotice('new');
+      return;
+    }
+
     this.extensionUiRequestHandler.startNewGeneration();
     this.assistantStreamId = 0;
     this.resetAbortState();

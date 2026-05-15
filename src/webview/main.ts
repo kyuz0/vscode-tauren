@@ -909,6 +909,7 @@ function syncSubmit() {
   const hasSendableText = textarea.value.trim().length > 0;
   const label = getSubmitLabel(isStopMode);
   submitButton.disabled = state.busy ? (hasInput && !hasSendableText) : !hasSendableText;
+  newSessionButton.disabled = state.busy;
   forkSessionButton.disabled = state.busy;
   cloneSessionButton.disabled = state.busy;
   submitButton.classList.toggle('composer__submit--stop', isStopMode);
@@ -1577,6 +1578,10 @@ function syncComposer(options: { preserveBottom?: boolean } = {}): void {
 }
 
 function startNewSession() {
+  if (state.busy) {
+    return;
+  }
+
   cancelSessionNameEdit();
   vscode.postMessage({ type: 'newSession' });
   focusPromptInput();
