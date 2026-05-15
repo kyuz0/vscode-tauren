@@ -485,7 +485,13 @@ export const chatWebviewStyles = /* css */ `    :root {
     }
 
     .message--user .message__body {
+      display: inline-block;
+      max-width: 100%;
+      padding: 7px 9px;
       color: var(--vscode-input-foreground);
+      background: color-mix(in srgb, var(--vscode-input-background, var(--vscode-sideBar-background)) 88%, #000 12%);
+      border: 1px solid color-mix(in srgb, var(--vscode-foreground) 16%, transparent);
+      border-radius: 10px;
     }
 
     .message--thinking .message__body {
