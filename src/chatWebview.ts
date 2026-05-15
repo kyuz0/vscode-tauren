@@ -11,7 +11,7 @@ export type WebviewPromptContextAttachment = {
   title: string;
 };
 
-export type WebviewSessionItemCommand = 'rename' | 'fork' | 'clone' | 'compact' | 'reload' | 'export' | 'delete';
+export type WebviewSessionItemCommand = 'rename' | 'fork' | 'clone' | 'compact' | 'export' | 'delete';
 
 export type WebviewMessage =
   | { type: 'ready' }
@@ -474,7 +474,6 @@ function isWebviewSessionItemCommand(command: unknown): command is WebviewSessio
     || command === 'fork'
     || command === 'clone'
     || command === 'compact'
-    || command === 'reload'
     || command === 'export'
     || command === 'delete';
 }

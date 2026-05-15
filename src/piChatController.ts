@@ -908,11 +908,6 @@ export class PiChatController {
     }
 
     await this.runSessionAction(sessionPath, async (session, isCurrentSession) => {
-      if (command === 'reload') {
-        await this.handleReloadSlashCommand();
-        return;
-      }
-
       if (command === 'compact' && isCurrentSession) {
         await this.handleCompactSlashCommand('');
         return;

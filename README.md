@@ -77,6 +77,11 @@ Tau-specific keys inside the sidebar:
 | `ArrowRight`                    | Session list                 | Open the selected session's command menu.           |
 | `Enter`                         | Session list or session tree | Open the selected session or tree entry.            |
 | `Delete` / `Backspace`          | Session list                 | Delete the selected session if it is deletable.     |
+| `r`                             | Session list                 | Rename the selected session inline.                 |
+| `f`                             | Session list                 | Fork the selected session.                          |
+| `c`                             | Session list                 | Clone the selected session.                         |
+| `z`                             | Session list                 | Compact the selected session.                       |
+| `e`                             | Session list                 | Export the selected session as HTML.                |
 | `ArrowUp` / `ArrowDown`         | Session command menu         | Move the selected menu entry.                       |
 | `Enter`                         | Session command menu         | Run the selected menu entry without switching rows. |
 | `Esc`                           | Session command menu         | Close the menu.                                     |
