@@ -116,6 +116,10 @@ suite('Chat webview helpers', () => {
     assert.deepStrictEqual(parseWebviewMessage({ type: 'removePromptContext', id: 'context-1' }), { type: 'removePromptContext', id: 'context-1' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'abort' }), { type: 'abort' });
     assert.deepStrictEqual(
+      parseWebviewMessage({ type: 'copyText', text: 'assistant output' }),
+      { type: 'copyText', text: 'assistant output' }
+    );
+    assert.deepStrictEqual(
       parseWebviewMessage({ type: 'submit', text: 'hello' }),
       { type: 'submit', text: 'hello' }
     );
@@ -144,6 +148,8 @@ suite('Chat webview helpers', () => {
     assert.deepStrictEqual(parseWebviewMessage({ type: 'selectSession', sessionPath: '' }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'setSessionName', name: 42 }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'removePromptContext', id: '' }), { type: 'unknown' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'copyText', text: '' }), { type: 'unknown' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'copyText', text: 42 }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'submit', text: 'hello', streamingBehavior: 'later' }), { type: 'unknown' });
     assert.deepStrictEqual(
       parseWebviewMessage({ type: 'setModel', provider: 'openai' }),

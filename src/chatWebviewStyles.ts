@@ -484,6 +484,32 @@ export const chatWebviewStyles = /* css */ `    :root {
       margin-top: 8px;
     }
 
+    .message__actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 6px;
+    }
+
+    .message__copy {
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      color: var(--vscode-descriptionForeground);
+      background: transparent;
+      border: 0;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .message__copy:hover,
+    .message__copy:focus-visible {
+      color: var(--vscode-foreground);
+      background: color-mix(in srgb, var(--vscode-foreground) 8%, transparent);
+      outline: none;
+    }
+
     .message--user .message__body {
       display: inline-block;
       max-width: 100%;

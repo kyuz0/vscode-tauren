@@ -24,6 +24,7 @@ export type WebviewMessage =
   | { type: 'refreshSlashCommands' }
   | { type: 'removePromptContext'; id: string }
   | { type: 'abort' }
+  | { type: 'copyText'; text: string }
   | { type: 'openFile'; path: string; line?: number; column?: number }
   | { type: 'submit'; text: string; streamingBehavior?: WebviewStreamingBehavior }
   | { type: 'setModel'; provider: string; modelId: string }
@@ -68,6 +69,10 @@ export function parseWebviewMessage(value: unknown): WebviewMessage {
         : { type: 'unknown' };
     case 'abort':
       return { type: 'abort' };
+    case 'copyText':
+      return typeof value.text === 'string' && value.text
+        ? { type: 'copyText', text: value.text }
+        : { type: 'unknown' };
     case 'openFile': {
       if (typeof value.path !== 'string' || !value.path) {
         return { type: 'unknown' };

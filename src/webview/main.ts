@@ -370,9 +370,9 @@ function render() {
 
   let previousMessageRole;
 
-  for (const message of state.messages) {
+  for (const [index, message] of state.messages.entries()) {
     const showRole = message.role !== previousMessageRole;
-    messagesElement.append(createMessageElement(message, showRole));
+    messagesElement.append(createMessageElement(message, showRole, index));
     previousMessageRole = message.role;
   }
 
@@ -1457,7 +1457,22 @@ function focusPromptInput() {
 }
 
 function handleMessageClick(event: MouseEvent): void {
-  const link = eventTargetElement(event)?.closest('.tau-file-link');
+  const target = eventTargetElement(event);
+  const copyButton = target?.closest('.message__copy');
+
+  if (copyButton instanceof HTMLElement) {
+    const index = Number(copyButton.dataset.copyMessageIndex);
+    const text = Number.isInteger(index) ? state.messages[index]?.text : '';
+
+    if (text) {
+      event.preventDefault();
+      vscode.postMessage({ type: 'copyText', text });
+    }
+
+    return;
+  }
+
+  const link = target?.closest('.tau-file-link');
 
   if (!(link instanceof HTMLElement)) {
     return;

@@ -292,6 +292,11 @@ export class PiChatController {
       return;
     }
 
+    if (message.type === 'copyText') {
+      await this.copyTextFromWebview(message.text);
+      return;
+    }
+
     if (message.type !== 'submit') {
       return;
     }
@@ -1502,13 +1507,26 @@ export class PiChatController {
       return;
     }
 
+    await this.copyTextToClipboard(text, 'Copied last Pi response.');
+  }
+
+  private async copyTextFromWebview(text: string): Promise<void> {
+    await this.copyTextToClipboard(text, 'Copied Pi response.');
+  }
+
+  private async copyTextToClipboard(text: string, successMessage: string): Promise<void> {
+    if (!text) {
+      this.options.showNotification('No assistant message to copy.', 'warning');
+      return;
+    }
+
     if (!this.options.writeClipboard) {
       this.options.showNotification('Copy is not available in this environment.', 'warning');
       return;
     }
 
     await this.options.writeClipboard(text);
-    this.options.showNotification('Copied last Pi response.', 'info');
+    this.options.showNotification(successMessage, 'info');
   }
 
   private async handleCompactSlashCommand(customInstructions: string): Promise<void> {
