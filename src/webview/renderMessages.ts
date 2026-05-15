@@ -1,9 +1,16 @@
-import { renderMarkdownInto } from './markdown';
+import { renderMarkdownInto, type RenderMarkdownOptions } from './markdown';
 import type { Activity, ChatMessage } from './types';
 
 const activityExpansion = new Map<string, boolean>();
 
-export function createMessageElement(message: ChatMessage, showRole: boolean, messageIndex?: number): HTMLElement {
+export type MessageRenderOptions = RenderMarkdownOptions;
+
+export function createMessageElement(
+  message: ChatMessage,
+  showRole: boolean,
+  messageIndex?: number,
+  options: MessageRenderOptions = {}
+): HTMLElement {
   const article = document.createElement('article');
   article.className = `message message--${message.role}${message.error ? ' message--error' : ''}${message.variant === 'thinking' ? ' message--thinking' : ''}`;
 
@@ -11,7 +18,7 @@ export function createMessageElement(message: ChatMessage, showRole: boolean, me
   body.className = 'message__body';
 
   if (message.role === 'assistant' && !message.error) {
-    renderMarkdownInto(body, message.text || '');
+    renderMarkdownInto(body, message.text || '', options);
   } else {
     body.textContent = message.text || '';
   }
@@ -48,6 +55,42 @@ export function createMessageElement(message: ChatMessage, showRole: boolean, me
   }
 
   return article;
+}
+
+export function updateMessageBodyElement(
+  article: HTMLElement,
+  message: ChatMessage,
+  options: MessageRenderOptions = {}
+): boolean {
+  const body = getDirectMessageBodyElement(article);
+
+  if (!body) {
+    return false;
+  }
+
+  body.className = 'message__body';
+
+  if (message.role === 'assistant' && Array.isArray(message.activities) && message.activities.length > 0) {
+    body.classList.add('message__body--after-activities');
+  }
+
+  if (message.role === 'assistant' && !message.error) {
+    renderMarkdownInto(body, message.text || '', options);
+  } else {
+    body.textContent = message.text || '';
+  }
+
+  return true;
+}
+
+function getDirectMessageBodyElement(article: HTMLElement): HTMLElement | undefined {
+  for (const child of Array.from(article.children)) {
+    if (child instanceof HTMLElement && child.classList.contains('message__body')) {
+      return child;
+    }
+  }
+
+  return undefined;
 }
 
 function canCopyAssistantMessage(message: ChatMessage): boolean {

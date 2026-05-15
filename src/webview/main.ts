@@ -1,5 +1,5 @@
 import { getWebviewDom } from './dom';
-import { createMessageElement } from './renderMessages';
+import { createMessageElement, updateMessageBodyElement } from './renderMessages';
 import { buildSessionTreePrefix, formatSessionMeta, getSessionDisplayName, shortenPath } from './sessionFormat';
 import {
   localSlashCommands,
@@ -9,6 +9,7 @@ import {
 } from './constants';
 import type {
   Activity,
+  ChatMessage,
   PromptContextAttachment,
   SessionItem,
   SlashCommand,
@@ -74,6 +75,16 @@ let sessionListSelectedIndex = 0;
 let treeListSelectedIndex = 0;
 let sessionNameEditing = false;
 let sessionNameEditInitialValue = '';
+
+type RenderedMessageView = {
+  element: HTMLElement;
+  message: ChatMessage;
+  showRole: boolean;
+  activitiesSignature: string;
+  copyable: boolean;
+};
+
+let renderedMessageViews: RenderedMessageView[] = [];
 window.addEventListener('message', (event) => {
   if (event.data?.type === 'focusInput') {
     focusPromptInput();
@@ -372,22 +383,7 @@ function render() {
     return;
   }
 
-  messagesContentElement.replaceChildren();
-
-  if (state.messages.length === 0) {
-    const empty = document.createElement('p');
-    empty.className = 'empty-state';
-    empty.textContent = 'Ask Pi about this workspace.';
-    messagesContentElement.append(empty);
-  }
-
-  let previousMessageRole;
-
-  for (const [index, message] of state.messages.entries()) {
-    const showRole = message.role !== previousMessageRole;
-    messagesContentElement.append(createMessageElement(message, showRole, index));
-    previousMessageRole = message.role;
-  }
+  renderMessageList();
 
   syncBusyStatus();
   syncModelLabel();
@@ -397,6 +393,149 @@ function render() {
   if (shouldStickToBottom) {
     scrollMessagesToBottom();
   }
+}
+
+function renderMessageList(): void {
+  if (state.messages.length === 0) {
+    renderedMessageViews = [];
+    const empty = document.createElement('p');
+    empty.className = 'empty-state';
+    empty.textContent = 'Ask Pi about this workspace.';
+    messagesContentElement.replaceChildren(empty);
+    return;
+  }
+
+  if (messagesContentElement.querySelector('.empty-state')) {
+    messagesContentElement.replaceChildren();
+  }
+
+  let previousMessageRole: string | undefined;
+
+  for (const [index, message] of state.messages.entries()) {
+    const showRole = message.role !== previousMessageRole;
+    const view = renderMessageAtIndex(index, message, showRole);
+    const currentNode = messagesContentElement.children[index];
+
+    if (currentNode !== view.element) {
+      messagesContentElement.insertBefore(view.element, currentNode ?? null);
+    }
+
+    previousMessageRole = message.role;
+  }
+
+  for (let index = renderedMessageViews.length - 1; index >= state.messages.length; index -= 1) {
+    renderedMessageViews[index]?.element.remove();
+  }
+
+  renderedMessageViews.length = state.messages.length;
+}
+
+function renderMessageAtIndex(index: number, message: ChatMessage, showRole: boolean): RenderedMessageView {
+  const existingView = renderedMessageViews[index];
+  const activitiesSignature = getActivitiesSignature(message);
+  const copyable = canCopyAssistantMessage(message);
+  const animateFromText = getStreamingAnimationStartText(existingView, message, index);
+
+  if (existingView && canReuseMessageElement(existingView, message, showRole, activitiesSignature, copyable)) {
+    if ((existingView.message.text || '') !== (message.text || '')) {
+      updateMessageBodyElement(
+        existingView.element,
+        message,
+        animateFromText === undefined ? undefined : { animateFromText }
+      );
+    }
+
+    existingView.message = message;
+    existingView.showRole = showRole;
+    existingView.activitiesSignature = activitiesSignature;
+    existingView.copyable = copyable;
+    return existingView;
+  }
+
+  const nextView: RenderedMessageView = {
+    element: createMessageElement(
+      message,
+      showRole,
+      index,
+      animateFromText === undefined ? undefined : { animateFromText }
+    ),
+    message,
+    showRole,
+    activitiesSignature,
+    copyable
+  };
+
+  existingView?.element.replaceWith(nextView.element);
+  renderedMessageViews[index] = nextView;
+  return nextView;
+}
+
+function canReuseMessageElement(
+  view: RenderedMessageView,
+  message: ChatMessage,
+  showRole: boolean,
+  activitiesSignature: string,
+  copyable: boolean
+): boolean {
+  return view.message.role === message.role
+    && Boolean(view.message.error) === Boolean(message.error)
+    && (view.message.variant || '') === (message.variant || '')
+    && view.showRole === showRole
+    && view.activitiesSignature === activitiesSignature
+    && view.copyable === copyable;
+}
+
+function getStreamingAnimationStartText(
+  existingView: RenderedMessageView | undefined,
+  message: ChatMessage,
+  index: number
+): string | undefined {
+  if (!existingView || !shouldAnimateStreamingAppend(existingView.message, message, index)) {
+    return undefined;
+  }
+
+  return getMessageBodyVisibleText(existingView.element);
+}
+
+function shouldAnimateStreamingAppend(previous: ChatMessage, next: ChatMessage, index: number): boolean {
+  const previousText = previous.text || '';
+  const nextText = next.text || '';
+
+  return state.busy
+    && index === state.messages.length - 1
+    && previous.role === 'assistant'
+    && next.role === 'assistant'
+    && !previous.error
+    && !next.error
+    && previous.variant !== 'thinking'
+    && next.variant !== 'thinking'
+    && nextText.length > previousText.length
+    && nextText.startsWith(previousText);
+}
+
+function getMessageBodyVisibleText(article: HTMLElement): string {
+  for (const child of Array.from(article.children)) {
+    if (child instanceof HTMLElement && child.classList.contains('message__body')) {
+      return child.textContent ?? '';
+    }
+  }
+
+  return '';
+}
+
+function canCopyAssistantMessage(message: ChatMessage): boolean {
+  return message.role === 'assistant'
+    && !message.error
+    && message.variant !== 'thinking'
+    && Boolean(message.text);
+}
+
+function getActivitiesSignature(message: ChatMessage): string {
+  if (!Array.isArray(message.activities) || message.activities.length === 0) {
+    return '';
+  }
+
+  return JSON.stringify(message.activities);
 }
 
 function renderSessions() {

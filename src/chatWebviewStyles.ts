@@ -484,6 +484,40 @@ export const chatWebviewStyles = /* css */ `    :root {
       text-underline-offset: 2px;
     }
 
+    .tau-stream-word {
+      display: inline-block;
+      animation: tau-stream-word-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+      will-change: opacity, filter, transform;
+    }
+
+    @keyframes tau-stream-word-in {
+      from {
+        opacity: 0;
+        filter: blur(2.5px);
+        transform: translateY(2px);
+      }
+
+      to {
+        opacity: 1;
+        filter: blur(0);
+        transform: translateY(0);
+      }
+    }
+
+    body.vscode-reduce-motion .tau-stream-word {
+      display: inline;
+      animation: none;
+      will-change: auto;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .tau-stream-word {
+        display: inline;
+        animation: none;
+        will-change: auto;
+      }
+    }
+
     .message__body--after-activities {
       margin-top: 8px;
     }

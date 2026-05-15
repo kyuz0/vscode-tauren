@@ -49,9 +49,10 @@
     breaks: false,
     highlight: highlightCode
   }) : void 0;
-  function renderMarkdownInto(element, text) {
+  function renderMarkdownInto(element, text, options = {}) {
     if (!markdownRenderer || !window.DOMPurify) {
       element.textContent = text;
+      animateNewVisibleText(element, options.animateFromText);
       return;
     }
     element.classList.add("message__body--markdown");
@@ -60,6 +61,7 @@
       USE_PROFILES: { html: true }
     });
     linkifyFileReferences(element);
+    animateNewVisibleText(element, options.animateFromText);
   }
   function linkifyFileReferences(root) {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
@@ -151,6 +153,90 @@
     }
     return link;
   }
+  function animateNewVisibleText(root, previousVisibleText) {
+    if (previousVisibleText === void 0) {
+      return;
+    }
+    const nextVisibleText = root.textContent ?? "";
+    const startOffset = getCommonPrefixLength(previousVisibleText, nextVisibleText);
+    if (startOffset >= nextVisibleText.length || previousVisibleText.length > 0 && startOffset === 0) {
+      return;
+    }
+    wrapVisibleTextRange(root, startOffset, nextVisibleText.length);
+  }
+  function getCommonPrefixLength(left, right) {
+    const limit = Math.min(left.length, right.length);
+    let index = 0;
+    while (index < limit && left.charCodeAt(index) === right.charCodeAt(index)) {
+      index += 1;
+    }
+    return index;
+  }
+  function wrapVisibleTextRange(root, rangeStart, rangeEnd) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const ranges = [];
+    let visibleOffset = 0;
+    let current = walker.nextNode();
+    while (current) {
+      const node = current;
+      const textLength = node.textContent?.length ?? 0;
+      const nodeStart = visibleOffset;
+      const nodeEnd = nodeStart + textLength;
+      if (nodeEnd > rangeStart && nodeStart < rangeEnd && !shouldSkipStreamingTextNode(node)) {
+        ranges.push({
+          node,
+          start: Math.max(0, rangeStart - nodeStart),
+          end: Math.min(textLength, rangeEnd - nodeStart)
+        });
+      }
+      visibleOffset = nodeEnd;
+      current = walker.nextNode();
+    }
+    let wordIndex = 0;
+    for (const range of ranges) {
+      wordIndex = wrapTextNodeRange(range.node, range.start, range.end, wordIndex);
+    }
+  }
+  function shouldSkipStreamingTextNode(node) {
+    const parent = node.parentElement;
+    return !parent || Boolean(parent.closest("a, code, pre, kbd, samp, svg, math, annotation"));
+  }
+  function wrapTextNodeRange(node, start, end, initialWordIndex) {
+    const text = node.textContent ?? "";
+    if (start >= end) {
+      return initialWordIndex;
+    }
+    const fragment = document.createDocumentFragment();
+    let wordIndex = initialWordIndex;
+    if (start > 0) {
+      fragment.append(document.createTextNode(text.slice(0, start)));
+    }
+    wordIndex = appendAnimatedText(fragment, text.slice(start, end), wordIndex);
+    if (end < text.length) {
+      fragment.append(document.createTextNode(text.slice(end)));
+    }
+    node.replaceWith(fragment);
+    return wordIndex;
+  }
+  function appendAnimatedText(fragment, text, initialWordIndex) {
+    const tokens = text.match(/\s+|\S+/g) ?? [];
+    let wordIndex = initialWordIndex;
+    for (const token of tokens) {
+      if (/^\s+$/.test(token)) {
+        fragment.append(document.createTextNode(token));
+        continue;
+      }
+      const span = document.createElement("span");
+      span.className = "tau-stream-word";
+      span.textContent = token;
+      if (wordIndex > 0) {
+        span.style.animationDelay = Math.min(wordIndex * 16, 120) + "ms";
+      }
+      fragment.append(span);
+      wordIndex += 1;
+    }
+    return wordIndex;
+  }
   function highlightCode(code, language) {
     if (!window.hljs || typeof language !== "string" || language.length === 0) {
       return escapeHtml(code);
@@ -189,13 +275,13 @@
 
   // src/webview/renderMessages.ts
   var activityExpansion = /* @__PURE__ */ new Map();
-  function createMessageElement(message, showRole, messageIndex) {
+  function createMessageElement(message, showRole, messageIndex, options = {}) {
     const article = document.createElement("article");
     article.className = `message message--${message.role}${message.error ? " message--error" : ""}${message.variant === "thinking" ? " message--thinking" : ""}`;
     const body = document.createElement("div");
     body.className = "message__body";
     if (message.role === "assistant" && !message.error) {
-      renderMarkdownInto(body, message.text || "");
+      renderMarkdownInto(body, message.text || "", options);
     } else {
       body.textContent = message.text || "";
     }
@@ -224,6 +310,30 @@
       article.append(createCopyButtonElement(messageIndex));
     }
     return article;
+  }
+  function updateMessageBodyElement(article, message, options = {}) {
+    const body = getDirectMessageBodyElement(article);
+    if (!body) {
+      return false;
+    }
+    body.className = "message__body";
+    if (message.role === "assistant" && Array.isArray(message.activities) && message.activities.length > 0) {
+      body.classList.add("message__body--after-activities");
+    }
+    if (message.role === "assistant" && !message.error) {
+      renderMarkdownInto(body, message.text || "", options);
+    } else {
+      body.textContent = message.text || "";
+    }
+    return true;
+  }
+  function getDirectMessageBodyElement(article) {
+    for (const child of Array.from(article.children)) {
+      if (child instanceof HTMLElement && child.classList.contains("message__body")) {
+        return child;
+      }
+    }
+    return void 0;
   }
   function canCopyAssistantMessage(message) {
     return message.role === "assistant" && !message.error && message.variant !== "thinking" && Boolean(message.text);
@@ -478,6 +588,7 @@
   var treeListSelectedIndex = 0;
   var sessionNameEditing = false;
   var sessionNameEditInitialValue = "";
+  var renderedMessageViews = [];
   window.addEventListener("message", (event) => {
     if (event.data?.type === "focusInput") {
       focusPromptInput();
@@ -724,19 +835,7 @@
       requestAnimationFrame(() => sessionsElement?.focus({ preventScroll: true }));
       return;
     }
-    messagesContentElement.replaceChildren();
-    if (state.messages.length === 0) {
-      const empty = document.createElement("p");
-      empty.className = "empty-state";
-      empty.textContent = "Ask Pi about this workspace.";
-      messagesContentElement.append(empty);
-    }
-    let previousMessageRole;
-    for (const [index, message] of state.messages.entries()) {
-      const showRole = message.role !== previousMessageRole;
-      messagesContentElement.append(createMessageElement(message, showRole, index));
-      previousMessageRole = message.role;
-    }
+    renderMessageList();
     syncBusyStatus();
     syncModelLabel();
     syncPromptContextBadges();
@@ -745,6 +844,99 @@
     if (shouldStickToBottom) {
       scrollMessagesToBottom();
     }
+  }
+  function renderMessageList() {
+    if (state.messages.length === 0) {
+      renderedMessageViews = [];
+      const empty = document.createElement("p");
+      empty.className = "empty-state";
+      empty.textContent = "Ask Pi about this workspace.";
+      messagesContentElement.replaceChildren(empty);
+      return;
+    }
+    if (messagesContentElement.querySelector(".empty-state")) {
+      messagesContentElement.replaceChildren();
+    }
+    let previousMessageRole;
+    for (const [index, message] of state.messages.entries()) {
+      const showRole = message.role !== previousMessageRole;
+      const view = renderMessageAtIndex(index, message, showRole);
+      const currentNode = messagesContentElement.children[index];
+      if (currentNode !== view.element) {
+        messagesContentElement.insertBefore(view.element, currentNode ?? null);
+      }
+      previousMessageRole = message.role;
+    }
+    for (let index = renderedMessageViews.length - 1; index >= state.messages.length; index -= 1) {
+      renderedMessageViews[index]?.element.remove();
+    }
+    renderedMessageViews.length = state.messages.length;
+  }
+  function renderMessageAtIndex(index, message, showRole) {
+    const existingView = renderedMessageViews[index];
+    const activitiesSignature = getActivitiesSignature(message);
+    const copyable = canCopyAssistantMessage2(message);
+    const animateFromText = getStreamingAnimationStartText(existingView, message, index);
+    if (existingView && canReuseMessageElement(existingView, message, showRole, activitiesSignature, copyable)) {
+      if ((existingView.message.text || "") !== (message.text || "")) {
+        updateMessageBodyElement(
+          existingView.element,
+          message,
+          animateFromText === void 0 ? void 0 : { animateFromText }
+        );
+      }
+      existingView.message = message;
+      existingView.showRole = showRole;
+      existingView.activitiesSignature = activitiesSignature;
+      existingView.copyable = copyable;
+      return existingView;
+    }
+    const nextView = {
+      element: createMessageElement(
+        message,
+        showRole,
+        index,
+        animateFromText === void 0 ? void 0 : { animateFromText }
+      ),
+      message,
+      showRole,
+      activitiesSignature,
+      copyable
+    };
+    existingView?.element.replaceWith(nextView.element);
+    renderedMessageViews[index] = nextView;
+    return nextView;
+  }
+  function canReuseMessageElement(view, message, showRole, activitiesSignature, copyable) {
+    return view.message.role === message.role && Boolean(view.message.error) === Boolean(message.error) && (view.message.variant || "") === (message.variant || "") && view.showRole === showRole && view.activitiesSignature === activitiesSignature && view.copyable === copyable;
+  }
+  function getStreamingAnimationStartText(existingView, message, index) {
+    if (!existingView || !shouldAnimateStreamingAppend(existingView.message, message, index)) {
+      return void 0;
+    }
+    return getMessageBodyVisibleText(existingView.element);
+  }
+  function shouldAnimateStreamingAppend(previous, next, index) {
+    const previousText = previous.text || "";
+    const nextText = next.text || "";
+    return state.busy && index === state.messages.length - 1 && previous.role === "assistant" && next.role === "assistant" && !previous.error && !next.error && previous.variant !== "thinking" && next.variant !== "thinking" && nextText.length > previousText.length && nextText.startsWith(previousText);
+  }
+  function getMessageBodyVisibleText(article) {
+    for (const child of Array.from(article.children)) {
+      if (child instanceof HTMLElement && child.classList.contains("message__body")) {
+        return child.textContent ?? "";
+      }
+    }
+    return "";
+  }
+  function canCopyAssistantMessage2(message) {
+    return message.role === "assistant" && !message.error && message.variant !== "thinking" && Boolean(message.text);
+  }
+  function getActivitiesSignature(message) {
+    if (!Array.isArray(message.activities) || message.activities.length === 0) {
+      return "";
+    }
+    return JSON.stringify(message.activities);
   }
   function renderSessions() {
     sessionsElement.replaceChildren();
