@@ -11,6 +11,8 @@ export type WebviewPromptContextAttachment = {
   title: string;
 };
 
+export type WebviewSessionItemCommand = 'rename' | 'fork' | 'clone' | 'compact' | 'reload' | 'export' | 'delete';
+
 export type WebviewMessage =
   | { type: 'ready' }
   | { type: 'newSession' }
@@ -19,6 +21,8 @@ export type WebviewMessage =
   | { type: 'refreshSessions' }
   | { type: 'selectSession'; sessionPath: string }
   | { type: 'deleteSession'; sessionPath: string }
+  | { type: 'sessionItemCommand'; sessionPath: string; command: WebviewSessionItemCommand }
+  | { type: 'setSessionItemName'; sessionPath: string; name: string }
   | { type: 'selectTreeEntry'; entryId: string }
   | { type: 'setSessionName'; name: string }
   | { type: 'refreshMetadata' }
@@ -55,6 +59,14 @@ export function parseWebviewMessage(value: unknown): WebviewMessage {
     case 'deleteSession':
       return typeof value.sessionPath === 'string' && value.sessionPath
         ? { type: 'deleteSession', sessionPath: value.sessionPath }
+        : { type: 'unknown' };
+    case 'sessionItemCommand':
+      return typeof value.sessionPath === 'string' && value.sessionPath && isWebviewSessionItemCommand(value.command)
+        ? { type: 'sessionItemCommand', sessionPath: value.sessionPath, command: value.command }
+        : { type: 'unknown' };
+    case 'setSessionItemName':
+      return typeof value.sessionPath === 'string' && value.sessionPath && typeof value.name === 'string'
+        ? { type: 'setSessionItemName', sessionPath: value.sessionPath, name: value.name }
         : { type: 'unknown' };
     case 'selectTreeEntry':
       return typeof value.entryId === 'string' && value.entryId
@@ -374,7 +386,7 @@ ${chatWebviewStyles}
             </svg>
           </button>
           <button class="pi-toolbar__menu-item" type="button" role="menuitem" data-session-command="export">
-            <span class="pi-toolbar__menu-label">Export HTML</span>
+            <span class="pi-toolbar__menu-label">Export as HTML</span>
             <svg class="pi-toolbar__menu-icon" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none">
               <path d="M8 3.5V10" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/>
               <path d="M5.6 5.9L8 3.5L10.4 5.9" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/>
@@ -455,6 +467,16 @@ ${chatWebviewStyles}
 
 function parseStreamingBehavior(value: unknown): WebviewStreamingBehavior | undefined {
   return value === 'steer' || value === 'followUp' ? value : undefined;
+}
+
+function isWebviewSessionItemCommand(command: unknown): command is WebviewSessionItemCommand {
+  return command === 'rename'
+    || command === 'fork'
+    || command === 'clone'
+    || command === 'compact'
+    || command === 'reload'
+    || command === 'export'
+    || command === 'delete';
 }
 
 function parsePositiveInteger(value: unknown): number | undefined {

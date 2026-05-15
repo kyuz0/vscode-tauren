@@ -108,6 +108,14 @@ suite('Chat webview helpers', () => {
       { type: 'deleteSession', sessionPath: '/sessions/old.jsonl' }
     );
     assert.deepStrictEqual(
+      parseWebviewMessage({ type: 'sessionItemCommand', sessionPath: '/sessions/old.jsonl', command: 'compact' }),
+      { type: 'sessionItemCommand', sessionPath: '/sessions/old.jsonl', command: 'compact' }
+    );
+    assert.deepStrictEqual(
+      parseWebviewMessage({ type: 'setSessionItemName', sessionPath: '/sessions/old.jsonl', name: 'Old work' }),
+      { type: 'setSessionItemName', sessionPath: '/sessions/old.jsonl', name: 'Old work' }
+    );
+    assert.deepStrictEqual(
       parseWebviewMessage({ type: 'selectTreeEntry', entryId: 'entry-1' }),
       { type: 'selectTreeEntry', entryId: 'entry-1' }
     );
@@ -151,6 +159,10 @@ suite('Chat webview helpers', () => {
     assert.deepStrictEqual(parseWebviewMessage({ type: 'submit', text: 42 }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'selectSession', sessionPath: '' }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'deleteSession', sessionPath: '' }), { type: 'unknown' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'sessionItemCommand', sessionPath: '', command: 'compact' }), { type: 'unknown' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'sessionItemCommand', sessionPath: '/sessions/old.jsonl', command: 'bogus' }), { type: 'unknown' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'setSessionItemName', sessionPath: '', name: 'Old work' }), { type: 'unknown' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'setSessionItemName', sessionPath: '/sessions/old.jsonl', name: 42 }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'setSessionName', name: 42 }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'removePromptContext', id: '' }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'copyText', text: '' }), { type: 'unknown' });

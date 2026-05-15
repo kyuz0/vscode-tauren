@@ -4,6 +4,7 @@ import {
   createWebviewStateMessage,
   type WebviewMessage,
   type WebviewModelOption,
+  type WebviewSessionItemCommand,
   type WebviewPromptContextAttachment,
   type WebviewSessionItem,
   type WebviewSlashCommand,
@@ -255,6 +256,16 @@ export class PiChatController {
       return;
     }
 
+    if (message.type === 'sessionItemCommand') {
+      await this.runSessionItemCommand(message.sessionPath, message.command);
+      return;
+    }
+
+    if (message.type === 'setSessionItemName') {
+      await this.setSessionItemName(message.sessionPath, message.name);
+      return;
+    }
+
     if (message.type === 'selectTreeEntry') {
       await this.navigateTree(message.entryId);
       return;
@@ -370,7 +381,7 @@ export class PiChatController {
     await this.handleLocalSlashCommand({ name, args });
   }
 
-  public startNewSession(): void {
+  public startNewSession(options: { viewMode?: 'chat' | 'sessions' } = {}): void {
     if (this.session.isBusy) {
       this.addBusySlashCommandNotice('new');
       return;
@@ -380,7 +391,7 @@ export class PiChatController {
     this.assistantStreamId = 0;
     this.resetAbortState();
     this.session.startNewSession();
-    this.sessionViewMode = 'chat';
+    this.sessionViewMode = options.viewMode ?? 'chat';
     this.sessionsError = '';
     this.treeRefreshSequence += 1;
     this.treeItems = [];
@@ -859,7 +870,7 @@ export class PiChatController {
 
       if (isCurrentSession) {
         this.sessionsRefreshing = false;
-        this.startNewSession();
+        this.startNewSession({ viewMode: 'sessions' });
         return;
       }
 
@@ -872,6 +883,192 @@ export class PiChatController {
       if (this.sessionViewMode === 'sessions') {
         this.postState();
       }
+    }
+  }
+
+  private async setSessionItemName(sessionPath: string, name: string): Promise<void> {
+    await this.runSessionAction(sessionPath, async (session, isCurrentSession) => {
+      const trimmedName = name.trim();
+
+      if (isCurrentSession) {
+        await this.setCurrentSessionName(trimmedName, { announce: false });
+        return;
+      }
+
+      await this.withSessionClient(session.path, async (client) => {
+        await client.setSessionName(trimmedName);
+      });
+      this.options.showToast?.(trimmedName ? 'Session renamed.' : 'Session name cleared.');
+    });
+  }
+
+  private async runSessionItemCommand(sessionPath: string, command: WebviewSessionItemCommand): Promise<void> {
+    if (command === 'rename' || command === 'delete') {
+      return;
+    }
+
+    await this.runSessionAction(sessionPath, async (session, isCurrentSession) => {
+      if (command === 'reload') {
+        await this.handleReloadSlashCommand();
+        return;
+      }
+
+      if (command === 'compact' && isCurrentSession) {
+        await this.handleCompactSlashCommand('');
+        return;
+      }
+
+      await this.withSessionClient(session.path, async (client) => {
+        switch (command) {
+          case 'fork':
+            await this.forkSessionWithClient(client);
+            return;
+          case 'clone':
+            await this.cloneSessionWithClient(client);
+            return;
+          case 'compact':
+            await this.compactSessionWithClient(client);
+            return;
+          case 'export':
+            await this.exportSessionWithClient(client);
+            return;
+          default:
+            return;
+        }
+      });
+    });
+  }
+
+  private async runSessionAction(
+    sessionPath: string,
+    action: (session: WebviewSessionItem, isCurrentSession: boolean) => Promise<void>
+  ): Promise<void> {
+    const trimmedPath = sessionPath.trim();
+
+    if (!trimmedPath) {
+      return;
+    }
+
+    const normalizedPath = normalizeSessionPath(trimmedPath);
+    const session = this.sessions.find((entry) => normalizeSessionPath(entry.path) === normalizedPath)
+      ?? createFallbackSessionItem(trimmedPath);
+    const isCurrentSession = Boolean(session.current) || normalizeSessionPath(this.currentSessionFile) === normalizedPath;
+
+    if (session.liveStatus === 'running' || (isCurrentSession && this.session.isBusy)) {
+      this.options.showNotification('Wait for the session to finish before running this command.', 'warning');
+      return;
+    }
+
+    this.sessionsError = '';
+    this.sessionsRefreshing = true;
+    this.postState();
+
+    try {
+      await action(session, isCurrentSession);
+      await this.refreshSessions();
+    } catch (error) {
+      this.sessionsError = getErrorMessage(error);
+      this.postState();
+    } finally {
+      this.sessionsRefreshing = false;
+
+      if (this.sessionViewMode === 'sessions') {
+        this.postState();
+      }
+    }
+  }
+
+  private async forkSessionWithClient(client: PiRpcClientLike): Promise<void> {
+    const select = this.options.extensionUi?.select;
+
+    if (!select) {
+      this.options.showNotification('Fork selection is not available in this environment.', 'warning');
+      return;
+    }
+
+    const forkMessages = formatForkMessages((await client.getForkMessages()).messages);
+
+    if (forkMessages.length === 0) {
+      this.options.showNotification('No messages to fork from.', 'warning');
+      return;
+    }
+
+    const labels = forkMessages.map((message, index) => formatForkMessageLabel(message, index));
+    const picked = await select('Fork from message', labels);
+
+    if (!picked) {
+      return;
+    }
+
+    const selected = forkMessages[labels.indexOf(picked)];
+
+    if (!selected) {
+      return;
+    }
+
+    const result = await client.fork(selected.entryId);
+
+    if (!result.cancelled) {
+      this.options.showToast?.('Forked session.');
+    }
+  }
+
+  private async cloneSessionWithClient(client: PiRpcClientLike): Promise<void> {
+    const result = await client.clone();
+
+    if (!result.cancelled) {
+      this.options.showToast?.('Cloned session.');
+    }
+  }
+
+  private async compactSessionWithClient(client: PiRpcClientLike): Promise<void> {
+    await client.compact(undefined);
+    this.options.showToast?.('Compacted session.');
+  }
+
+  private async exportSessionWithClient(client: PiRpcClientLike): Promise<void> {
+    const result = await client.exportHtml(undefined);
+    const path = typeof result.path === 'string' && result.path ? result.path : 'HTML file';
+    this.options.showToast?.(`Exported session to ${path}.`);
+  }
+
+  private async withSessionClient<T>(sessionPath: string, action: (client: PiRpcClientLike) => Promise<T>): Promise<T> {
+    const clientOptions: PiRpcClientOptions = { cwd: this.options.getCwd?.(), sessionFile: sessionPath };
+    const piPath = this.options.getPiPath?.();
+
+    if (piPath) {
+      clientOptions.piPath = piPath;
+    }
+
+    const client = this.options.createClient(clientOptions);
+    const extensionUiRequestHandler = new ExtensionUiRequestHandler({
+      ui: this.options.extensionUi ?? createCancellingExtensionUi(this.options.showNotification),
+      respond: (response) => client.respondExtensionUiRequest(response),
+      onError: (message) => {
+        this.sessionsError = message;
+        this.postState();
+      }
+    });
+    const disposables = [
+      { dispose: client.onEvent((event) => {
+        if (event.type === 'extension_ui_request') {
+          void extensionUiRequestHandler.handle(event);
+        }
+      }) },
+      { dispose: client.onError((message) => {
+        this.sessionsError = message;
+        this.postState();
+      }) }
+    ];
+
+    try {
+      return await action(client);
+    } finally {
+      extensionUiRequestHandler.dispose();
+      for (const disposable of disposables) {
+        disposable.dispose();
+      }
+      client.dispose();
     }
   }
 
@@ -2135,6 +2332,22 @@ function getSessionFile(state: { sessionFile?: string }): string | undefined {
 
 function normalizeSessionPath(sessionPath: string | undefined): string {
   return typeof sessionPath === 'string' ? sessionPath.replace(/\\/g, '/') : '';
+}
+
+function createFallbackSessionItem(sessionPath: string): WebviewSessionItem {
+  return {
+    path: sessionPath,
+    id: sessionPath.split(/[\\/]/).pop()?.trim() || sessionPath,
+    cwd: '',
+    created: '',
+    modified: '',
+    messageCount: 0,
+    firstMessage: '',
+    depth: 0,
+    isLast: true,
+    ancestorContinues: [],
+    current: false
+  };
 }
 
 function getSessionDisplayName(session: WebviewSessionItem | undefined, fallbackPath: string): string {

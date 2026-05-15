@@ -239,6 +239,99 @@ suite('PiChatController', () => {
     harness.controller.dispose();
   });
 
+  test('session item clone updates the list without switching sessions', async () => {
+    const sessions: WebviewSessionItem[] = [
+      {
+        path: '/sessions/current.jsonl',
+        id: 'current',
+        cwd: '/workspace',
+        created: '2026-01-01T00:00:00.000Z',
+        modified: '2026-01-01T00:01:00.000Z',
+        messageCount: 1,
+        firstMessage: 'Current question',
+        depth: 0,
+        isLast: false,
+        ancestorContinues: [],
+        current: true
+      },
+      {
+        path: '/sessions/old.jsonl',
+        id: 'old',
+        cwd: '/workspace',
+        name: 'Old work',
+        created: '2026-01-01T00:00:00.000Z',
+        modified: '2026-01-01T00:01:00.000Z',
+        messageCount: 1,
+        firstMessage: 'Old question',
+        depth: 0,
+        isLast: true,
+        ancestorContinues: [],
+        current: false
+      }
+    ];
+    const cloneClient = new FakePiClient();
+    const harness = createControllerHarness([cloneClient], {
+      cwd: '/workspace',
+      listSessions: async () => sessions
+    });
+
+    await harness.controller.handleWebviewMessage({ type: 'showSessions' });
+    await harness.controller.handleWebviewMessage({ type: 'sessionItemCommand', sessionPath: '/sessions/old.jsonl', command: 'clone' });
+
+    assert.strictEqual(cloneClient.cloneCalls, 1);
+    assert.strictEqual(cloneClient.disposed, true);
+    assert.deepStrictEqual(harness.clientOptions, [{ cwd: '/workspace', sessionFile: '/sessions/old.jsonl' }]);
+    assert.strictEqual(lastState(harness).viewMode, 'sessions');
+    assert.deepStrictEqual(harness.toasts, ['Cloned session.']);
+    harness.controller.dispose();
+  });
+
+  test('session item rename updates a listed session without switching sessions', async () => {
+    const renameClient = new FakePiClient();
+    const harness = createControllerHarness([renameClient], {
+      cwd: '/workspace',
+      listSessions: async () => [
+        {
+          path: '/sessions/current.jsonl',
+          id: 'current',
+          cwd: '/workspace',
+          created: '2026-01-01T00:00:00.000Z',
+          modified: '2026-01-01T00:01:00.000Z',
+          messageCount: 1,
+          firstMessage: 'Current question',
+          depth: 0,
+          isLast: false,
+          ancestorContinues: [],
+          current: true
+        },
+        {
+          path: '/sessions/old.jsonl',
+          id: 'old',
+          cwd: '/workspace',
+          name: 'Old work',
+          created: '2026-01-01T00:00:00.000Z',
+          modified: '2026-01-01T00:01:00.000Z',
+          messageCount: 1,
+          firstMessage: 'Old question',
+          depth: 0,
+          isLast: true,
+          ancestorContinues: [],
+          current: false
+        }
+      ]
+    });
+
+    await harness.controller.handleWebviewMessage({ type: 'showSessions' });
+    await harness.controller.handleWebviewMessage({ type: 'setSessionItemName', sessionPath: '/sessions/old.jsonl', name: ' Renamed old ' });
+
+    assert.deepStrictEqual(renameClient.sessionNames, ['Renamed old']);
+    assert.strictEqual(renameClient.disposed, true);
+    assert.deepStrictEqual(harness.clientOptions, [{ cwd: '/workspace', sessionFile: '/sessions/old.jsonl' }]);
+    assert.strictEqual(lastState(harness).viewMode, 'sessions');
+    assert.deepStrictEqual(harness.toasts, ['Session renamed.']);
+    harness.controller.dispose();
+  });
+
   test('session switcher deletes the current session and starts a fresh empty session', async () => {
     const deleted: Array<{ path: string; name: string }> = [];
     const sessionFiles: Array<string | undefined> = [];
@@ -270,7 +363,8 @@ suite('PiChatController', () => {
 
     assert.deepStrictEqual(deleted, [{ path: '/sessions/current.jsonl', name: 'Current question' }]);
     assert.deepStrictEqual(harness.toasts, ['Session moved to Trash.']);
-    assert.strictEqual(lastState(harness).currentSessionFile, undefined);
+    assert.strictEqual(lastState(harness).viewMode, 'sessions');
+    assert.strictEqual(lastState(harness).currentSessionFile, '');
     assert.deepStrictEqual(lastState(harness).messages, []);
     assert.deepStrictEqual(sessionFiles, [undefined]);
     assert.deepStrictEqual(harness.clientOptions, [{ cwd: undefined }]);

@@ -12,6 +12,7 @@ import type {
   ChatMessage,
   PromptContextAttachment,
   SessionItem,
+  SessionItemCommand,
   SlashCommand,
   TreeItem,
   WebviewState,
@@ -76,11 +77,11 @@ let sessionListSelectedIndex = 0;
 let treeListSelectedIndex = 0;
 let sessionPointerHoverEnabled = false;
 let openSessionListMenuIndex: number | undefined;
-let pendingSessionItemCommand: { sessionPath: string; command: SessionItemCommand } | undefined;
+let openSessionListMenuCommandIndex = 0;
+let sessionListNameEditPath: string | undefined;
+let sessionListNameEditInitialValue = '';
 let sessionNameEditing = false;
 let sessionNameEditInitialValue = '';
-
-type SessionItemCommand = 'rename' | 'fork' | 'clone' | 'compact' | 'reload' | 'export' | 'delete';
 
 const sessionItemMenuCommands: SessionItemCommand[] = ['reload', 'rename', 'fork', 'clone', 'compact', 'export', 'delete'];
 const sessionItemCommandIcons: Record<SessionItemCommand, string> = {
@@ -169,9 +170,12 @@ window.addEventListener('message', (event) => {
   if (state.viewMode === 'tree' && (previousViewMode !== 'tree' || previousTreeCount === 0)) {
     selectCurrentTreeEntry();
   }
+  if (sessionListNameEditPath && !state.sessions.some((session) => session.path === sessionListNameEditPath)) {
+    stopSessionListNameEdit();
+  }
+
   render();
   applyComposerTextFromState();
-  runPendingSessionItemCommand();
 
   if (wasListView && state.viewMode === 'chat') {
     scheduleMessagesToBottom();
@@ -317,6 +321,27 @@ window.addEventListener('keydown', (event) => {
     return;
   }
 
+  const sessionListNameInput = eventTargetElement(event)?.closest('.sessions__name-input');
+
+  if (sessionListNameInput instanceof HTMLInputElement) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      commitSessionListNameEdit(sessionListNameInput.value);
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      cancelSessionListNameEdit({ focusList: true });
+      return;
+    }
+
+    event.stopPropagation();
+    return;
+  }
+
   if ((state.viewMode === 'sessions' || state.viewMode === 'tree') && handleSessionListKeydown(event)) {
     return;
   }
@@ -427,8 +452,10 @@ function showToast(message: string): void {
 function render() {
   const isListView = state.viewMode === 'sessions' || state.viewMode === 'tree';
   const shouldStickToBottom = !isListView && isMessagesAtBottom();
-  if (!isListView) {
+  if (state.viewMode !== 'sessions') {
     openSessionListMenuIndex = undefined;
+    openSessionListMenuCommandIndex = 0;
+    stopSessionListNameEdit();
   }
   messagesElement.hidden = isListView;
   sessionsElement.hidden = !isListView;
@@ -461,7 +488,11 @@ function render() {
     closeModelMenu();
     closeSessionCommandMenu();
     cancelSessionNameEdit();
-    requestAnimationFrame(() => sessionsElement?.focus({ preventScroll: true }));
+
+    if (!sessionListNameEditPath) {
+      requestAnimationFrame(() => sessionsElement?.focus({ preventScroll: true }));
+    }
+
     return;
   }
 
@@ -673,6 +704,10 @@ function renderSessions() {
   for (let index = 0; index < state.sessions.length; index += 1) {
     sessionsElement.append(createSessionItemElement(state.sessions[index], index));
   }
+
+  if (sessionListNameEditPath) {
+    requestAnimationFrame(focusSessionListNameInput);
+  }
 }
 
 function createSessionEmptyElement(text: string): HTMLElement {
@@ -701,7 +736,16 @@ function createSessionItemElement(session: SessionItem, index: number): HTMLElem
 
   const title = document.createElement('span');
   title.className = 'sessions__title';
-  title.textContent = getSessionDisplayName(session);
+
+  if (sessionListNameEditPath === session.path) {
+    title.append(createSessionListNameInput(session));
+  } else {
+    const titleText = document.createElement('span');
+    titleText.className = 'sessions__title-text';
+    titleText.textContent = getSessionDisplayName(session);
+    title.append(titleText);
+  }
+
   item.append(title);
 
   const meta = document.createElement('span');
@@ -719,6 +763,18 @@ function createSessionItemElement(session: SessionItem, index: number): HTMLElem
   item.append(createSessionItemMenuElement(session, index));
 
   return item;
+}
+
+function createSessionListNameInput(session: SessionItem): HTMLInputElement {
+  const input = document.createElement('input');
+  input.className = 'sessions__name-input';
+  input.type = 'text';
+  input.value = sessionListNameEditInitialValue;
+  input.placeholder = getSessionDisplayName(session);
+  input.setAttribute('aria-label', 'Session name');
+  input.addEventListener('click', (event) => event.stopPropagation());
+  input.addEventListener('blur', () => cancelSessionListNameEdit());
+  return input;
 }
 
 function createSessionItemMenuElement(session: SessionItem, index: number): HTMLElement {
@@ -741,25 +797,32 @@ function createSessionItemMenuElement(session: SessionItem, index: number): HTML
   menu.setAttribute('role', 'menu');
   menu.hidden = openSessionListMenuIndex !== index;
 
-  for (const command of sessionItemMenuCommands) {
-    menu.append(createSessionItemMenuButton(command, session));
+  for (let commandIndex = 0; commandIndex < sessionItemMenuCommands.length; commandIndex += 1) {
+    menu.append(createSessionItemMenuButton(sessionItemMenuCommands[commandIndex], session, commandIndex));
   }
 
   wrap.append(menu);
   return wrap;
 }
 
-function createSessionItemMenuButton(command: SessionItemCommand, session: SessionItem): HTMLButtonElement {
+function createSessionItemMenuButton(command: SessionItemCommand, session: SessionItem, commandIndex: number): HTMLButtonElement {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'pi-toolbar__menu-item sessions__menu-item';
   button.setAttribute('role', 'menuitem');
   button.setAttribute('data-session-command', command);
+  button.setAttribute('data-session-command-index', String(commandIndex));
   button.disabled = !canRunSessionItemCommand(session, command);
   button.innerHTML = '<span class="pi-toolbar__menu-label">' + getSessionItemCommandLabel(command) + '</span>' + getSessionItemCommandIcon(command);
-  button.addEventListener('pointerenter', () => setSessionMenuItemHover(button, true));
+  button.addEventListener('pointerenter', () => {
+    openSessionListMenuCommandIndex = commandIndex;
+    setSessionMenuItemHover(button, true);
+  });
   button.addEventListener('pointerleave', () => setSessionMenuItemHover(button, false));
-  button.addEventListener('focus', () => setSessionMenuItemHover(button, true));
+  button.addEventListener('focus', () => {
+    openSessionListMenuCommandIndex = commandIndex;
+    setSessionMenuItemHover(button, true);
+  });
   button.addEventListener('blur', () => setSessionMenuItemHover(button, false));
   return button;
 }
@@ -890,15 +953,13 @@ function handleSessionListKeydown(event: KeyboardEvent): boolean {
     return false;
   }
 
+  if (openSessionListMenuIndex !== undefined && handleSessionItemMenuKeydown(event)) {
+    return true;
+  }
+
   if (event.key === 'Escape') {
     event.preventDefault();
     event.stopPropagation();
-
-    if (openSessionListMenuIndex !== undefined) {
-      closeSessionItemMenus();
-      return true;
-    }
-
     vscode.postMessage({ type: 'hideSessions' });
     focusPromptInput();
     return true;
@@ -917,6 +978,13 @@ function handleSessionListKeydown(event: KeyboardEvent): boolean {
     event.stopPropagation();
     closeSessionItemMenus();
     state.viewMode === 'tree' ? moveTreeSelection(-1) : moveSessionSelection(-1);
+    return true;
+  }
+
+  if (state.viewMode === 'sessions' && event.key === 'ArrowRight') {
+    event.preventDefault();
+    event.stopPropagation();
+    openSessionItemMenu(sessionListSelectedIndex, { focusMenu: true });
     return true;
   }
 
@@ -990,12 +1058,34 @@ function deleteSessionIndex(index: number): void {
 }
 
 function toggleSessionItemMenu(index: number): void {
-  if (!Number.isInteger(index) || index < 0) {
+  if (openSessionListMenuIndex === index) {
+    closeSessionItemMenus();
     return;
   }
 
-  openSessionListMenuIndex = openSessionListMenuIndex === index ? undefined : index;
+  openSessionItemMenu(index, { focusMenu: true });
+}
+
+function openSessionItemMenu(index: number, options: { focusMenu?: boolean } = {}): void {
+  if (!Number.isInteger(index) || index < 0 || state.viewMode !== 'sessions') {
+    return;
+  }
+
+  const session = Array.isArray(state.sessions) ? state.sessions[index] : undefined;
+
+  if (!session || !canRunSessionItemCommand(session)) {
+    return;
+  }
+
+  sessionListSelectedIndex = clampSessionIndex(index);
+  openSessionListMenuIndex = sessionListSelectedIndex;
+  openSessionListMenuCommandIndex = getFirstEnabledSessionItemMenuCommandIndex(session);
   renderSessions();
+  document.getElementById('session-' + sessionListSelectedIndex)?.scrollIntoView({ block: 'nearest' });
+
+  if (options.focusMenu) {
+    requestAnimationFrame(() => focusSessionItemMenuCommand(openSessionListMenuIndex, openSessionListMenuCommandIndex));
+  }
 }
 
 function closeSessionItemMenus(): void {
@@ -1004,6 +1094,7 @@ function closeSessionItemMenus(): void {
   }
 
   openSessionListMenuIndex = undefined;
+  openSessionListMenuCommandIndex = 0;
 
   for (const menu of sessionsElement.querySelectorAll<HTMLElement>('.sessions__menu')) {
     menu.hidden = true;
@@ -1012,6 +1103,105 @@ function closeSessionItemMenus(): void {
   for (const button of sessionsElement.querySelectorAll<HTMLButtonElement>('.sessions__menu-button')) {
     button.setAttribute('aria-expanded', 'false');
   }
+}
+
+function handleSessionItemMenuKeydown(event: KeyboardEvent): boolean {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    event.stopPropagation();
+    closeSessionItemMenus();
+    sessionsElement.focus({ preventScroll: true });
+    return true;
+  }
+
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    event.stopPropagation();
+    moveSessionItemMenuSelection(1);
+    return true;
+  }
+
+  if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    event.stopPropagation();
+    moveSessionItemMenuSelection(-1);
+    return true;
+  }
+
+  if (event.key === 'ArrowRight') {
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  }
+
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    event.stopPropagation();
+    const focusedCommand = eventTargetElement(event)?.closest('.sessions__menu-item')?.getAttribute('data-session-command');
+    runOpenSessionItemMenuCommand(focusedCommand ?? sessionItemMenuCommands[openSessionListMenuCommandIndex]);
+    return true;
+  }
+
+  return false;
+}
+
+function moveSessionItemMenuSelection(delta: number): void {
+  if (openSessionListMenuIndex === undefined) {
+    return;
+  }
+
+  const session = Array.isArray(state.sessions) ? state.sessions[openSessionListMenuIndex] : undefined;
+  const enabledIndexes = getEnabledSessionItemMenuCommandIndexes(session);
+
+  if (enabledIndexes.length === 0) {
+    return;
+  }
+
+  const currentPosition = enabledIndexes.indexOf(openSessionListMenuCommandIndex);
+  const nextPosition = currentPosition >= 0
+    ? (currentPosition + delta + enabledIndexes.length) % enabledIndexes.length
+    : (delta > 0 ? 0 : enabledIndexes.length - 1);
+  openSessionListMenuCommandIndex = enabledIndexes[nextPosition];
+  focusSessionItemMenuCommand(openSessionListMenuIndex, openSessionListMenuCommandIndex);
+}
+
+function focusSessionItemMenuCommand(sessionIndex: number | undefined, commandIndex: number): void {
+  if (sessionIndex === undefined) {
+    return;
+  }
+
+  const item = document.getElementById('session-' + sessionIndex);
+  const commandButton = item?.querySelector<HTMLButtonElement>('.sessions__menu-item[data-session-command-index="' + commandIndex + '"]:not(:disabled)')
+    ?? item?.querySelector<HTMLButtonElement>('.sessions__menu-item:not(:disabled)');
+  commandButton?.focus({ preventScroll: true });
+}
+
+function runOpenSessionItemMenuCommand(command: SessionItemCommand | string | null | undefined): void {
+  if (openSessionListMenuIndex === undefined) {
+    return;
+  }
+
+  runSessionItemMenuCommand(openSessionListMenuIndex, typeof command === 'string' ? command : null);
+}
+
+function getFirstEnabledSessionItemMenuCommandIndex(session: SessionItem): number {
+  return getEnabledSessionItemMenuCommandIndexes(session)[0] ?? 0;
+}
+
+function getEnabledSessionItemMenuCommandIndexes(session: SessionItem | undefined): number[] {
+  if (!session) {
+    return [];
+  }
+
+  const indexes: number[] = [];
+
+  for (let index = 0; index < sessionItemMenuCommands.length; index += 1) {
+    if (canRunSessionItemCommand(session, sessionItemMenuCommands[index])) {
+      indexes.push(index);
+    }
+  }
+
+  return indexes;
 }
 
 function runSessionItemMenuCommand(index: number, command: string | null): void {
@@ -1029,33 +1219,69 @@ function runSessionItemMenuCommand(index: number, command: string | null): void 
     return;
   }
 
-  pendingSessionItemCommand = { sessionPath: session.path, command: parsedCommand };
-  selectSessionByPath(session.path);
+  if (parsedCommand === 'rename') {
+    startSessionListNameEdit(index);
+    return;
+  }
+
+  vscode.postMessage({ type: 'sessionItemCommand', sessionPath: session.path, command: parsedCommand });
 }
 
-function runPendingSessionItemCommand(): void {
-  if (!pendingSessionItemCommand || state.viewMode !== 'chat') {
+function startSessionListNameEdit(index: number): void {
+  const session = Array.isArray(state.sessions) ? state.sessions[index] : undefined;
+
+  if (!session?.path || !canRunSessionItemCommand(session, 'rename')) {
     return;
   }
 
-  const pending = pendingSessionItemCommand;
+  sessionListSelectedIndex = clampSessionIndex(index);
+  sessionListNameEditPath = session.path;
+  sessionListNameEditInitialValue = session.name?.trim() ?? '';
+  closeSessionItemMenus();
+  renderSessions();
+}
 
-  if (getCurrentSessionPath() !== pending.sessionPath) {
+function commitSessionListNameEdit(name: string): void {
+  const sessionPath = sessionListNameEditPath;
+
+  if (!sessionPath) {
     return;
   }
 
-  pendingSessionItemCommand = undefined;
+  const nextName = name.trim();
+  const previousName = sessionListNameEditInitialValue.trim();
+  stopSessionListNameEdit();
+  renderSessions();
 
-  if (pending.command === 'rename') {
-    startSessionNameEdit();
+  if (nextName === previousName) {
     return;
   }
 
-  if (pending.command === 'delete') {
+  vscode.postMessage({ type: 'setSessionItemName', sessionPath, name: nextName });
+}
+
+function cancelSessionListNameEdit(options: { focusList?: boolean } = {}): void {
+  if (!sessionListNameEditPath) {
     return;
   }
 
-  runSessionSlashCommand(pending.command);
+  stopSessionListNameEdit();
+  renderSessions();
+
+  if (options.focusList) {
+    requestAnimationFrame(() => sessionsElement.focus({ preventScroll: true }));
+  }
+}
+
+function stopSessionListNameEdit(): void {
+  sessionListNameEditPath = undefined;
+  sessionListNameEditInitialValue = '';
+}
+
+function focusSessionListNameInput(): void {
+  const input = sessionsElement.querySelector<HTMLInputElement>('.sessions__name-input');
+  input?.focus({ preventScroll: true });
+  input?.select();
 }
 
 function parseSessionItemCommand(command: string | null): SessionItemCommand | undefined {
@@ -1091,7 +1317,7 @@ function getSessionItemCommandLabel(command: SessionItemCommand): string {
     case 'compact':
       return 'Compact session';
     case 'export':
-      return 'Export HTML';
+      return 'Export as HTML';
     case 'delete':
       return 'Move session to trash';
   }

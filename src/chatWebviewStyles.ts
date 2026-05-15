@@ -362,11 +362,33 @@ export const chatWebviewStyles = /* css */ `    :root {
     }
 
     .sessions__title {
+      display: flex;
       min-width: 0;
+      align-items: center;
+      gap: 6px;
       overflow: hidden;
       font-weight: 600;
-      text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    .sessions__title-text {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .sessions__name-input {
+      width: 100%;
+      min-width: 0;
+      height: 22px;
+      padding: 1px 5px;
+      color: var(--vscode-input-foreground);
+      background: var(--vscode-input-background);
+      border: 1px solid var(--vscode-focusBorder, var(--vscode-input-border, transparent));
+      border-radius: 3px;
+      font: inherit;
+      font-weight: 400;
+      outline: none;
     }
 
     .sessions__item--current .sessions__title {

@@ -58,7 +58,7 @@ Useful commands are also available from the Command Palette:
 
 You can also right-click in an editor and choose `Add Context`. If text is selected, Tau attaches the selection. If nothing is selected, it attaches the current file.
 
-Double-click the session title in Tau's toolbar to rename the current session inline.
+Double-click the session title in Tau's toolbar to rename the current session inline. In the session list, open a row's command menu and choose Rename session to edit that session name without switching to it.
 
 ## Keyboard navigation
 
@@ -74,8 +74,14 @@ Tau-specific keys inside the sidebar:
 | `Esc`                           | Prompt, with no popup open   | Open the session list.                              |
 | `Esc`                           | Session list or session tree | Return to the current session and focus the prompt. |
 | `ArrowUp` / `ArrowDown`         | Session list or session tree | Move the selected row.                              |
+| `ArrowRight`                    | Session list                 | Open the selected session's command menu.           |
 | `Enter`                         | Session list or session tree | Open the selected session or tree entry.            |
 | `Delete` / `Backspace`          | Session list                 | Delete the selected session if it is deletable.     |
+| `ArrowUp` / `ArrowDown`         | Session command menu         | Move the selected menu entry.                       |
+| `Enter`                         | Session command menu         | Run the selected menu entry without switching rows. |
+| `Esc`                           | Session command menu         | Close the menu.                                     |
+| `Enter`                         | Session-list rename editor   | Save the session name.                              |
+| `Esc`                           | Session-list rename editor   | Cancel editing and keep focus in the list.          |
 | `ArrowUp` / `ArrowDown`         | Slash command menu           | Move the selected command.                          |
 | `Tab`                           | Slash command menu           | Insert the selected command.                        |
 | `Enter`                         | Slash command menu           | Insert the selected command.                        |
@@ -83,7 +89,7 @@ Tau-specific keys inside the sidebar:
 | `Enter`                         | Inline session naming        | Save the session name.                              |
 | `Esc`                           | Inline session naming        | Cancel editing and focus the prompt.                |
 
-`Esc` is intentionally overloaded as Tau's back key. It first closes the most local UI you opened: slash command menu, model picker, top-bar session menu, or inline session naming. If there is nothing local to close and the prompt is focused, `Esc` opens the session list. Press `Esc` again from the session list to return to chat, so you can toggle between writing and session navigation with one key.
+`Esc` is intentionally overloaded as Tau's back key. It first closes the most local UI you opened: slash command menu, model picker, top-bar session menu, session command menu, or inline session naming. If there is nothing local to close and the prompt is focused, `Esc` opens the session list. Press `Esc` again from the session list to return to chat, so you can toggle between writing and session navigation with one key.
 
 ## Slash commands
 

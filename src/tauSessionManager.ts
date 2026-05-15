@@ -64,6 +64,11 @@ export class TauSessionManager {
       return;
     }
 
+    if (message.type === 'sessionItemCommand' && message.command === 'fork' && this.hasRunningBackgroundSession()) {
+      this.options.showNotification('Wait for background sessions to finish before forking.', 'warning');
+      return;
+    }
+
     await this.active().controller.handleWebviewMessage(message);
   }
 
