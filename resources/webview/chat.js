@@ -594,6 +594,7 @@
   var toastHideTimeout;
   var sessionListSelectedIndex = 0;
   var treeListSelectedIndex = 0;
+  var sessionPointerHoverEnabled = false;
   var sessionNameEditing = false;
   var sessionNameEditInitialValue = "";
   var renderedMessageViews = [];
@@ -641,6 +642,11 @@
       treeRefreshing: Boolean(event.data.treeRefreshing),
       treeError: typeof event.data.treeError === "string" ? event.data.treeError : ""
     };
+    const wasListView = previousViewMode === "sessions" || previousViewMode === "tree";
+    const isListView = state.viewMode === "sessions" || state.viewMode === "tree";
+    if (!wasListView && isListView) {
+      disableSessionPointerHover();
+    }
     if (state.viewMode === "sessions" && (previousViewMode !== "sessions" || previousCurrentSessionFile !== state.currentSessionFile || previousSessionCount === 0)) {
       selectCurrentSession();
     }
@@ -697,6 +703,7 @@
   }
   sessionNameInputElement?.addEventListener("blur", () => cancelSessionNameEdit());
   sessionsElement?.addEventListener("keydown", handleSessionListKeydown);
+  sessionsElement?.addEventListener("pointermove", enableSessionPointerHover);
   sessionsElement?.addEventListener("click", (event) => {
     const target = eventTargetElement(event);
     const deleteButton = target?.closest(".sessions__delete");
@@ -1166,6 +1173,17 @@
       return true;
     }
     return false;
+  }
+  function enableSessionPointerHover() {
+    if (sessionPointerHoverEnabled) {
+      return;
+    }
+    sessionPointerHoverEnabled = true;
+    sessionsElement.classList.add("sessions--pointer-hover");
+  }
+  function disableSessionPointerHover() {
+    sessionPointerHoverEnabled = false;
+    sessionsElement.classList.remove("sessions--pointer-hover");
   }
   function moveSessionSelection(delta) {
     if (!Array.isArray(state.sessions) || state.sessions.length === 0) {

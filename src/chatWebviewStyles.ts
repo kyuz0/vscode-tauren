@@ -327,7 +327,7 @@ export const chatWebviewStyles = /* css */ `    :root {
       cursor: pointer;
     }
 
-    .sessions__item:hover:not(:disabled),
+    .sessions--pointer-hover .sessions__item:hover:not(:disabled),
     .sessions__item--active {
       color: var(--vscode-list-activeSelectionForeground, var(--vscode-foreground));
       background: var(--vscode-list-activeSelectionBackground, color-mix(in srgb, var(--vscode-foreground) 14%, transparent));
@@ -399,7 +399,7 @@ export const chatWebviewStyles = /* css */ `    :root {
       opacity: 0;
     }
 
-    .sessions__item:hover .sessions__delete,
+    .sessions--pointer-hover .sessions__item:hover .sessions__delete,
     .sessions__item--active .sessions__delete,
     .sessions__delete:focus-visible {
       opacity: 0.78;

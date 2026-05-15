@@ -77,6 +77,7 @@ let busySubmitHideTimeout: ReturnType<typeof setTimeout> | undefined;
 let toastHideTimeout: ReturnType<typeof setTimeout> | undefined;
 let sessionListSelectedIndex = 0;
 let treeListSelectedIndex = 0;
+let sessionPointerHoverEnabled = false;
 let sessionNameEditing = false;
 let sessionNameEditInitialValue = '';
 
@@ -136,6 +137,13 @@ window.addEventListener('message', (event) => {
     treeRefreshing: Boolean(event.data.treeRefreshing),
     treeError: typeof event.data.treeError === 'string' ? event.data.treeError : ''
   };
+  const wasListView = previousViewMode === 'sessions' || previousViewMode === 'tree';
+  const isListView = state.viewMode === 'sessions' || state.viewMode === 'tree';
+
+  if (!wasListView && isListView) {
+    disableSessionPointerHover();
+  }
+
   if (
     state.viewMode === 'sessions'
     && (previousViewMode !== 'sessions'
@@ -209,6 +217,7 @@ for (const item of sessionMenuItemElements) {
 }
 sessionNameInputElement?.addEventListener('blur', () => cancelSessionNameEdit());
 sessionsElement?.addEventListener('keydown', handleSessionListKeydown);
+sessionsElement?.addEventListener('pointermove', enableSessionPointerHover);
 sessionsElement?.addEventListener('click', (event) => {
   const target = eventTargetElement(event);
   const deleteButton = target?.closest('.sessions__delete');
@@ -825,6 +834,20 @@ function handleSessionListKeydown(event: KeyboardEvent): boolean {
   }
 
   return false;
+}
+
+function enableSessionPointerHover(): void {
+  if (sessionPointerHoverEnabled) {
+    return;
+  }
+
+  sessionPointerHoverEnabled = true;
+  sessionsElement.classList.add('sessions--pointer-hover');
+}
+
+function disableSessionPointerHover(): void {
+  sessionPointerHoverEnabled = false;
+  sessionsElement.classList.remove('sessions--pointer-hover');
 }
 
 function moveSessionSelection(delta: number): void {
