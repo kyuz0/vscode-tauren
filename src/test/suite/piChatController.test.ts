@@ -188,6 +188,86 @@ suite('PiChatController', () => {
     harness.controller.dispose();
   });
 
+  test('session switcher deletes a non-current session', async () => {
+    const sessions: WebviewSessionItem[] = [
+      {
+        path: '/sessions/current.jsonl',
+        id: 'current',
+        cwd: '/workspace',
+        created: '2026-01-01T00:00:00.000Z',
+        modified: '2026-01-01T00:01:00.000Z',
+        messageCount: 1,
+        firstMessage: 'Current question',
+        depth: 0,
+        isLast: false,
+        ancestorContinues: [],
+        current: true
+      },
+      {
+        path: '/sessions/old.jsonl',
+        id: 'old',
+        cwd: '/workspace',
+        name: 'Old work',
+        created: '2026-01-01T00:00:00.000Z',
+        modified: '2026-01-01T00:01:00.000Z',
+        messageCount: 1,
+        firstMessage: 'Old question',
+        depth: 0,
+        isLast: true,
+        ancestorContinues: [],
+        current: false
+      }
+    ];
+    const deleted: Array<{ path: string; name: string }> = [];
+    const harness = createControllerHarness([new FakePiClient()], {
+      initialSessionFile: '/sessions/current.jsonl',
+      listSessions: async () => sessions.filter((session) => !deleted.some((entry) => entry.path === session.path)),
+      deleteSession: async (path, name) => {
+        deleted.push({ path, name });
+        return true;
+      }
+    });
+
+    await harness.controller.handleWebviewMessage({ type: 'showSessions' });
+    await harness.controller.handleWebviewMessage({ type: 'deleteSession', sessionPath: '/sessions/old.jsonl' });
+
+    assert.deepStrictEqual(deleted, [{ path: '/sessions/old.jsonl', name: 'Old work' }]);
+    assert.deepStrictEqual(lastState(harness).sessions?.map((session) => session.path), ['/sessions/current.jsonl']);
+    assert.deepStrictEqual(harness.toasts, ['Session moved to Trash.']);
+    harness.controller.dispose();
+  });
+
+  test('session switcher blocks deleting the current session', async () => {
+    const deleted: string[] = [];
+    const harness = createControllerHarness([new FakePiClient()], {
+      initialSessionFile: '/sessions/current.jsonl',
+      listSessions: async () => [{
+        path: '/sessions/current.jsonl',
+        id: 'current',
+        cwd: '/workspace',
+        created: '2026-01-01T00:00:00.000Z',
+        modified: '2026-01-01T00:01:00.000Z',
+        messageCount: 1,
+        firstMessage: 'Current question',
+        depth: 0,
+        isLast: true,
+        ancestorContinues: [],
+        current: true
+      }],
+      deleteSession: async (path) => {
+        deleted.push(path);
+        return true;
+      }
+    });
+
+    await harness.controller.handleWebviewMessage({ type: 'showSessions' });
+    await harness.controller.handleWebviewMessage({ type: 'deleteSession', sessionPath: '/sessions/current.jsonl' });
+
+    assert.deepStrictEqual(deleted, []);
+    assert.deepStrictEqual(harness.notifications, [{ message: 'Switch away from the current session before deleting it.', type: 'warning' }]);
+    harness.controller.dispose();
+  });
+
   test('metadata refresh publishes the current session file', async () => {
     const sessionFiles: Array<string | undefined> = [];
     const client = new FakePiClient({
@@ -1462,6 +1542,7 @@ type ControllerHarnessOptions = {
   onSessionFileChange?: (sessionFile: string | undefined) => void;
   listSessions?: (cwd: string | undefined, currentSessionFile: string | undefined) => Promise<WebviewSessionItem[]>;
   listSessionTree?: (sessionFile: string | undefined) => Promise<WebviewTreeItem[]>;
+  deleteSession?: (sessionPath: string, displayName: string) => Promise<boolean>;
 };
 
 function createControllerHarness(
@@ -1502,7 +1583,8 @@ function createControllerHarness(
     onSessionMetaChange: options.onSessionMetaChange,
     onSessionFileChange: options.onSessionFileChange,
     listSessions: options.listSessions,
-    listSessionTree: options.listSessionTree
+    listSessionTree: options.listSessionTree,
+    deleteSession: options.deleteSession
   };
 
   const controller = new PiChatController(controllerOptions);

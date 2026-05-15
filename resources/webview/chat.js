@@ -695,7 +695,17 @@
   sessionNameInputElement?.addEventListener("blur", () => cancelSessionNameEdit());
   sessionsElement?.addEventListener("keydown", handleSessionListKeydown);
   sessionsElement?.addEventListener("click", (event) => {
-    const item = eventTargetElement(event)?.closest(".sessions__item");
+    const target = eventTargetElement(event);
+    const deleteButton = target?.closest(".sessions__delete");
+    if (deleteButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      const item2 = deleteButton.closest(".sessions__item");
+      const index2 = Number(item2?.getAttribute("data-index"));
+      deleteSessionIndex(index2);
+      return;
+    }
+    const item = target?.closest(".sessions__item");
     if (!item) {
       return;
     }
@@ -996,14 +1006,12 @@
     return empty;
   }
   function createSessionItemElement(session, index) {
-    const item = document.createElement("button");
-    item.type = "button";
+    const item = document.createElement("div");
     item.id = "session-" + index;
     item.className = "sessions__item" + (index === sessionListSelectedIndex ? " sessions__item--active" : "") + (session.current ? " sessions__item--current" : "") + (session.liveStatus ? " sessions__item--" + session.liveStatus : "") + (session.unread ? " sessions__item--unread" : "");
     item.setAttribute("role", "option");
     item.setAttribute("aria-selected", index === sessionListSelectedIndex ? "true" : "false");
     item.setAttribute("data-index", String(index));
-    item.disabled = false;
     const prefix = document.createElement("span");
     prefix.className = "sessions__prefix";
     prefix.textContent = (session.liveStatus === "running" ? "\u25CF " : "") + buildSessionTreePrefix(session);
@@ -1021,6 +1029,15 @@
       cwd.className = "sessions__cwd";
       cwd.textContent = shortenPath(session.cwd);
       item.append(cwd);
+    }
+    if (canDeleteSession(session)) {
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "sessions__delete";
+      deleteButton.title = "Move session to Trash";
+      deleteButton.setAttribute("aria-label", "Move session to Trash");
+      deleteButton.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M6 2h4l1 1h3v1H2V3h3l1-1Zm-2 3h8l-.6 9.2A2 2 0 0 1 9.4 16H6.6a2 2 0 0 1-2-1.8L4 5Zm2 1v8h1V6H6Zm3 0v8h1V6H9Z"/></svg>';
+      item.append(deleteButton);
     }
     return item;
   }
@@ -1113,6 +1130,12 @@
       state.viewMode === "tree" ? selectTreeIndex(treeListSelectedIndex) : selectSessionIndex(sessionListSelectedIndex);
       return true;
     }
+    if (state.viewMode === "sessions" && (event.key === "Delete" || event.key === "Backspace")) {
+      event.preventDefault();
+      event.stopPropagation();
+      deleteSessionIndex(sessionListSelectedIndex);
+      return true;
+    }
     return false;
   }
   function moveSessionSelection(delta) {
@@ -1135,6 +1158,16 @@
       return;
     }
     vscode.postMessage({ type: "selectSession", sessionPath });
+  }
+  function deleteSessionIndex(index) {
+    const session = Array.isArray(state.sessions) ? state.sessions[index] : void 0;
+    if (!session?.path || !canDeleteSession(session)) {
+      return;
+    }
+    vscode.postMessage({ type: "deleteSession", sessionPath: session.path });
+  }
+  function canDeleteSession(session) {
+    return !session.current && session.liveStatus !== "running";
   }
   function clampSessionIndex(index) {
     const count = Array.isArray(state.sessions) ? state.sessions.length : 0;

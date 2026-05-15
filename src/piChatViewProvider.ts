@@ -69,7 +69,8 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
       initialSessionFile: readCurrentSessionFile(this.workspaceState),
       onSessionMetaChange: (metadata) => this.writeCachedSessionMeta(metadata),
       onSessionFileChange: (sessionFile) => this.writeCurrentSessionFile(sessionFile),
-      listSessions: (cwd, currentSessionFile) => listPiSessions({ cwd, currentSessionFile })
+      listSessions: (cwd, currentSessionFile) => listPiSessions({ cwd, currentSessionFile }),
+      deleteSession: (sessionPath, displayName) => this.deleteSession(sessionPath, displayName)
     });
 
     this.disposables.push(
@@ -289,6 +290,22 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
     }
 
     return undefined;
+  }
+
+  private async deleteSession(sessionPath: string, displayName: string): Promise<boolean> {
+    const moveToTrash = 'Move to Trash';
+    const selected = await vscode.window.showWarningMessage(
+      `Move "${displayName}" to Trash?`,
+      { modal: true, detail: sessionPath },
+      moveToTrash
+    );
+
+    if (selected !== moveToTrash) {
+      return false;
+    }
+
+    await vscode.workspace.fs.delete(vscode.Uri.file(sessionPath), { useTrash: true });
+    return true;
   }
 
   private postInputFocus(): void {

@@ -18,6 +18,7 @@ export type WebviewMessage =
   | { type: 'hideSessions' }
   | { type: 'refreshSessions' }
   | { type: 'selectSession'; sessionPath: string }
+  | { type: 'deleteSession'; sessionPath: string }
   | { type: 'selectTreeEntry'; entryId: string }
   | { type: 'setSessionName'; name: string }
   | { type: 'refreshMetadata' }
@@ -50,6 +51,10 @@ export function parseWebviewMessage(value: unknown): WebviewMessage {
     case 'selectSession':
       return typeof value.sessionPath === 'string' && value.sessionPath
         ? { type: 'selectSession', sessionPath: value.sessionPath }
+        : { type: 'unknown' };
+    case 'deleteSession':
+      return typeof value.sessionPath === 'string' && value.sessionPath
+        ? { type: 'deleteSession', sessionPath: value.sessionPath }
         : { type: 'unknown' };
     case 'selectTreeEntry':
       return typeof value.entryId === 'string' && value.entryId

@@ -131,6 +131,7 @@ export type PiChatControllerOptions = {
   writeClipboard?: (text: string) => PromiseLike<void> | Promise<void> | void;
   listSessions?: (cwd: string | undefined, currentSessionFile: string | undefined) => Promise<WebviewSessionItem[]>;
   listSessionTree?: (sessionFile: string | undefined) => Promise<WebviewTreeItem[]>;
+  deleteSession?: (sessionPath: string, displayName: string) => Promise<boolean>;
 };
 
 type DisposableLike = {
@@ -244,6 +245,11 @@ export class PiChatController {
 
     if (message.type === 'selectSession') {
       await this.switchSession(message.sessionPath);
+      return;
+    }
+
+    if (message.type === 'deleteSession') {
+      await this.deleteSession(message.sessionPath);
       return;
     }
 
@@ -796,6 +802,55 @@ export class PiChatController {
       }
 
       await this.adoptReplacedSession({ fallbackSessionFile: trimmedPath });
+    } catch (error) {
+      this.sessionsError = getErrorMessage(error);
+      this.postState();
+    } finally {
+      this.sessionsRefreshing = false;
+      if (this.sessionViewMode === 'sessions') {
+        this.postState();
+      }
+    }
+  }
+
+  private async deleteSession(sessionPath: string): Promise<void> {
+    const trimmedPath = sessionPath.trim();
+
+    if (!trimmedPath) {
+      return;
+    }
+
+    const session = this.sessions.find((entry) => normalizeSessionPath(entry.path) === normalizeSessionPath(trimmedPath));
+
+    if (session?.current || normalizeSessionPath(this.currentSessionFile) === normalizeSessionPath(trimmedPath)) {
+      this.options.showNotification('Switch away from the current session before deleting it.', 'warning');
+      return;
+    }
+
+    if (session?.liveStatus === 'running') {
+      this.options.showNotification('Wait for the session to finish before deleting it.', 'warning');
+      return;
+    }
+
+    if (!this.options.deleteSession) {
+      this.options.showNotification('Session deletion is not available in this environment.', 'warning');
+      return;
+    }
+
+    this.sessionsError = '';
+    this.sessionsRefreshing = true;
+    this.postState();
+
+    try {
+      const deleted = await this.options.deleteSession(trimmedPath, getSessionDisplayName(session, trimmedPath));
+
+      if (!deleted) {
+        return;
+      }
+
+      this.sessions = this.sessions.filter((entry) => normalizeSessionPath(entry.path) !== normalizeSessionPath(trimmedPath));
+      this.options.showToast?.('Session moved to Trash.');
+      await this.refreshSessions();
     } catch (error) {
       this.sessionsError = getErrorMessage(error);
       this.postState();
@@ -2041,6 +2096,21 @@ function getSessionFile(state: { sessionFile?: string }): string | undefined {
   return typeof state.sessionFile === 'string' && state.sessionFile
     ? state.sessionFile
     : undefined;
+}
+
+function normalizeSessionPath(sessionPath: string | undefined): string {
+  return typeof sessionPath === 'string' ? sessionPath.replace(/\\/g, '/') : '';
+}
+
+function getSessionDisplayName(session: WebviewSessionItem | undefined, fallbackPath: string): string {
+  const name = session?.name?.trim() || session?.firstMessage?.trim() || session?.id?.trim();
+
+  if (name) {
+    return name.length > 80 ? name.slice(0, 77) + '...' : name;
+  }
+
+  const fileName = fallbackPath.split(/[\\/]/).pop()?.trim();
+  return fileName || 'session';
 }
 
 const ideContextStartMarker = '<!-- tau:ide-context:start -->';

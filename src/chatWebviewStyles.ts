@@ -313,6 +313,7 @@ export const chatWebviewStyles = /* css */ `    :root {
       display: grid;
       grid-template-columns: auto minmax(0, 1fr) auto;
       gap: 2px 8px;
+      align-items: start;
       width: 100%;
       min-width: 0;
       padding: 7px 8px;
@@ -357,7 +358,7 @@ export const chatWebviewStyles = /* css */ `    :root {
     }
 
     .sessions__meta {
-      grid-column: 2 / -1;
+      grid-column: 2 / 3;
       color: var(--vscode-descriptionForeground);
       font-size: 11px;
       white-space: nowrap;
@@ -373,13 +374,42 @@ export const chatWebviewStyles = /* css */ `    :root {
     }
 
     .sessions__cwd {
-      grid-column: 2 / -1;
+      grid-column: 2 / 3;
       min-width: 0;
       overflow: hidden;
       color: var(--vscode-descriptionForeground);
       font-size: 11px;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    .sessions__delete {
+      grid-column: 3;
+      grid-row: 1 / 3;
+      display: grid;
+      place-items: center;
+      width: 22px;
+      height: 22px;
+      padding: 0;
+      color: inherit;
+      background: transparent;
+      border: 0;
+      border-radius: 999px;
+      cursor: pointer;
+      opacity: 0;
+    }
+
+    .sessions__item:hover .sessions__delete,
+    .sessions__item--active .sessions__delete,
+    .sessions__delete:focus-visible {
+      opacity: 0.78;
+    }
+
+    .sessions__delete:hover,
+    .sessions__delete:focus-visible {
+      background: color-mix(in srgb, currentColor 16%, transparent);
+      outline: none;
+      opacity: 1;
     }
 
     .sessions__item--active .sessions__meta,

@@ -104,6 +104,10 @@ suite('Chat webview helpers', () => {
       { type: 'selectSession', sessionPath: '/sessions/current.jsonl' }
     );
     assert.deepStrictEqual(
+      parseWebviewMessage({ type: 'deleteSession', sessionPath: '/sessions/old.jsonl' }),
+      { type: 'deleteSession', sessionPath: '/sessions/old.jsonl' }
+    );
+    assert.deepStrictEqual(
       parseWebviewMessage({ type: 'selectTreeEntry', entryId: 'entry-1' }),
       { type: 'selectTreeEntry', entryId: 'entry-1' }
     );
@@ -146,6 +150,7 @@ suite('Chat webview helpers', () => {
     assert.deepStrictEqual(parseWebviewMessage({}), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'submit', text: 42 }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'selectSession', sessionPath: '' }), { type: 'unknown' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'deleteSession', sessionPath: '' }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'setSessionName', name: 42 }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'removePromptContext', id: '' }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'copyText', text: '' }), { type: 'unknown' });
