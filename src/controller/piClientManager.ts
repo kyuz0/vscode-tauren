@@ -82,17 +82,18 @@ export class PiClientManager {
     return client;
   }
 
-  public restartIfIdle(busy: boolean): boolean {
+  public restartIfIdle(busy: boolean, beforeRestart?: () => void): boolean {
     if (!this.restartWhenIdle || busy) {
       return false;
     }
 
-    this.restartNow();
+    this.restartNow(beforeRestart);
     return true;
   }
 
-  public restartNow(): void {
+  public restartNow(beforeRestart?: () => void): void {
     this.restartWhenIdle = false;
+    beforeRestart?.();
     this.disposeClient();
   }
 

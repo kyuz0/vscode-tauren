@@ -601,8 +601,12 @@ export class PiChatController {
   }
 
   private disposeClient(): void {
-    this.extensionUiRequestHandler.startNewGeneration();
+    this.prepareForClientDispose();
     this.clientManager.disposeClient();
+  }
+
+  private prepareForClientDispose(): void {
+    this.extensionUiRequestHandler.startNewGeneration();
     this.resetReadyScriptArming();
   }
 
@@ -678,7 +682,7 @@ export class PiChatController {
   }
 
   private restartClientForConfigurationChangeIfIdle(): void {
-    if (!this.clientManager.restartIfIdle(this.session.isBusy)) {
+    if (!this.clientManager.restartIfIdle(this.session.isBusy, () => this.prepareForClientDispose())) {
       return;
     }
 
@@ -686,8 +690,6 @@ export class PiChatController {
   }
 
   private afterClientRestartForConfigurationChange(): void {
-    this.extensionUiRequestHandler.startNewGeneration();
-    this.resetReadyScriptArming();
     this.sessionMetadataRefresh.invalidate();
     this.postState();
     void Promise.all([
