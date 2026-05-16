@@ -5,7 +5,12 @@ import {
   type SessionFileDiff
 } from './sessionDiffTracker';
 
-const sessionDiffScheme = 'tau-session-diff';
+export const sessionDiffScheme = 'tau-session-diff';
+
+export type SessionDiffDocumentContext = {
+  path: string;
+  side: 'original' | 'modified';
+};
 
 type SessionDiffDocument = {
   uri: vscode.Uri;
@@ -94,6 +99,23 @@ export class SessionDiffViewer implements vscode.TextDocumentContentProvider, vs
       modified: { uri: modifiedUri, content: diff.modifiedContent }
     };
   }
+}
+
+export function getSessionDiffDocumentContext(uri: vscode.Uri): SessionDiffDocumentContext | undefined {
+  if (uri.scheme !== sessionDiffScheme || (uri.authority !== 'original' && uri.authority !== 'modified')) {
+    return undefined;
+  }
+
+  const pathParts = uri.path.replace(/^\/+/, '').split('/').filter(Boolean);
+
+  if (pathParts.length < 2) {
+    return undefined;
+  }
+
+  return {
+    path: pathParts.slice(1).join('/'),
+    side: uri.authority
+  };
 }
 
 function normalizeDiffPath(filePath: string): string {

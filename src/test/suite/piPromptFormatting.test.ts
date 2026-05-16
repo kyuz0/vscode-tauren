@@ -32,6 +32,20 @@ suite('Pi prompt formatting helpers', () => {
     assert.ok(prompt.endsWith('\n\nexplain this'));
   });
 
+  test('includes context notes for diff-view selections', () => {
+    const prompt = formatPromptWithIdeContext('explain this change', [
+      {
+        kind: 'selection',
+        path: 'src/foo.ts',
+        startLine: 12,
+        note: 'Line numbers are diff-view section lines, not current file lines.',
+        text: 'const answer = 42;'
+      }
+    ]);
+
+    assert.ok(prompt.includes('note="Line numbers are diff-view section lines, not current file lines."'));
+  });
+
   test('escapes selection attributes and chooses a safe markdown fence', () => {
     const prompt = formatPromptWithIdeContext('review', [
       {

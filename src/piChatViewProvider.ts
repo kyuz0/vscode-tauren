@@ -13,7 +13,7 @@ import {
   type PiRpcClientFactory
 } from './piChatController';
 import { PiRpcClient } from './piRpcClient';
-import { SessionDiffViewer } from './sessionDiffViewer';
+import { getSessionDiffDocumentContext, SessionDiffViewer } from './sessionDiffViewer';
 import { ShikiCodeRenderer } from './shikiCodeRenderer';
 import { TauSessionManager } from './tauSessionManager';
 import { listPiSessions } from './piSessionList';
@@ -449,7 +449,8 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
 
 function createPromptContextFromEditor(editor: vscode.TextEditor): PiPromptContextInput[] {
   const document = editor.document;
-  const path = getDocumentContextPath(document);
+  const diffContext = getSessionDiffDocumentContext(document.uri);
+  const path = diffContext?.path ?? getDocumentContextPath(document);
 
   if (!path) {
     return [];
@@ -468,16 +469,21 @@ function createPromptContextFromEditor(editor: vscode.TextEditor): PiPromptConte
 
     const lineRange = getSelectedLineRange(selection);
     const lineLabel = formatLineRange(lineRange.startLine, lineRange.endLine);
-    const title = `${path}:${lineLabel}`;
+    const title = diffContext
+      ? `${path}:${lineLabel} (${diffContext.side} side of Tau session diff; lines are diff-view section lines)`
+      : `${path}:${lineLabel}`;
 
     return [{
       kind: 'selection',
       path,
-      label: `${getPathBasename(path)}:${lineLabel}`,
+      label: diffContext
+        ? `${getPathBasename(path)}:${lineLabel} (${diffContext.side} diff)`
+        : `${getPathBasename(path)}:${lineLabel}`,
       title,
       languageId: document.languageId,
       startLine: lineRange.startLine,
       endLine: lineRange.endLine,
+      ...(diffContext ? { note: getSessionDiffContextNote(diffContext.side) } : {}),
       text
     }];
   });
@@ -489,8 +495,9 @@ function createPromptContextFromEditor(editor: vscode.TextEditor): PiPromptConte
   return [{
     kind: 'file',
     path,
-    label: getPathBasename(path),
-    title: path
+    label: diffContext ? `${getPathBasename(path)} (${diffContext.side} diff)` : getPathBasename(path),
+    title: diffContext ? `${path} (${diffContext.side} side of Tau session diff)` : path,
+    ...(diffContext ? { note: getSessionDiffContextNote(diffContext.side) } : {})
   }];
 }
 
@@ -500,6 +507,10 @@ function getDocumentContextPath(document: vscode.TextDocument): string {
   }
 
   return document.uri.toString(true);
+}
+
+function getSessionDiffContextNote(side: 'original' | 'modified'): string {
+  return `This context comes from the ${side} side of a Tau session diff view. The line numbers refer to the diff viewer's virtual section document, not to the current workspace file.`;
 }
 
 function getSelectedLineRange(selection: vscode.Selection): { startLine: number; endLine: number } {

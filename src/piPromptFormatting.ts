@@ -4,6 +4,7 @@ export type PiPromptFormattingContextAttachment = {
   languageId?: string;
   startLine?: number;
   endLine?: number;
+  note?: string;
   text?: string;
 };
 
@@ -49,7 +50,11 @@ export function formatPromptWithIdeContext(
 
 function formatPromptContextAttachment(attachment: PiPromptFormattingContextAttachment): string | undefined {
   if (attachment.kind === 'file') {
-    return `<file path="${escapeXmlAttribute(attachment.path)}" />`;
+    const attributes = [
+      `path="${escapeXmlAttribute(attachment.path)}"`,
+      ...(attachment.note ? [`note="${escapeXmlAttribute(attachment.note)}"`] : [])
+    ];
+    return `<file ${attributes.join(' ')} />`;
   }
 
   const text = attachment.text ?? '';
@@ -62,7 +67,8 @@ function formatPromptContextAttachment(attachment: PiPromptFormattingContextAtta
     `path="${escapeXmlAttribute(attachment.path)}"`,
     ...(attachment.startLine ? [`start_line="${attachment.startLine}"`] : []),
     ...(attachment.endLine ? [`end_line="${attachment.endLine}"`] : []),
-    ...(attachment.languageId ? [`language="${escapeXmlAttribute(attachment.languageId)}"`] : [])
+    ...(attachment.languageId ? [`language="${escapeXmlAttribute(attachment.languageId)}"`] : []),
+    ...(attachment.note ? [`note="${escapeXmlAttribute(attachment.note)}"`] : [])
   ];
   const fence = getMarkdownFence(text);
   const language = sanitizeFenceLanguage(attachment.languageId);

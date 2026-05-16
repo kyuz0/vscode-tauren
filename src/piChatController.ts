@@ -120,6 +120,7 @@ export type PiPromptContextInput = {
   languageId?: string;
   startLine?: number;
   endLine?: number;
+  note?: string;
   text?: string;
 };
 
@@ -573,8 +574,10 @@ export class PiChatController {
     const label = (input.label ?? '').trim() || createPromptContextLabel(input, path);
     const title = (input.title ?? '').trim() || createPromptContextTitle(input, path);
 
+    const note = normalizePromptContextNote(input.note);
+
     if (kind === 'file') {
-      return [{ id: this.nextPromptContextId(), kind, path, label, title }];
+      return [{ id: this.nextPromptContextId(), kind, path, label, title, ...(note ? { note } : {}) }];
     }
 
     const text = typeof input.text === 'string' ? input.text : '';
@@ -592,6 +595,7 @@ export class PiChatController {
       languageId: input.languageId,
       startLine: normalizeLineNumber(input.startLine),
       endLine: normalizeLineNumber(input.endLine),
+      ...(note ? { note } : {}),
       text
     }];
   }
@@ -2597,6 +2601,11 @@ function normalizeLineNumber(value: number | undefined): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value > 0
     ? Math.floor(value)
     : undefined;
+}
+
+function normalizePromptContextNote(value: string | undefined): string | undefined {
+  const note = value?.trim();
+  return note ? note : undefined;
 }
 
 function createPromptContextLabel(input: PiPromptContextInput, path: string): string {
