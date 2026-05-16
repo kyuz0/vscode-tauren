@@ -1,9 +1,8 @@
-import { ChatSession, type ChatActivityInput, type ChatMessage } from './chatSession';
+import { ChatSession } from './chatSession';
 import { listPiSessionTree } from './sessions/piSessionTree';
 import { createWebviewStateMessage } from './sidebar/chatWebview';
 import type {
   WebviewMessage,
-  WebviewModelOption,
   WebviewSessionItem,
   WebviewSessionItemCommand,
   WebviewStateMessage,
@@ -20,7 +19,6 @@ import {
 } from './extensionUiRequestHandler';
 import {
   formatExtensionError,
-  formatToolExecutionActivity,
   getFailedResponseError,
   mapMessageUpdate,
   mapRpcActivity,
@@ -30,32 +28,44 @@ import {
 } from './piEventMapper';
 import type { PiRpcClient } from './rpc/client';
 import type {
-  PiAgentMessage,
-  PiForkMessage,
   PiPromptStreamingBehavior,
   PiRpcClientOptions,
   PiSessionState,
   PiSessionStats,
   RpcEvent
 } from './rpc/types';
-import { extractPiMessageText } from './piMessageContent';
 import { formatPromptForPi as formatPromptForPiMessage } from './prompt/formatting';
 import { PromptContextStore } from './prompt/contextStore';
 import type { PiPromptContextAttachment, PiPromptContextInput } from './prompt/types';
-import {
-  isBuiltinSlashCommand,
-  isSupportedBuiltinSlashCommand
-} from './slashCommands';
+import { isSupportedBuiltinSlashCommand } from './slashCommands';
 import { ReadyScriptState } from './readyScript';
 import {
-  formatContextUsage,
-  formatInteger,
   SessionMetadataRefreshController,
   SessionMetadataState,
   type PiChatSessionMetaSnapshot
 } from './sessionMetadata';
 import { SessionDiffController } from './diff/sessionDiffController';
 import type { SessionDiffSnapshot } from './diff/types';
+import {
+  getErrorMessage,
+  isAbortMessage,
+  isClientLifecycleError,
+  isMessageUpdateStart,
+  isUnsupportedReloadCommandError
+} from './controller/errors';
+import { filterModelOptions, formatModelOptionLabel } from './controller/modelFormatting';
+import { parseLocalSlashCommand } from './controller/slashCommandParsing';
+import {
+  createFallbackSessionItem,
+  formatForkMessageLabel,
+  formatForkMessages,
+  formatSessionInfo,
+  getSessionDisplayName,
+  getSessionFile,
+  normalizeSessionPath
+} from './controller/sessionFormatting';
+import { formatAgentMessages, type RestoredToolCall } from './controller/transcriptFormatting';
+import { getRecordString, isRecord } from './controller/typeGuards';
 
 export type PiRpcClientLike = Pick<
   PiRpcClient,
@@ -86,12 +96,6 @@ export type PiRpcClientLike = Pick<
 >;
 
 export type PiRpcClientFactory = (options: PiRpcClientOptions) => PiRpcClientLike;
-
-type RestoredToolCall = {
-  id: string;
-  name?: string;
-  args?: unknown;
-};
 
 export type { PiChatContextUsage, PiChatModelMeta, PiChatSessionMetaSnapshot } from './sessionMetadata';
 
@@ -1957,363 +1961,4 @@ export class PiChatController {
 
 async function defaultListSessions(): Promise<WebviewSessionItem[]> {
   return [];
-}
-
-function getSessionFile(state: { sessionFile?: string }): string | undefined {
-  return typeof state.sessionFile === 'string' && state.sessionFile
-    ? state.sessionFile
-    : undefined;
-}
-
-function normalizeSessionPath(sessionPath: string | undefined): string {
-  return typeof sessionPath === 'string' ? sessionPath.replace(/\\/g, '/') : '';
-}
-
-function createFallbackSessionItem(sessionPath: string): WebviewSessionItem {
-  return {
-    path: sessionPath,
-    id: sessionPath.split(/[\\/]/).pop()?.trim() || sessionPath,
-    cwd: '',
-    created: '',
-    modified: '',
-    messageCount: 0,
-    firstMessage: '',
-    depth: 0,
-    isLast: true,
-    ancestorContinues: [],
-    current: false
-  };
-}
-
-function getSessionDisplayName(session: WebviewSessionItem | undefined, fallbackPath: string): string {
-  const name = session?.name?.trim() || session?.firstMessage?.trim() || session?.id?.trim();
-
-  if (name) {
-    return name.length > 80 ? name.slice(0, 77) + '...' : name;
-  }
-
-  const fileName = fallbackPath.split(/[\\/]/).pop()?.trim();
-  return fileName || 'session';
-}
-
-type ForkMessageOption = {
-  entryId: string;
-  text: string;
-};
-
-function formatForkMessages(messages: PiForkMessage[] | undefined): ForkMessageOption[] {
-  if (!Array.isArray(messages)) {
-    return [];
-  }
-
-  return messages.flatMap((message) => {
-    const entryId = typeof message.entryId === 'string' ? message.entryId : '';
-    const text = typeof message.text === 'string'
-      ? message.text.trim()
-      : '';
-
-    return entryId && text ? [{ entryId, text }] : [];
-  });
-}
-
-function formatForkMessageLabel(message: ForkMessageOption, index: number): string {
-  return `${index + 1}. ${truncateOneLine(message.text, 120)}`;
-}
-
-function truncateOneLine(text: string, maxLength: number): string {
-  const singleLine = text.replace(/\s+/g, ' ').trim();
-
-  if (singleLine.length <= maxLength) {
-    return singleLine;
-  }
-
-  return `${singleLine.slice(0, Math.max(0, maxLength - 1))}…`;
-}
-
-function formatAgentMessages(messages: PiAgentMessage[] | undefined): ChatMessage[] {
-  if (!Array.isArray(messages)) {
-    return [];
-  }
-
-  const transcript: ChatMessage[] = [];
-  const toolCallsById = new Map<string, RestoredToolCall>();
-  let lastAssistant: ChatMessage | undefined;
-  let restoredActivitySequence = 0;
-
-  for (const message of messages) {
-    if (!isRecord(message)) {
-      continue;
-    }
-
-    if (message.role === 'user') {
-      const text = extractPiMessageText(message.content, { includeImages: true });
-
-      if (text.trim()) {
-        transcript.push({ role: 'user', text });
-      }
-
-      lastAssistant = undefined;
-      continue;
-    }
-
-    if (message.role === 'assistant') {
-      const toolCalls = extractRestoredToolCalls(message.content);
-
-      for (const toolCall of toolCalls) {
-        toolCallsById.set(toolCall.id, toolCall);
-      }
-
-      const text = extractPiMessageText(message.content, { includeImages: true });
-      const errorMessage = typeof message.errorMessage === 'string' ? message.errorMessage : '';
-      const displayText = text || errorMessage;
-
-      if (displayText.trim() || toolCalls.length > 0) {
-        const chatMessage: ChatMessage = {
-          role: 'assistant',
-          text: displayText,
-          ...(errorMessage ? { error: true } : {})
-        };
-        transcript.push(chatMessage);
-        lastAssistant = chatMessage;
-      } else {
-        lastAssistant = undefined;
-      }
-
-      continue;
-    }
-
-    if (message.role === 'toolResult') {
-      const activity = formatRestoredToolResultActivity(message, toolCallsById);
-
-      if (activity) {
-        const target = lastAssistant ?? createRestoredToolAssistantMessage(transcript);
-        restoredActivitySequence += 1;
-        target.activities ??= [];
-        target.activities.push({
-          id: `restored-tool-${restoredActivitySequence}`,
-          ...activity
-        });
-        lastAssistant = target;
-      }
-
-      continue;
-    }
-
-    if (message.role === 'compactionSummary') {
-      const summary = typeof message.summary === 'string' ? message.summary : '';
-
-      if (summary.trim()) {
-        transcript.push({ role: 'system', text: `Compacted session context.\n\n${summary}` });
-      }
-
-      lastAssistant = undefined;
-      continue;
-    }
-
-    if (message.role === 'branchSummary') {
-      const summary = typeof message.summary === 'string' ? message.summary : '';
-
-      if (summary.trim()) {
-        transcript.push({ role: 'system', text: `Returned from branch.\n\n${summary}` });
-      }
-
-      lastAssistant = undefined;
-      continue;
-    }
-
-    if (message.role === 'custom') {
-      const displayText = typeof message.display === 'string'
-        ? message.display
-        : extractPiMessageText(message.content, { includeImages: true });
-
-      if (displayText.trim()) {
-        transcript.push({ role: 'system', text: displayText });
-      }
-
-      lastAssistant = undefined;
-    }
-  }
-
-  return transcript;
-}
-
-function extractRestoredToolCalls(content: unknown): RestoredToolCall[] {
-  if (!Array.isArray(content)) {
-    return [];
-  }
-
-  return content.flatMap((item): RestoredToolCall[] => {
-    if (!isRecord(item) || item.type !== 'toolCall') {
-      return [];
-    }
-
-    const id = typeof item.id === 'string' ? item.id : '';
-
-    if (!id) {
-      return [];
-    }
-
-    return [{
-      id,
-      name: typeof item.name === 'string' ? item.name : undefined,
-      args: item.arguments ?? item.args
-    }];
-  });
-}
-
-function formatRestoredToolResultActivity(
-  message: PiAgentMessage,
-  toolCallsById: Map<string, RestoredToolCall>
-): ChatActivityInput | undefined {
-  const toolCallId = typeof message.toolCallId === 'string' ? message.toolCallId : '';
-  const restoredToolCall = toolCallId ? toolCallsById.get(toolCallId) : undefined;
-  const toolName = typeof message.toolName === 'string'
-    ? message.toolName
-    : restoredToolCall?.name;
-  const result = { content: message.content };
-
-  if (!toolName && message.content === undefined) {
-    return undefined;
-  }
-
-  return formatToolExecutionActivity({
-    toolName,
-    args: restoredToolCall?.args,
-    result,
-    status: message.isError === true ? 'error' : 'completed'
-  });
-}
-
-function createRestoredToolAssistantMessage(transcript: ChatMessage[]): ChatMessage {
-  const message: ChatMessage = { role: 'assistant', text: '' };
-  transcript.push(message);
-  return message;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function getRecordString(record: Record<string, unknown>, key: string): string | undefined {
-  const value = record[key];
-  return typeof value === 'string' ? value : undefined;
-}
-
-function parseLocalSlashCommand(text: string): { name: string; args: string } | undefined {
-  const match = text.trim().match(/^\/([^\s]+)(?:\s+([\s\S]*))?$/);
-
-  if (!match) {
-    return undefined;
-  }
-
-  const name = match[1];
-
-  if (!isBuiltinSlashCommand(name)) {
-    return undefined;
-  }
-
-  return { name, args: match[2]?.trim() ?? '' };
-}
-
-function filterModelOptions(modelOptions: WebviewModelOption[], query: string): WebviewModelOption[] {
-  const normalizedQuery = query.trim().toLowerCase();
-
-  if (!normalizedQuery) {
-    return modelOptions;
-  }
-
-  return modelOptions.filter((model) => {
-    const providerAndId = `${model.provider}/${model.id}`.toLowerCase();
-    const id = model.id.toLowerCase();
-    const name = model.name.toLowerCase();
-    return providerAndId === normalizedQuery
-      || id === normalizedQuery
-      || name === normalizedQuery
-      || providerAndId.includes(normalizedQuery)
-      || id.includes(normalizedQuery)
-      || name.includes(normalizedQuery);
-  });
-}
-
-function formatModelOptionLabel(model: WebviewModelOption): string {
-  return model.name && model.name !== model.id
-    ? `${model.name} (${model.provider}/${model.id})`
-    : `${model.provider}/${model.id}`;
-}
-
-function formatSessionInfo(state: PiSessionState, stats: PiSessionStats): string {
-  const lines = ['Session'];
-  const sessionName = state.sessionName ?? stats.sessionName;
-  const sessionId = state.sessionId ?? stats.sessionId;
-  const sessionFile = state.sessionFile ?? stats.sessionFile;
-
-  if (sessionName) {
-    lines.push(`Name: ${sessionName}`);
-  }
-
-  if (sessionId) {
-    lines.push(`ID: ${sessionId}`);
-  }
-
-  if (sessionFile) {
-    lines.push(`File: ${sessionFile}`);
-  }
-
-  if (typeof state.messageCount === 'number') {
-    lines.push(`Messages: ${formatInteger(state.messageCount)}`);
-  } else if (typeof stats.totalMessages === 'number') {
-    lines.push(`Messages: ${formatInteger(stats.totalMessages)}`);
-  }
-
-  if (typeof stats.toolCalls === 'number') {
-    lines.push(`Tool calls: ${formatInteger(stats.toolCalls)}`);
-  }
-
-  if (typeof stats.cost === 'number') {
-    lines.push(`Cost: $${stats.cost.toFixed(4)}`);
-  }
-
-  const contextUsage = formatContextUsage(stats);
-
-  if (contextUsage.label) {
-    lines.push(`Context used: ${contextUsage.label}`);
-  }
-
-  return lines.join('\n');
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return String(error);
-}
-
-function isUnsupportedReloadCommandError(error: unknown): boolean {
-  return /unknown command:?\s+reload/i.test(getErrorMessage(error));
-}
-
-function isAbortMessage(message: string): boolean {
-  return message.trim().toLowerCase() === 'aborted';
-}
-
-function isClientLifecycleError(message: string): boolean {
-  const normalized = message.trim().toLowerCase();
-
-  return normalized.startsWith('pi rpc process exited')
-    || normalized.startsWith('failed to start pi rpc process')
-    || normalized.startsWith('failed to parse pi rpc output')
-    || normalized.startsWith('received malformed pi rpc output')
-    || normalized.includes('pi rpc process is not running')
-    || normalized.includes('pi rpc client disposed');
-}
-
-function isMessageUpdateStart(event: RpcEvent): boolean {
-  const assistantMessageEvent = event.assistantMessageEvent;
-
-  return typeof assistantMessageEvent === 'object'
-    && assistantMessageEvent !== null
-    && 'type' in assistantMessageEvent
-    && assistantMessageEvent.type === 'start';
 }
