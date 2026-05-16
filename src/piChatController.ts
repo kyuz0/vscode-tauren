@@ -27,7 +27,6 @@ import {
 import type { PiRpcClientFactory, PiRpcClientLike } from './rpc/clientTypes';
 import type {
   PiPromptStreamingBehavior,
-  PiRpcClientOptions,
   PiSessionState,
   PiSessionStats,
   RpcEvent
@@ -59,6 +58,7 @@ import {
   formatSessionInfo,
   getSessionFile
 } from './controller/sessionFormatting';
+import { PiClientManager } from './controller/piClientManager';
 import { SessionViewController } from './controller/sessionViewController';
 import { formatAgentMessages, type RestoredToolCall } from './controller/transcriptFormatting';
 import { getRecordString, isRecord } from './controller/typeGuards';
@@ -93,12 +93,7 @@ export type PiChatControllerOptions = {
   saveSessionDiffSnapshot?: (sessionFile: string, snapshot: SessionDiffSnapshot) => void;
 };
 
-type DisposableLike = {
-  dispose(): void;
-};
-
 export class PiChatController {
-  private client: PiRpcClientLike | undefined;
   private assistantStreamId = 0;
   private readonly promptContext = new PromptContextStore();
   private readonly sessionMetadata: SessionMetadataState;
@@ -106,10 +101,9 @@ export class PiChatController {
   private readonly sessionView: SessionViewController;
   private pendingComposerText: { text: string; revision: number } | undefined;
   private composerTextRevision = 0;
-  private nextClientSessionFile: string | undefined;
+  private readonly clientManager: PiClientManager;
   private shouldRestoreInitialSessionHistory: boolean;
   private sessionHistoryLoading: boolean;
-  private restartClientWhenIdle = false;
   private abortRequested = false;
   private abortNoticeAdded = false;
   private compacting = false;
@@ -117,7 +111,6 @@ export class PiChatController {
   private readonly readyScriptState = new ReadyScriptState();
   private readonly liveToolCallsById = new Map<string, RestoredToolCall>();
   private readonly session = new ChatSession();
-  private readonly clientDisposables: DisposableLike[] = [];
   private readonly statePublisher: StatePublisher<WebviewStateMessage>;
   private readonly extensionUiRequestHandler: ExtensionUiRequestHandler;
 
@@ -158,6 +151,16 @@ export class PiChatController {
         this.sessionHistoryLoading = value;
       },
       startNewSession: (sessionOptions) => this.startNewSession(sessionOptions)
+    });
+
+    this.clientManager = new PiClientManager({
+      createClient: options.createClient,
+      getCwd: options.getCwd,
+      getPiPath: options.getPiPath,
+      getCurrentSessionFile: () => this.sessionView.currentSessionFile,
+      getSessionGeneration: () => this.session.generation,
+      onEvent: (event) => this.handleRpcEvent(event),
+      onError: (message) => this.handleClientError(message)
     });
 
     this.sessionMetadata = new SessionMetadataState({
@@ -355,10 +358,9 @@ export class PiChatController {
     this.session.startNewSession();
     this.sessionView.startNewSession(options.viewMode ?? 'chat');
     this.sessionDiffController.reset(undefined);
-    this.nextClientSessionFile = undefined;
+    this.clientManager.setNextSessionFile(undefined);
     this.shouldRestoreInitialSessionHistory = false;
     this.sessionHistoryLoading = false;
-    this.restartClientWhenIdle = false;
     this.resetReadyScriptArming();
     this.resetSessionMeta();
     this.disposeClient();
@@ -367,11 +369,11 @@ export class PiChatController {
   }
 
   public handlePiPathChanged(): void {
-    if (!this.client) {
+    if (!this.clientManager.hasClient) {
       return;
     }
 
-    this.restartClientWhenIdle = true;
+    this.clientManager.requestRestartWhenIdle();
 
     if (this.session.isBusy) {
       return;
@@ -935,7 +937,7 @@ export class PiChatController {
       const sessionFile = getSessionFile(await client.getState());
       restartedClient = true;
       restoredSession = Boolean(sessionFile);
-      this.nextClientSessionFile = sessionFile;
+      this.clientManager.setNextSessionFile(sessionFile);
       this.disposeClient();
       this.session.addSystemMessage(sessionFile
         ? 'Pi RPC reload is not supported by this Pi version; restarted Pi and reconnected to the current session.'
@@ -1034,13 +1036,7 @@ export class PiChatController {
 
   private disposeClient(): void {
     this.extensionUiRequestHandler.startNewGeneration();
-
-    for (const disposable of this.clientDisposables.splice(0)) {
-      disposable.dispose();
-    }
-
-    this.client?.dispose();
-    this.client = undefined;
+    this.clientManager.disposeClient();
     this.resetReadyScriptArming();
   }
 
@@ -1079,49 +1075,11 @@ export class PiChatController {
   }
 
   private getExistingClient(): PiRpcClientLike | undefined {
-    if (!this.client?.isRunning()) {
-      return undefined;
-    }
-
-    return this.client;
+    return this.clientManager.getExistingClient();
   }
 
   private getClient(): PiRpcClientLike {
-    if (this.client) {
-      return this.client;
-    }
-
-    const sessionFile = this.nextClientSessionFile ?? this.sessionView.currentSessionFile;
-    this.nextClientSessionFile = undefined;
-    const clientOptions: PiRpcClientOptions = { cwd: this.options.getCwd?.() };
-    const piPath = this.options.getPiPath?.();
-
-    if (piPath) {
-      clientOptions.piPath = piPath;
-    }
-
-    if (sessionFile) {
-      clientOptions.sessionFile = sessionFile;
-    }
-
-    const client = this.options.createClient(clientOptions);
-    const sessionGeneration = this.session.generation;
-    this.client = client;
-
-    this.clientDisposables.push(
-      { dispose: client.onEvent((event) => {
-        if (sessionGeneration === this.session.generation) {
-          this.handleRpcEvent(event);
-        }
-      }) },
-      { dispose: client.onError((message) => {
-        if (sessionGeneration === this.session.generation) {
-          this.handleClientError(message);
-        }
-      }) }
-    );
-
-    return client;
+    return this.clientManager.getClient();
   }
 
   private handleRpcEvent(event: RpcEvent): void {
@@ -1377,17 +1335,17 @@ export class PiChatController {
   }
 
   private restartClientForConfigurationChangeIfIdle(): void {
-    if (!this.restartClientWhenIdle || this.session.isBusy) {
+    if (!this.clientManager.restartIfIdle(this.session.isBusy)) {
       return;
     }
 
-    this.restartClientForConfigurationChange();
+    this.afterClientRestartForConfigurationChange();
   }
 
-  private restartClientForConfigurationChange(): void {
-    this.restartClientWhenIdle = false;
+  private afterClientRestartForConfigurationChange(): void {
+    this.extensionUiRequestHandler.startNewGeneration();
+    this.resetReadyScriptArming();
     this.sessionMetadataRefresh.invalidate();
-    this.disposeClient();
     this.postState();
     void Promise.all([
       this.refreshSessionMeta({ startClient: true, force: true }),
