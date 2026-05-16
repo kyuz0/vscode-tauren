@@ -11,7 +11,7 @@ import type {
   PiSessionState,
   PiSessionStats,
   RpcEvent
-} from '../../piRpcClient';
+} from '../../rpc/types';
 
 suite('TauSessionManager', () => {
   test('tracks background session live status, unread state, and active persistence', async () => {

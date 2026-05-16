@@ -6,7 +6,7 @@ import {
   type ExtensionUiRequestUi,
   type MaybePromise
 } from '../../extensionUiRequestHandler';
-import type { ExtensionUiResponse } from '../../piRpcProtocol';
+import type { ExtensionUiResponse } from '../../rpc/types';
 
 suite('ExtensionUiRequestHandler', () => {
   test('maps extension UI requests', () => {

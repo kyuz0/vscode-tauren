@@ -5,7 +5,7 @@ import {
   parseRpcEvent,
   parseRpcResponse,
   serializeJsonLine
-} from '../../piRpcProtocol';
+} from '../../rpc/protocol';
 
 suite('Pi RPC protocol helpers', () => {
   test('parseRpcEvent accepts records with string event types', () => {

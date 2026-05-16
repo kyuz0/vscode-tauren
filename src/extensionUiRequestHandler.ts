@@ -1,4 +1,4 @@
-import type { ExtensionUiResponse, RpcEvent } from './piRpcProtocol';
+import type { ExtensionUiResponse, RpcEvent } from './rpc/types';
 
 export const defaultExtensionUiRequestTimeoutMs = 5 * 60 * 1000;
 

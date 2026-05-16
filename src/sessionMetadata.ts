@@ -1,5 +1,5 @@
 import type { WebviewModelOption, WebviewSlashCommand } from './chatWebview';
-import type { PiCommand, PiMessagesResult, PiModel, PiSessionState, PiSessionStats } from './piRpcClient';
+import type { PiCommand, PiMessagesResult, PiModel, PiSessionState, PiSessionStats } from './rpc/types';
 
 export type PiChatModelMeta = {
   label: string;

@@ -1,4 +1,4 @@
-import { StringDecoder } from 'string_decoder';
+import type { SpawnOptionsWithoutStdio } from 'child_process';
 
 export type RpcEventBase = Record<string, unknown> & {
   type: string;
@@ -91,111 +91,141 @@ export type UnknownRpcEvent = RpcEventBase;
 
 export type RpcEvent = KnownRpcEvent | UnknownRpcEvent;
 
-export function parseRpcEvent(value: unknown): RpcEvent | undefined {
-  if (!isRecord(value) || typeof value.type !== 'string') {
-    return undefined;
-  }
+export type RpcCommand = {
+  type: string;
+  [key: string]: unknown;
+};
 
-  if (value.type === 'response') {
-    return parseRpcResponseFromRecord(value);
-  }
+export type PiModel = {
+  provider?: string;
+  id?: string;
+  name?: string;
+  reasoning?: boolean;
+  contextWindow?: number;
+};
 
-  return { ...value, type: value.type };
-}
+export type PiSessionState = {
+  model?: PiModel | null;
+  thinkingLevel?: string;
+  sessionFile?: string;
+  sessionId?: string;
+  sessionName?: string;
+  messageCount?: number;
+  pendingMessageCount?: number;
+};
 
-export function parseRpcResponse(value: unknown): RpcResponse | undefined {
-  if (!isRecord(value) || value.type !== 'response') {
-    return undefined;
-  }
+export type PiAvailableModels = {
+  models?: PiModel[];
+};
 
-  return parseRpcResponseFromRecord(value);
-}
+export type PiCommand = {
+  name?: string;
+  description?: string;
+  source?: string;
+  location?: string;
+  path?: string;
+};
 
-export function attachJsonlLineReader(
-  stream: NodeJS.ReadableStream,
-  onLine: (line: string) => void
-): () => void {
-  const decoder = new StringDecoder('utf8');
-  let buffer = '';
+export type PiAvailableCommands = {
+  commands?: PiCommand[];
+};
 
-  const emitLine = (line: string): void => {
-    onLine(line.endsWith('\r') ? line.slice(0, -1) : line);
+export type PiSessionStats = {
+  sessionFile?: string;
+  sessionId?: string;
+  sessionName?: string;
+  userMessages?: number;
+  assistantMessages?: number;
+  toolCalls?: number;
+  totalMessages?: number;
+  cost?: number;
+  contextUsage?: {
+    tokens?: number | null;
+    contextWindow?: number;
+    percent?: number | null;
   };
+};
 
-  const onData = (chunk: string | Buffer): void => {
-    buffer += typeof chunk === 'string' ? chunk : decoder.write(chunk);
+export type PiCompactResult = {
+  summary?: string;
+  firstKeptEntryId?: string;
+  tokensBefore?: number;
+  details?: unknown;
+};
 
-    while (true) {
-      const newlineIndex = buffer.indexOf('\n');
+export type PiExportHtmlResult = {
+  path?: string;
+};
 
-      if (newlineIndex === -1) {
-        return;
-      }
+export type PiLastAssistantText = {
+  text?: string | null;
+};
 
-      emitLine(buffer.slice(0, newlineIndex));
-      buffer = buffer.slice(newlineIndex + 1);
-    }
-  };
+export type PiSwitchSessionResult = {
+  cancelled?: boolean;
+};
 
-  const onEnd = (): void => {
-    buffer += decoder.end();
+export type PiForkMessage = {
+  entryId?: string;
+  text?: string;
+};
 
-    if (buffer.length > 0) {
-      emitLine(buffer);
-      buffer = '';
-    }
-  };
+export type PiForkMessagesResult = {
+  messages?: PiForkMessage[];
+};
 
-  stream.on('data', onData);
-  stream.on('end', onEnd);
+export type PiForkResult = {
+  text?: string;
+  cancelled?: boolean;
+};
 
-  return () => {
-    stream.off('data', onData);
-    stream.off('end', onEnd);
-  };
-}
+export type PiCloneResult = {
+  cancelled?: boolean;
+};
 
-export function serializeJsonLine(value: unknown): string {
-  return `${JSON.stringify(value)}\n`;
-}
+export type PiNavigateTreeResult = {
+  editorText?: string;
+  cancelled?: boolean;
+  aborted?: boolean;
+};
 
-function parseRpcResponseFromRecord(record: Record<string, unknown>): RpcResponse {
-  const response = omitKeys(record, ['type', 'command', 'id', 'success', 'error', 'data']) as RpcResponse;
-  response.type = 'response';
+export type PiAgentMessage = {
+  role?: string;
+  content?: unknown;
+  errorMessage?: string;
+  summary?: string;
+  display?: unknown;
+  toolCallId?: string;
+  toolName?: string;
+  isError?: boolean;
+};
 
-  if (typeof record.command === 'string') {
-    response.command = record.command;
-  }
+export type PiMessagesResult = {
+  messages?: PiAgentMessage[];
+};
 
-  if (typeof record.id === 'string') {
-    response.id = record.id;
-  }
+export type PiPromptStreamingBehavior = 'steer' | 'followUp';
 
-  if (typeof record.success === 'boolean') {
-    response.success = record.success;
-  }
+export type PiRpcProcess = {
+  stdin: NodeJS.WritableStream;
+  stdout: NodeJS.ReadableStream;
+  stderr: NodeJS.ReadableStream;
+  exitCode: number | null;
+  kill(signal?: NodeJS.Signals | number): boolean;
+  once(event: 'error', listener: (error: Error) => void): unknown;
+  once(event: 'exit', listener: (code: number | null, signal: NodeJS.Signals | null) => void): unknown;
+};
 
-  if (typeof record.error === 'string') {
-    response.error = record.error;
-  }
+export type PiRpcSpawnFactory = (
+  command: string,
+  args: readonly string[],
+  options: SpawnOptionsWithoutStdio
+) => PiRpcProcess;
 
-  if ('data' in record) {
-    response.data = record.data;
-  }
-
-  return response;
-}
-
-function omitKeys(record: Record<string, unknown>, keys: string[]): Record<string, unknown> {
-  const copy = { ...record };
-
-  for (const key of keys) {
-    delete copy[key];
-  }
-
-  return copy;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
+export type PiRpcClientOptions = {
+  cwd?: string;
+  sessionFile?: string;
+  piPath?: string;
+  spawnFactory?: PiRpcSpawnFactory;
+  commandTimeoutMs?: number;
+};

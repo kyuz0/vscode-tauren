@@ -28,16 +28,16 @@ import {
   type ActivityRemoveAction,
   type ActivityUpdateAction
 } from './piEventMapper';
+import type { PiRpcClient } from './rpc/client';
 import type {
   PiAgentMessage,
   PiForkMessage,
   PiPromptStreamingBehavior,
-  PiRpcClient,
   PiRpcClientOptions,
   PiSessionState,
   PiSessionStats,
   RpcEvent
-} from './piRpcClient';
+} from './rpc/types';
 import { extractPiMessageText } from './piMessageContent';
 import { formatPromptForPi as formatPromptForPiMessage } from './piPromptFormatting';
 import {

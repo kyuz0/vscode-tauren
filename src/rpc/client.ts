@@ -1,161 +1,43 @@
-import { spawn, type SpawnOptionsWithoutStdio } from 'child_process';
+import { spawn } from 'child_process';
 import {
   attachJsonlLineReader,
   parseRpcEvent,
   parseRpcResponse,
-  serializeJsonLine,
-  type ExtensionUiResponse,
-  type RpcEvent,
-  type RpcResponse
-} from './piRpcProtocol';
+  serializeJsonLine
+} from './protocol';
+import type {
+  ExtensionUiResponse,
+  PiAvailableCommands,
+  PiAvailableModels,
+  PiCloneResult,
+  PiCompactResult,
+  PiExportHtmlResult,
+  PiForkMessagesResult,
+  PiForkResult,
+  PiLastAssistantText,
+  PiMessagesResult,
+  PiModel,
+  PiNavigateTreeResult,
+  PiPromptStreamingBehavior,
+  PiRpcClientOptions,
+  PiRpcProcess,
+  PiRpcSpawnFactory,
+  PiSessionState,
+  PiSessionStats,
+  PiSwitchSessionResult,
+  RpcCommand,
+  RpcEvent,
+  RpcResponse
+} from './types';
 
-export { parseRpcEvent, parseRpcResponse } from './piRpcProtocol';
-export type { ExtensionUiResponse, RpcEvent, RpcResponse } from './piRpcProtocol';
-
-type RpcCommand = {
-  type: string;
-  [key: string]: unknown;
-};
-
-export type PiModel = {
-  provider?: string;
-  id?: string;
-  name?: string;
-  reasoning?: boolean;
-  contextWindow?: number;
-};
-
-export type PiSessionState = {
-  model?: PiModel | null;
-  thinkingLevel?: string;
-  sessionFile?: string;
-  sessionId?: string;
-  sessionName?: string;
-  messageCount?: number;
-  pendingMessageCount?: number;
-};
-
-export type PiAvailableModels = {
-  models?: PiModel[];
-};
-
-export type PiCommand = {
-  name?: string;
-  description?: string;
-  source?: string;
-  location?: string;
-  path?: string;
-};
-
-export type PiAvailableCommands = {
-  commands?: PiCommand[];
-};
-
-export type PiSessionStats = {
-  sessionFile?: string;
-  sessionId?: string;
-  sessionName?: string;
-  userMessages?: number;
-  assistantMessages?: number;
-  toolCalls?: number;
-  totalMessages?: number;
-  cost?: number;
-  contextUsage?: {
-    tokens?: number | null;
-    contextWindow?: number;
-    percent?: number | null;
-  };
-};
-
-export type PiCompactResult = {
-  summary?: string;
-  firstKeptEntryId?: string;
-  tokensBefore?: number;
-  details?: unknown;
-};
-
-export type PiExportHtmlResult = {
-  path?: string;
-};
-
-export type PiLastAssistantText = {
-  text?: string | null;
-};
-
-export type PiSwitchSessionResult = {
-  cancelled?: boolean;
-};
-
-export type PiForkMessage = {
-  entryId?: string;
-  text?: string;
-};
-
-export type PiForkMessagesResult = {
-  messages?: PiForkMessage[];
-};
-
-export type PiForkResult = {
-  text?: string;
-  cancelled?: boolean;
-};
-
-export type PiCloneResult = {
-  cancelled?: boolean;
-};
-
-export type PiNavigateTreeResult = {
-  editorText?: string;
-  cancelled?: boolean;
-  aborted?: boolean;
-};
-
-export type PiAgentMessage = {
-  role?: string;
-  content?: unknown;
-  errorMessage?: string;
-  summary?: string;
-  display?: unknown;
-  toolCallId?: string;
-  toolName?: string;
-  isError?: boolean;
-};
-
-export type PiMessagesResult = {
-  messages?: PiAgentMessage[];
-};
-
-export type PiPromptStreamingBehavior = 'steer' | 'followUp';
+export { parseRpcEvent, parseRpcResponse } from './protocol';
+export type * from './types';
 
 type PendingRequest = {
   commandType: string;
   timeout: NodeJS.Timeout;
   resolve: (response: RpcResponse) => void;
   reject: (error: Error) => void;
-};
-
-type PiRpcProcess = {
-  stdin: NodeJS.WritableStream;
-  stdout: NodeJS.ReadableStream;
-  stderr: NodeJS.ReadableStream;
-  exitCode: number | null;
-  kill(signal?: NodeJS.Signals | number): boolean;
-  once(event: 'error', listener: (error: Error) => void): unknown;
-  once(event: 'exit', listener: (code: number | null, signal: NodeJS.Signals | null) => void): unknown;
-};
-
-type PiRpcSpawnFactory = (
-  command: string,
-  args: readonly string[],
-  options: SpawnOptionsWithoutStdio
-) => PiRpcProcess;
-
-export type PiRpcClientOptions = {
-  cwd?: string;
-  sessionFile?: string;
-  piPath?: string;
-  spawnFactory?: PiRpcSpawnFactory;
-  commandTimeoutMs?: number;
 };
 
 const defaultSpawnFactory: PiRpcSpawnFactory = (command, args, options) => spawn(command, args, options);

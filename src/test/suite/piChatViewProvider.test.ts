@@ -9,7 +9,7 @@ import type {
   PiSessionState,
   PiSessionStats,
   RpcEvent
-} from '../../piRpcClient';
+} from '../../rpc/types';
 
 suite('PiChatViewProvider', () => {
   test('posts cached legacy model metadata and persists refreshed session metadata', async () => {

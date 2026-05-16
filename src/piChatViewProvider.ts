@@ -12,7 +12,7 @@ import {
   type PiChatSessionMetaSnapshot,
   type PiRpcClientFactory
 } from './piChatController';
-import { PiRpcClient } from './piRpcClient';
+import { PiRpcClient } from './rpc/client';
 import { createSessionDiffStatsFileWatcher, readSessionDiffSnapshot, writeSessionDiffSnapshot } from './diff/sessionDiffStorage';
 import { getSessionDiffDocumentContext, SessionDiffViewer } from './diff/sessionDiffViewer';
 import { ShikiCodeRenderer } from './shikiCodeRenderer';

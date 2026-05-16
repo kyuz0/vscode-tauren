@@ -1,7 +1,8 @@
 import * as assert from 'assert';
 import { EventEmitter } from 'events';
 import { PassThrough, Writable } from 'stream';
-import { PiRpcClient, type RpcEvent } from '../../piRpcClient';
+import { PiRpcClient } from '../../rpc/client';
+import type { RpcEvent } from '../../rpc/types';
 
 suite('PiRpcClient', () => {
   test('reports whether the RPC process is running', async () => {

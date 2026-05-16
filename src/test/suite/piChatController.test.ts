@@ -19,7 +19,7 @@ import type {
   PiSessionState,
   PiSessionStats,
   RpcEvent
-} from '../../piRpcClient';
+} from '../../rpc/types';
 
 suite('PiChatController', () => {
   test('webview ready starts one live metadata refresh and dedupes repeated ready messages', async () => {
