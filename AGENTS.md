@@ -27,6 +27,7 @@ Do not add transient notes, guesses, one-off debugging observations, or broad ge
 - `src/shikiCodeRenderer.ts` owns extension-host Shiki syntax rendering, VS Code theme/language registration resolution, fallback bundled Shiki themes/languages, and highlight-result caching.
 - Browser-side sidebar logic lives under `src/webview` and is bundled by esbuild to `resources/webview/chat.js`; keep generated webview assets in `resources/webview`.
 - `src/webview/codeHighlighting.ts` owns browser-side asynchronous code-highlight requests/results for markdown code fences and read-tool code boxes; reuse it for future code/diff panes where practical.
+- `src/webview/diffCounter.ts` owns browser-side session diff counter formatting and animation.
 - `src/nonce.ts` owns nonce generation for CSP-protected inline scripts.
 - `src/piEventMapper.ts` owns pure Pi RPC event-to-UI action mapping helpers.
 - `src/extensionUiRequestHandler.ts` owns extension UI request routing through an injected VS Code UI adapter, safe cancellation, and stale request cleanup.
