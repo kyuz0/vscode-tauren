@@ -1,5 +1,5 @@
 import { ChatSession, type ChatActivityInput, type ChatMessage } from './chatSession';
-import { listPiSessionTree } from './piSessionTree';
+import { listPiSessionTree } from './sessions/piSessionTree';
 import {
   createWebviewStateMessage,
   type WebviewMessage,

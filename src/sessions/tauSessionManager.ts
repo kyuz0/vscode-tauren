@@ -3,8 +3,8 @@ import {
   type PiChatControllerOptions,
   type PiChatSessionMetaSnapshot,
   type PiPromptContextInput
-} from './piChatController';
-import type { WebviewMessage, WebviewSessionItem, WebviewStateMessage } from './chatWebview';
+} from '../piChatController';
+import type { WebviewMessage, WebviewSessionItem, WebviewStateMessage } from '../chatWebview';
 
 export type TauSessionManagerOptions = PiChatControllerOptions;
 

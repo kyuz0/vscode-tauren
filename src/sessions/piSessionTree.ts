@@ -1,5 +1,5 @@
 import { readFile } from 'fs/promises';
-import { extractPiMessageText } from './piMessageContent';
+import { extractPiMessageText } from '../piMessageContent';
 
 export type PiSessionTreeItem = {
   entryId: string;

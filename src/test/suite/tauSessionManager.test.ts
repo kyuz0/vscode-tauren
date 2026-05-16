@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { TauSessionManager, type TauSessionManagerOptions } from '../../tauSessionManager';
+import { TauSessionManager, type TauSessionManagerOptions } from '../../sessions/tauSessionManager';
 import type { WebviewSessionItem, WebviewStateMessage, WebviewTreeItem } from '../../chatWebview';
 import type { PiRpcClientLike } from '../../piChatController';
 import type {

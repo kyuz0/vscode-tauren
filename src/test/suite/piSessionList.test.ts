@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { listPiSessions } from '../../piSessionList';
+import { listPiSessions } from '../../sessions/piSessionList';
 
 suite('Pi session list', () => {
   test('falls back to current session file directory when cwd is unavailable', async () => {

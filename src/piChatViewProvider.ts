@@ -16,8 +16,8 @@ import { PiRpcClient } from './piRpcClient';
 import { createSessionDiffStatsFileWatcher, readSessionDiffSnapshot, writeSessionDiffSnapshot } from './diff/sessionDiffStorage';
 import { getSessionDiffDocumentContext, SessionDiffViewer } from './diff/sessionDiffViewer';
 import { ShikiCodeRenderer } from './shikiCodeRenderer';
-import { TauSessionManager } from './tauSessionManager';
-import { listPiSessions } from './piSessionList';
+import { TauSessionManager } from './sessions/tauSessionManager';
+import { listPiSessions } from './sessions/piSessionList';
 import { runReadyScript } from './readyScript';
 import type { WebviewModelOption } from './chatWebview';
 
