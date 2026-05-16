@@ -6,7 +6,6 @@ import {
   type WebviewModelOption,
   type WebviewSessionItemCommand,
   type WebviewSessionItem,
-  type WebviewSlashCommand,
   type WebviewStateMessage,
   type WebviewTreeItem
 } from './chatWebview';
@@ -31,9 +30,7 @@ import {
 } from './piEventMapper';
 import type {
   PiAgentMessage,
-  PiCommand,
   PiForkMessage,
-  PiModel,
   PiPromptStreamingBehavior,
   PiRpcClient,
   PiRpcClientOptions,
@@ -53,6 +50,12 @@ import {
   isSupportedBuiltinSlashCommand
 } from './slashCommands';
 import { ReadyScriptState } from './readyScriptState';
+import {
+  formatContextUsage,
+  formatInteger,
+  SessionMetadataState,
+  type PiChatSessionMetaSnapshot
+} from './sessionMetadata';
 import { SessionDiffController } from './diff/sessionDiffController';
 import type { SessionDiffSnapshot } from './diff/sessionDiffTracker';
 
@@ -92,25 +95,7 @@ type RestoredToolCall = {
   args?: unknown;
 };
 
-export type PiChatModelMeta = {
-  label: string;
-  provider: string;
-  id: string;
-  reasoning: boolean;
-  thinkingLevel: string;
-};
-
-export type PiChatContextUsage = {
-  label: string;
-  title: string;
-  level: string;
-};
-
-export type PiChatSessionMetaSnapshot = {
-  model?: PiChatModelMeta;
-  modelOptions?: WebviewModelOption[];
-  contextUsage?: PiChatContextUsage;
-};
+export type { PiChatContextUsage, PiChatModelMeta, PiChatSessionMetaSnapshot } from './sessionMetadata';
 
 export type { PiPromptContextAttachment, PiPromptContextInput } from './promptContext';
 
@@ -147,19 +132,8 @@ type DisposableLike = {
 export class PiChatController {
   private client: PiRpcClientLike | undefined;
   private assistantStreamId = 0;
-  private modelLabel = '';
-  private modelProvider = '';
-  private modelId = '';
-  private modelReasoning = false;
-  private thinkingLevel = '';
-  private modelOptions: WebviewModelOption[] = [];
-  private contextUsageLabel = '';
-  private contextUsageTitle = '';
-  private contextUsageLevel = '';
-  private metadataRefreshing = false;
-  private slashCommands: WebviewSlashCommand[] = [];
-  private slashCommandsRefreshing = false;
   private readonly promptContext = new PromptContextStore();
+  private readonly sessionMetadata: SessionMetadataState;
   private sessionViewMode: 'chat' | 'sessions' | 'tree' = 'chat';
   private sessions: WebviewSessionItem[] = [];
   private sessionsRefreshing = false;
@@ -206,9 +180,11 @@ export class PiChatController {
       saveSnapshot: (sessionFile, snapshot) => this.options.saveSessionDiffSnapshot?.(sessionFile, snapshot)
     });
 
-    if (options.initialSessionMeta) {
-      this.setSessionMetaFields(options.initialSessionMeta);
-    }
+    this.sessionMetadata = new SessionMetadataState({
+      initialSessionMeta: options.initialSessionMeta,
+      onChange: (metadata) => this.options.onSessionMetaChange?.(metadata),
+      postState: () => this.postState()
+    });
 
     this.statePublisher = new StatePublisher(
       () => this.getStateMessage(),
@@ -481,18 +457,13 @@ export class PiChatController {
   }
 
   public getStateMessage(): WebviewStateMessage {
+    const metadataState = this.sessionMetadata.getWebviewState();
+
     return createWebviewStateMessage({
       state: this.session.snapshot(),
-      model: {
-        label: this.modelLabel,
-        provider: this.modelProvider,
-        id: this.modelId,
-        reasoning: this.modelReasoning,
-        thinkingLevel: this.thinkingLevel,
-        options: this.modelOptions
-      },
-      slashCommands: this.slashCommands,
-      slashCommandsRefreshing: this.slashCommandsRefreshing,
+      model: metadataState.model,
+      slashCommands: metadataState.slashCommands,
+      slashCommandsRefreshing: metadataState.slashCommandsRefreshing,
       outputColors: this.options.getOutputColors?.() ?? true,
       promptContext: this.promptContext.getWebviewAttachments(),
       composer: this.pendingComposerText
@@ -501,12 +472,8 @@ export class PiChatController {
           revision: this.pendingComposerText.revision
         }
         : undefined,
-      contextUsage: {
-        label: this.contextUsageLabel,
-        title: this.contextUsageTitle,
-        level: this.contextUsageLevel
-      },
-      metadataRefreshing: this.metadataRefreshing,
+      contextUsage: metadataState.contextUsage,
+      metadataRefreshing: metadataState.metadataRefreshing,
       workspaceDiffStats: this.sessionDiffController.getStats(),
       sessionView: this.shouldPublishSessionView()
         ? {
@@ -1102,7 +1069,7 @@ export class PiChatController {
       return;
     }
 
-    this.setMetadataRefreshing(true);
+    this.sessionMetadata.setMetadataRefreshing(true);
 
     let handledError = false;
     const handleRefreshError = (error: unknown): void => {
@@ -1123,7 +1090,7 @@ export class PiChatController {
       ].map((refresh) => refresh.catch(handleRefreshError)));
     } finally {
       if (this.isCurrentMetadataRefresh(sessionGeneration, refreshId)) {
-        this.setMetadataRefreshing(false);
+        this.sessionMetadata.setMetadataRefreshing(false);
       }
     }
   }
@@ -1187,7 +1154,7 @@ export class PiChatController {
       void this.refreshSessions();
     }
 
-    if (sessionNameChanged || this.applyModelMeta(getModelMeta(state))) {
+    if (sessionNameChanged || this.sessionMetadata.applyModelState(state)) {
       this.postState();
     }
   }
@@ -1249,7 +1216,7 @@ export class PiChatController {
       void this.refreshSessions();
     }
 
-    if (sessionNameChanged || this.applyContextUsage(formatContextUsage(stats))) {
+    if (sessionNameChanged || this.sessionMetadata.applySessionStats(stats)) {
       this.postState();
     }
   }
@@ -1265,7 +1232,7 @@ export class PiChatController {
       return;
     }
 
-    if (this.applyModelOptions(formatModelOptions(availableModels.models))) {
+    if (this.sessionMetadata.applyAvailableModels(availableModels.models)) {
       this.postState();
     }
   }
@@ -1291,7 +1258,7 @@ export class PiChatController {
       return;
     }
 
-    this.setSlashCommandsRefreshing(true);
+    this.sessionMetadata.setSlashCommandsRefreshing(true);
 
     try {
       const availableCommands = await client.getCommands();
@@ -1300,7 +1267,7 @@ export class PiChatController {
         return;
       }
 
-      if (this.applySlashCommands(formatSlashCommands(availableCommands.commands))) {
+      if (this.sessionMetadata.applyAvailableCommands(availableCommands.commands)) {
         this.postState();
       }
     } catch (error) {
@@ -1309,7 +1276,7 @@ export class PiChatController {
       }
     } finally {
       if (this.isCurrentSlashCommandRefresh(sessionGeneration, refreshId)) {
-        this.setSlashCommandsRefreshing(false);
+        this.sessionMetadata.setSlashCommandsRefreshing(false);
       }
     }
   }
@@ -1329,64 +1296,6 @@ export class PiChatController {
       && sessionFile === this.currentSessionFile;
   }
 
-  private applyModelMeta(modelMeta: PiChatModelMeta): boolean {
-    if (
-      modelMeta.label === this.modelLabel
-      && modelMeta.provider === this.modelProvider
-      && modelMeta.id === this.modelId
-      && modelMeta.reasoning === this.modelReasoning
-      && modelMeta.thinkingLevel === this.thinkingLevel
-    ) {
-      return false;
-    }
-
-    this.setModelMetaFields(modelMeta);
-    this.notifySessionMetaChange();
-    return true;
-  }
-
-  private setModelMetaFields(modelMeta: PiChatModelMeta): void {
-    this.modelLabel = modelMeta.label;
-    this.modelProvider = modelMeta.provider;
-    this.modelId = modelMeta.id;
-    this.modelReasoning = modelMeta.reasoning;
-    this.thinkingLevel = modelMeta.thinkingLevel;
-  }
-
-  private applyContextUsage(contextUsage: PiChatContextUsage): boolean {
-    if (
-      contextUsage.label === this.contextUsageLabel
-      && contextUsage.title === this.contextUsageTitle
-      && contextUsage.level === this.contextUsageLevel
-    ) {
-      return false;
-    }
-
-    this.contextUsageLabel = contextUsage.label;
-    this.contextUsageTitle = contextUsage.title;
-    this.contextUsageLevel = contextUsage.level;
-    this.notifySessionMetaChange();
-    return true;
-  }
-
-  private applyModelOptions(modelOptions: WebviewModelOption[]): boolean {
-    if (areModelOptionsEqual(modelOptions, this.modelOptions)) {
-      return false;
-    }
-
-    this.modelOptions = modelOptions;
-    this.notifySessionMetaChange();
-    return true;
-  }
-
-  private applySlashCommands(slashCommands: WebviewSlashCommand[]): boolean {
-    if (areSlashCommandsEqual(slashCommands, this.slashCommands)) {
-      return false;
-    }
-
-    this.slashCommands = slashCommands;
-    return true;
-  }
 
   private applyCurrentSessionFile(sessionFile: string | undefined): boolean {
     if (sessionFile === this.currentSessionFile) {
@@ -1444,65 +1353,6 @@ export class PiChatController {
     return changed;
   }
 
-  private setSessionMetaFields(snapshot: PiChatSessionMetaSnapshot): void {
-    if (snapshot.model) {
-      this.setModelMetaFields(snapshot.model);
-    }
-
-    if (snapshot.modelOptions) {
-      this.modelOptions = snapshot.modelOptions.map((modelOption) => ({ ...modelOption }));
-    }
-
-    if (snapshot.contextUsage) {
-      this.contextUsageLabel = snapshot.contextUsage.label;
-      this.contextUsageTitle = snapshot.contextUsage.title;
-      this.contextUsageLevel = snapshot.contextUsage.level;
-    }
-  }
-
-  private notifySessionMetaChange(): void {
-    this.options.onSessionMetaChange?.(this.getSessionMetaSnapshot());
-  }
-
-  private getSessionMetaSnapshot(): PiChatSessionMetaSnapshot {
-    return {
-      model: this.modelId
-        ? {
-          label: this.modelLabel,
-          provider: this.modelProvider,
-          id: this.modelId,
-          reasoning: this.modelReasoning,
-          thinkingLevel: this.thinkingLevel
-        }
-        : undefined,
-      modelOptions: this.modelOptions.map((modelOption) => ({ ...modelOption })),
-      contextUsage: this.contextUsageLabel
-        ? {
-          label: this.contextUsageLabel,
-          title: this.contextUsageTitle,
-          level: this.contextUsageLevel
-        }
-        : undefined
-    };
-  }
-
-  private setMetadataRefreshing(value: boolean): void {
-    if (this.metadataRefreshing === value) {
-      return;
-    }
-
-    this.metadataRefreshing = value;
-    this.postState();
-  }
-
-  private setSlashCommandsRefreshing(value: boolean): void {
-    if (this.slashCommandsRefreshing === value) {
-      return;
-    }
-
-    this.slashCommandsRefreshing = value;
-    this.postState();
-  }
 
   private formatPromptForPi(userText: string, context: PiPromptContextAttachment[]): string {
     return formatPromptForPiMessage(userText, context);
@@ -1639,11 +1489,11 @@ export class PiChatController {
       return;
     }
 
-    if (this.modelOptions.length === 0) {
+    if (this.sessionMetadata.getModelOptions().length === 0) {
       await this.refreshSessionMeta({ startClient: true, force: true });
     }
 
-    const matches = filterModelOptions(this.modelOptions, query);
+    const matches = filterModelOptions(this.sessionMetadata.getModelOptions(), query);
 
     if (matches.length === 0) {
       this.session.addSystemMessage(query ? `No model matched "${query}".` : 'No models are available yet.');
@@ -1972,14 +1822,7 @@ export class PiChatController {
   }
 
   private resetSessionMeta(): void {
-    const changed = Boolean(this.contextUsageLabel || this.contextUsageTitle || this.contextUsageLevel);
-    this.contextUsageLabel = '';
-    this.contextUsageTitle = '';
-    this.contextUsageLevel = '';
-
-    if (changed) {
-      this.notifySessionMetaChange();
-    }
+    this.sessionMetadata.resetContextUsage();
   }
 
   private disposeClient(): void {
@@ -2320,8 +2163,7 @@ export class PiChatController {
     this.session.addErrorMessage(message);
     this.session.setBusy(false);
     this.compacting = false;
-    this.metadataRefreshing = false;
-    this.slashCommandsRefreshing = false;
+    this.sessionMetadata.clearRefreshing();
     this.sessionHistoryLoading = false;
     this.postState();
     this.restartClientForConfigurationChangeIfIdle();
@@ -2342,8 +2184,7 @@ export class PiChatController {
     this.metadataRefreshInFlight = undefined;
     this.contextUsageRefreshInFlight = undefined;
     this.slashCommandsRefreshInFlight = undefined;
-    this.metadataRefreshing = false;
-    this.slashCommandsRefreshing = false;
+    this.sessionMetadata.clearRefreshing();
     this.disposeClient();
     this.postState();
     void Promise.all([
@@ -2355,55 +2196,6 @@ export class PiChatController {
 
 async function defaultListSessions(): Promise<WebviewSessionItem[]> {
   return [];
-}
-
-function formatContextUsage(stats: PiSessionStats): PiChatContextUsage {
-  const usage = stats.contextUsage;
-
-  if (!usage || typeof usage.contextWindow !== 'number') {
-    return { label: '', title: '', level: '' };
-  }
-
-  const percent = typeof usage.percent === 'number' ? Math.round(usage.percent) : undefined;
-  const tokens = typeof usage.tokens === 'number' ? usage.tokens : undefined;
-
-  if (percent === undefined && tokens === undefined) {
-    return {
-      label: '?%',
-      title: [
-        'Context usage unavailable',
-        `Model context size: ${formatInteger(usage.contextWindow)} tokens`
-      ].join('\n'),
-      level: 'low'
-    };
-  }
-
-  const derivedPercent = percent ?? Math.round(((tokens ?? 0) / usage.contextWindow) * 100);
-  const label = `${derivedPercent}%`;
-  const titleTokens = tokens === undefined ? 'Unknown' : formatInteger(tokens);
-  const title = [
-    `Context used: ${derivedPercent}%`,
-    `Current context: ${titleTokens} tokens`,
-    `Model context size: ${formatInteger(usage.contextWindow)} tokens`
-  ].join('\n');
-
-  return { label, title, level: getContextUsageLevel(derivedPercent) };
-}
-
-function getContextUsageLevel(percent: number): string {
-  if (percent >= 80) {
-    return 'high';
-  }
-
-  if (percent >= 50) {
-    return 'medium';
-  }
-
-  return 'low';
-}
-
-function formatInteger(value: number): string {
-  return Math.round(value).toLocaleString('en-US');
 }
 
 function getSessionFile(state: { sessionFile?: string }): string | undefined {
@@ -2646,116 +2438,6 @@ function getRecordString(record: Record<string, unknown>, key: string): string |
   return typeof value === 'string' ? value : undefined;
 }
 
-function getModelMeta(state: PiSessionState): PiChatModelMeta {
-  const model = state.model;
-  const id = typeof model?.id === 'string' ? model.id : '';
-  const provider = typeof model?.provider === 'string' ? model.provider : '';
-  const reasoning = Boolean(model?.reasoning);
-  const thinkingLevel = typeof state.thinkingLevel === 'string' ? state.thinkingLevel : '';
-
-  if (!id) {
-    return { label: '', provider, id, reasoning, thinkingLevel };
-  }
-
-  if (reasoning && thinkingLevel) {
-    return { label: `${id} ${formatThinkingLevel(thinkingLevel)}`, provider, id, reasoning, thinkingLevel };
-  }
-
-  return { label: id, provider, id, reasoning, thinkingLevel };
-}
-
-function formatModelOptions(models: PiModel[] | undefined): WebviewModelOption[] {
-  if (!Array.isArray(models)) {
-    return [];
-  }
-
-  return models.flatMap((model) => {
-    const provider = typeof model.provider === 'string' ? model.provider : '';
-    const id = typeof model.id === 'string' ? model.id : '';
-
-    if (!provider || !id) {
-      return [];
-    }
-
-    return [{
-      provider,
-      id,
-      name: typeof model.name === 'string' && model.name.length > 0 ? model.name : id,
-      reasoning: Boolean(model.reasoning)
-    }];
-  });
-}
-
-function formatSlashCommands(commands: PiCommand[] | undefined): WebviewSlashCommand[] {
-  if (!Array.isArray(commands)) {
-    return [];
-  }
-
-  return commands
-    .flatMap((command) => {
-      const name = typeof command.name === 'string' ? command.name.trim() : '';
-
-      if (!name) {
-        return [];
-      }
-
-      return [{
-        name,
-        description: typeof command.description === 'string' ? command.description : '',
-        source: typeof command.source === 'string' ? command.source : '',
-        location: typeof command.location === 'string' ? command.location : undefined,
-        path: typeof command.path === 'string' ? command.path : undefined
-      }];
-    })
-    .sort(compareSlashCommands);
-}
-
-function compareSlashCommands(left: WebviewSlashCommand, right: WebviewSlashCommand): number {
-  return getSlashCommandSourceRank(left.source) - getSlashCommandSourceRank(right.source)
-    || left.name.localeCompare(right.name);
-}
-
-function getSlashCommandSourceRank(source: string): number {
-  if (source === 'extension') {
-    return 0;
-  }
-
-  if (source === 'prompt') {
-    return 1;
-  }
-
-  if (source === 'skill') {
-    return 2;
-  }
-
-  return 3;
-}
-
-function areModelOptionsEqual(left: WebviewModelOption[], right: WebviewModelOption[]): boolean {
-  return left.length === right.length
-    && left.every((model, index) => {
-      const other = right[index];
-      return other
-        && model.provider === other.provider
-        && model.id === other.id
-        && model.name === other.name
-        && model.reasoning === other.reasoning;
-    });
-}
-
-function areSlashCommandsEqual(left: WebviewSlashCommand[], right: WebviewSlashCommand[]): boolean {
-  return left.length === right.length
-    && left.every((command, index) => {
-      const other = right[index];
-      return other
-        && command.name === other.name
-        && command.description === other.description
-        && command.source === other.source
-        && command.location === other.location
-        && command.path === other.path;
-    });
-}
-
 function parseLocalSlashCommand(text: string): { name: string; args: string } | undefined {
   const match = text.trim().match(/^\/([^\s]+)(?:\s+([\s\S]*))?$/);
 
@@ -2837,14 +2519,6 @@ function formatSessionInfo(state: PiSessionState, stats: PiSessionStats): string
   }
 
   return lines.join('\n');
-}
-
-function formatThinkingLevel(level: string): string {
-  if (level === 'off') {
-    return 'Thinking off';
-  }
-
-  return level.slice(0, 1).toUpperCase() + level.slice(1);
 }
 
 function getErrorMessage(error: unknown): string {
