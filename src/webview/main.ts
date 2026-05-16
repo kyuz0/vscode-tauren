@@ -2,6 +2,13 @@ import { getWebviewDom } from './dom';
 import { createMessageElement, updateMessageBodyElement } from './renderMessages';
 import { buildSessionTreePrefix, formatSessionMeta, getSessionDisplayName, shortenPath } from './sessionFormat';
 import {
+  getSessionItemCommandIcon,
+  getSessionItemCommandLabel,
+  parseSessionItemCommand,
+  sessionItemMenuCommands
+} from './sessionItemCommands';
+import { initialWebviewState, parseWebviewStateMessage } from './state';
+import {
   localSlashCommands,
   maxTextareaHeight,
   messagesBottomThreshold,
@@ -63,7 +70,7 @@ busyStatusElement.append(busyStatusSpinnerElement, busyStatusTextElement);
 messagesContentElement.replaceChildren(...Array.from(messagesElement.childNodes));
 messagesElement.append(messagesContentElement, busyStatusElement);
 const isMac = navigator.platform.toUpperCase().includes('MAC');
-let state: WebviewState = { messages: [], busy: false, modelLabel: '', modelProvider: '', modelId: '', modelReasoning: false, thinkingLevel: '', modelOptions: [], contextUsageLabel: '', contextUsageTitle: '', contextUsageLevel: '', metadataRefreshing: false, slashCommands: [], slashCommandsRefreshing: false, promptContext: [], composerText: '', composerTextRevision: 0, viewMode: 'chat', sessions: [], sessionsRefreshing: false, sessionsError: '', currentSessionFile: '', currentSessionName: '', treeItems: [], treeRefreshing: false, treeError: '', sessionLoading: false };
+let state: WebviewState = { ...initialWebviewState };
 let appliedComposerTextRevision = 0;
 let slashMenuOpen = false;
 let slashMenuActiveIndex = 0;
@@ -84,15 +91,6 @@ let sessionListNameEditInitialValue = '';
 let sessionNameEditing = false;
 let sessionNameEditInitialValue = '';
 
-const sessionItemMenuCommands: SessionItemCommand[] = ['rename', 'fork', 'clone', 'compact', 'export', 'delete'];
-const sessionItemCommandIcons: Record<SessionItemCommand, string> = {
-  rename: '<svg class="pi-toolbar__menu-icon" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4.1 11.9L5.45 11.6L11.15 5.9C11.55 5.5 11.55 4.85 11.15 4.45L10.9 4.2C10.5 3.8 9.85 3.8 9.45 4.2L3.75 9.9L3.45 11.25C3.37 11.65 3.7 11.98 4.1 11.9Z" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.85 4.8L10.55 6.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/></svg>',
-  fork: '<svg class="pi-toolbar__menu-icon" aria-hidden="true" width="14" height="14" viewBox="0 0 19 19" fill="none"><path d="M5.5 4.25V8.5C5.5 10.16 6.84 11.5 8.5 11.5H10.5" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.5 4.25V14.75" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/><path d="M10.25 8.5L13.25 11.5L10.25 14.5" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/><circle cx="5.5" cy="4.25" r="1.55" fill="currentColor"/><circle cx="5.5" cy="14.75" r="1.55" fill="currentColor"/></svg>',
-  clone: '<svg class="pi-toolbar__menu-icon" aria-hidden="true" width="14" height="14" viewBox="0 0 19 19" fill="none"><rect x="4.25" y="6.25" width="8.5" height="8.5" rx="1.5" stroke="currentColor" stroke-width="1.35"/><path d="M7.25 4.25H13.25C14.08 4.25 14.75 4.92 14.75 5.75V11.75" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  compact: '<svg class="pi-toolbar__menu-icon" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M5 3.5H3.5V5" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 3.5H12.5V5" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 12.5H3.5V11" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 12.5H12.5V11" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.3 5.3L7.05 7.05M10.7 5.3L8.95 7.05M5.3 10.7L7.05 8.95M10.7 10.7L8.95 8.95" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
-  export: '<svg class="pi-toolbar__menu-icon" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 3.5V10" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/><path d="M5.6 5.9L8 3.5L10.4 5.9" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 9.5V11.6C4 12.1 4.4 12.5 4.9 12.5H11.1C11.6 12.5 12 12.1 12 11.6V9.5" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/></svg>',
-  delete: '<svg class="pi-toolbar__menu-icon" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16"><path fill="currentColor" d="M6 2h4l1 1h3v1H2V3h3l1-1Zm-2 3h8l-.6 9.2A2 2 0 0 1 9.4 16H6.6a2 2 0 0 1-2-1.8L4 5Zm2 1v8h1V6H6Zm3 0v8h1V6H9Z"/></svg>'
-};
 
 type RenderedMessageView = {
   element: HTMLElement;
@@ -122,35 +120,7 @@ window.addEventListener('message', (event) => {
   const previousCurrentSessionFile = state.currentSessionFile;
   const previousSessionCount = Array.isArray(state.sessions) ? state.sessions.length : 0;
   const previousTreeCount = Array.isArray(state.treeItems) ? state.treeItems.length : 0;
-  state = {
-    messages: Array.isArray(event.data.messages) ? event.data.messages : [],
-    busy: Boolean(event.data.busy),
-    modelLabel: typeof event.data.modelLabel === 'string' ? event.data.modelLabel : '',
-    modelProvider: typeof event.data.modelProvider === 'string' ? event.data.modelProvider : '',
-    modelId: typeof event.data.modelId === 'string' ? event.data.modelId : '',
-    modelReasoning: Boolean(event.data.modelReasoning),
-    thinkingLevel: typeof event.data.thinkingLevel === 'string' ? event.data.thinkingLevel : '',
-    modelOptions: Array.isArray(event.data.modelOptions) ? event.data.modelOptions : [],
-    contextUsageLabel: typeof event.data.contextUsageLabel === 'string' ? event.data.contextUsageLabel : '',
-    contextUsageTitle: typeof event.data.contextUsageTitle === 'string' ? event.data.contextUsageTitle : '',
-    contextUsageLevel: typeof event.data.contextUsageLevel === 'string' ? event.data.contextUsageLevel : '',
-    metadataRefreshing: Boolean(event.data.metadataRefreshing),
-    slashCommands: Array.isArray(event.data.slashCommands) ? event.data.slashCommands : [],
-    slashCommandsRefreshing: Boolean(event.data.slashCommandsRefreshing),
-    promptContext: Array.isArray(event.data.promptContext) ? event.data.promptContext : [],
-    composerText: typeof event.data.composerText === 'string' ? event.data.composerText : '',
-    composerTextRevision: typeof event.data.composerTextRevision === 'number' ? event.data.composerTextRevision : 0,
-    viewMode: event.data.viewMode === 'sessions' || event.data.viewMode === 'tree' ? event.data.viewMode : 'chat',
-    sessions: Array.isArray(event.data.sessions) ? event.data.sessions : [],
-    sessionsRefreshing: Boolean(event.data.sessionsRefreshing),
-    sessionsError: typeof event.data.sessionsError === 'string' ? event.data.sessionsError : '',
-    currentSessionFile: typeof event.data.currentSessionFile === 'string' ? event.data.currentSessionFile : '',
-    currentSessionName: typeof event.data.currentSessionName === 'string' ? event.data.currentSessionName : '',
-    treeItems: Array.isArray(event.data.treeItems) ? event.data.treeItems : [],
-    treeRefreshing: Boolean(event.data.treeRefreshing),
-    treeError: typeof event.data.treeError === 'string' ? event.data.treeError : '',
-    sessionLoading: Boolean(event.data.sessionLoading)
-  };
+  state = parseWebviewStateMessage(event.data);
   const wasListView = previousViewMode === 'sessions' || previousViewMode === 'tree';
   const isListView = state.viewMode === 'sessions' || state.viewMode === 'tree';
 
@@ -1295,17 +1265,6 @@ function focusSessionListNameInput(): void {
   input?.select();
 }
 
-function parseSessionItemCommand(command: string | null): SessionItemCommand | undefined {
-  return command === 'rename'
-    || command === 'fork'
-    || command === 'clone'
-    || command === 'compact'
-    || command === 'export'
-    || command === 'delete'
-    ? command
-    : undefined;
-}
-
 function handleSessionListCommandKey(event: KeyboardEvent): boolean {
   if (event.altKey || event.ctrlKey || event.metaKey) {
     return false;
@@ -1346,27 +1305,6 @@ function canRunSessionItemCommand(session: SessionItem, command?: SessionItemCom
   }
 
   return session.liveStatus !== 'running' && !(session.current && state.busy);
-}
-
-function getSessionItemCommandLabel(command: SessionItemCommand): string {
-  switch (command) {
-    case 'rename':
-      return 'Rename session';
-    case 'fork':
-      return 'Fork session';
-    case 'clone':
-      return 'Clone session';
-    case 'compact':
-      return 'Compact session';
-    case 'export':
-      return 'Export as HTML';
-    case 'delete':
-      return 'Move session to trash';
-  }
-}
-
-function getSessionItemCommandIcon(command: SessionItemCommand): string {
-  return sessionItemCommandIcons[command];
 }
 
 function canDeleteSession(session: SessionItem): boolean {

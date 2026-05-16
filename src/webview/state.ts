@@ -1,0 +1,69 @@
+import type { WebviewState } from './types';
+
+export const initialWebviewState: WebviewState = {
+  messages: [],
+  busy: false,
+  modelLabel: '',
+  modelProvider: '',
+  modelId: '',
+  modelReasoning: false,
+  thinkingLevel: '',
+  modelOptions: [],
+  contextUsageLabel: '',
+  contextUsageTitle: '',
+  contextUsageLevel: '',
+  metadataRefreshing: false,
+  slashCommands: [],
+  slashCommandsRefreshing: false,
+  promptContext: [],
+  composerText: '',
+  composerTextRevision: 0,
+  viewMode: 'chat',
+  sessions: [],
+  sessionsRefreshing: false,
+  sessionsError: '',
+  currentSessionFile: '',
+  currentSessionName: '',
+  treeItems: [],
+  treeRefreshing: false,
+  treeError: '',
+  sessionLoading: false
+};
+
+export function parseWebviewStateMessage(data: unknown): WebviewState {
+  const record = isRecord(data) ? data : {};
+
+  return {
+    messages: Array.isArray(record.messages) ? record.messages : [],
+    busy: Boolean(record.busy),
+    modelLabel: typeof record.modelLabel === 'string' ? record.modelLabel : '',
+    modelProvider: typeof record.modelProvider === 'string' ? record.modelProvider : '',
+    modelId: typeof record.modelId === 'string' ? record.modelId : '',
+    modelReasoning: Boolean(record.modelReasoning),
+    thinkingLevel: typeof record.thinkingLevel === 'string' ? record.thinkingLevel : '',
+    modelOptions: Array.isArray(record.modelOptions) ? record.modelOptions : [],
+    contextUsageLabel: typeof record.contextUsageLabel === 'string' ? record.contextUsageLabel : '',
+    contextUsageTitle: typeof record.contextUsageTitle === 'string' ? record.contextUsageTitle : '',
+    contextUsageLevel: typeof record.contextUsageLevel === 'string' ? record.contextUsageLevel : '',
+    metadataRefreshing: Boolean(record.metadataRefreshing),
+    slashCommands: Array.isArray(record.slashCommands) ? record.slashCommands : [],
+    slashCommandsRefreshing: Boolean(record.slashCommandsRefreshing),
+    promptContext: Array.isArray(record.promptContext) ? record.promptContext : [],
+    composerText: typeof record.composerText === 'string' ? record.composerText : '',
+    composerTextRevision: typeof record.composerTextRevision === 'number' ? record.composerTextRevision : 0,
+    viewMode: record.viewMode === 'sessions' || record.viewMode === 'tree' ? record.viewMode : 'chat',
+    sessions: Array.isArray(record.sessions) ? record.sessions : [],
+    sessionsRefreshing: Boolean(record.sessionsRefreshing),
+    sessionsError: typeof record.sessionsError === 'string' ? record.sessionsError : '',
+    currentSessionFile: typeof record.currentSessionFile === 'string' ? record.currentSessionFile : '',
+    currentSessionName: typeof record.currentSessionName === 'string' ? record.currentSessionName : '',
+    treeItems: Array.isArray(record.treeItems) ? record.treeItems : [],
+    treeRefreshing: Boolean(record.treeRefreshing),
+    treeError: typeof record.treeError === 'string' ? record.treeError : '',
+    sessionLoading: Boolean(record.sessionLoading)
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
