@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { SessionMetadataState, formatContextUsage } from '../../sessionMetadata';
+import { SessionMetadataRefreshController, SessionMetadataState, formatContextUsage } from '../../sessionMetadata';
 
 suite('SessionMetadataState', () => {
   test('applies initial metadata and publishes webview state', () => {
@@ -85,4 +85,67 @@ suite('SessionMetadataState', () => {
       level: 'low'
     });
   });
+
+  test('refresh controller dedupes session metadata refreshes', async () => {
+    const state = new SessionMetadataState();
+    const client = new FakeMetadataClient();
+    let postCount = 0;
+    const refresh = new SessionMetadataRefreshController({
+      state,
+      getSessionGeneration: () => 1,
+      getClient: () => client,
+      restoreInitialSessionHistory: async () => {},
+      applySessionState: () => ({ sessionFileChanged: false, sessionNameChanged: false }),
+      applySessionStatsIdentity: () => ({ sessionFileChanged: false, sessionNameChanged: false }),
+      refreshSessions: () => {},
+      postState: () => { postCount += 1; },
+      onMetadataStartError: (message) => { throw new Error(message); },
+      onError: (message) => { throw new Error(message); },
+      getErrorMessage: (error) => error instanceof Error ? error.message : String(error)
+    });
+
+    await Promise.all([
+      refresh.refreshSessionMeta({ startClient: true }),
+      refresh.refreshSessionMeta({ startClient: true })
+    ]);
+
+    assert.strictEqual(client.stateCalls, 1);
+    assert.strictEqual(client.statsCalls, 1);
+    assert.strictEqual(client.modelsCalls, 1);
+    assert.strictEqual(postCount > 0, true);
+    assert.strictEqual(state.getWebviewState().model.id, 'live-model');
+    assert.strictEqual(state.getWebviewState().contextUsage.label, '25%');
+  });
 });
+
+class FakeMetadataClient {
+  public stateCalls = 0;
+  public statsCalls = 0;
+  public modelsCalls = 0;
+
+  public async getMessages() {
+    return { messages: [] };
+  }
+
+  public async getState() {
+    this.stateCalls += 1;
+    return {
+      model: { provider: 'openai', id: 'live-model', reasoning: false },
+      thinkingLevel: 'off'
+    };
+  }
+
+  public async getSessionStats() {
+    this.statsCalls += 1;
+    return { contextUsage: { tokens: 25, contextWindow: 100, percent: 25 } };
+  }
+
+  public async getAvailableModels() {
+    this.modelsCalls += 1;
+    return { models: [{ provider: 'openai', id: 'live-model', name: 'Live Model', reasoning: false }] };
+  }
+
+  public async getCommands() {
+    return { commands: [] };
+  }
+}

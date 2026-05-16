@@ -1,5 +1,5 @@
 import type { WebviewModelOption, WebviewSlashCommand } from './chatWebview';
-import type { PiCommand, PiModel, PiSessionState, PiSessionStats } from './piRpcClient';
+import type { PiCommand, PiMessagesResult, PiModel, PiSessionState, PiSessionStats } from './piRpcClient';
 
 export type PiChatModelMeta = {
   label: string;
@@ -41,6 +41,320 @@ export type SessionMetadataStateOptions = {
   onChange?: (metadata: PiChatSessionMetaSnapshot) => void;
   postState?: () => void;
 };
+
+export type SessionMetadataClient = {
+  getMessages(): Promise<PiMessagesResult>;
+  getState(): Promise<PiSessionState>;
+  getSessionStats(): Promise<PiSessionStats>;
+  getAvailableModels(): Promise<{ models?: PiModel[] }>;
+  getCommands(): Promise<{ commands?: PiCommand[] }>;
+};
+
+export type SessionMetadataRefreshControllerOptions = {
+  state: SessionMetadataState;
+  getSessionGeneration: () => number;
+  getClient: (options: { startClient?: boolean }) => SessionMetadataClient | undefined;
+  restoreInitialSessionHistory: (
+    client: SessionMetadataClient,
+    sessionGeneration: number,
+    isCurrent: () => boolean
+  ) => Promise<void>;
+  applySessionState: (state: PiSessionState) => { sessionFileChanged: boolean; sessionNameChanged: boolean };
+  applySessionStatsIdentity: (stats: PiSessionStats) => { sessionFileChanged: boolean; sessionNameChanged: boolean };
+  refreshSessions: () => void;
+  postState: () => void;
+  onMetadataStartError: (message: string) => void;
+  onError: (message: string) => void;
+  getErrorMessage: (error: unknown) => string;
+};
+
+export class SessionMetadataRefreshController {
+  private metadataRefreshSequence = 0;
+  private slashCommandsRefreshSequence = 0;
+  private metadataRefreshInFlight: { generation: number; promise: Promise<void> } | undefined;
+  private contextUsageRefreshInFlight: { generation: number; promise: Promise<void> } | undefined;
+  private slashCommandsRefreshInFlight: { generation: number; promise: Promise<void> } | undefined;
+
+  public constructor(private readonly options: SessionMetadataRefreshControllerOptions) {}
+
+  public refreshSessionMeta(options: { startClient?: boolean; force?: boolean } = {}): Promise<void> {
+    const sessionGeneration = this.options.getSessionGeneration();
+    const existingRefresh = this.metadataRefreshInFlight;
+
+    if (!options.force && existingRefresh?.generation === sessionGeneration) {
+      return existingRefresh.promise;
+    }
+
+    const refreshId = ++this.metadataRefreshSequence;
+    let refreshPromise!: Promise<void>;
+
+    refreshPromise = this.runSessionMetaRefresh(options, sessionGeneration, refreshId)
+      .finally(() => {
+        if (this.metadataRefreshInFlight?.promise === refreshPromise) {
+          this.metadataRefreshInFlight = undefined;
+        }
+      });
+
+    this.metadataRefreshInFlight = { generation: sessionGeneration, promise: refreshPromise };
+
+    return refreshPromise;
+  }
+
+  public refreshContextUsage(options: { startClient?: boolean; silent?: boolean } = {}): Promise<void> {
+    const sessionGeneration = this.options.getSessionGeneration();
+    const existingRefresh = this.contextUsageRefreshInFlight;
+
+    if (existingRefresh?.generation === sessionGeneration) {
+      return existingRefresh.promise;
+    }
+
+    let refreshPromise!: Promise<void>;
+
+    refreshPromise = this.runContextUsageRefresh(options, sessionGeneration)
+      .finally(() => {
+        if (this.contextUsageRefreshInFlight?.promise === refreshPromise) {
+          this.contextUsageRefreshInFlight = undefined;
+        }
+      });
+
+    this.contextUsageRefreshInFlight = { generation: sessionGeneration, promise: refreshPromise };
+
+    return refreshPromise;
+  }
+
+  public refreshSlashCommands(options: { startClient?: boolean; force?: boolean } = {}): Promise<void> {
+    const sessionGeneration = this.options.getSessionGeneration();
+    const existingRefresh = this.slashCommandsRefreshInFlight;
+
+    if (!options.force && existingRefresh?.generation === sessionGeneration) {
+      return existingRefresh.promise;
+    }
+
+    const refreshId = ++this.slashCommandsRefreshSequence;
+    let refreshPromise!: Promise<void>;
+
+    refreshPromise = this.runSlashCommandsRefresh(options, sessionGeneration, refreshId)
+      .finally(() => {
+        if (this.slashCommandsRefreshInFlight?.promise === refreshPromise) {
+          this.slashCommandsRefreshInFlight = undefined;
+        }
+      });
+
+    this.slashCommandsRefreshInFlight = { generation: sessionGeneration, promise: refreshPromise };
+
+    return refreshPromise;
+  }
+
+  public invalidate(): void {
+    this.metadataRefreshSequence += 1;
+    this.slashCommandsRefreshSequence += 1;
+    this.metadataRefreshInFlight = undefined;
+    this.contextUsageRefreshInFlight = undefined;
+    this.slashCommandsRefreshInFlight = undefined;
+    this.options.state.clearRefreshing();
+  }
+
+  private async runSessionMetaRefresh(
+    options: { startClient?: boolean },
+    sessionGeneration: number,
+    refreshId: number
+  ): Promise<void> {
+    let client: SessionMetadataClient | undefined;
+
+    try {
+      client = this.options.getClient(options);
+    } catch (error) {
+      if (sessionGeneration === this.options.getSessionGeneration()) {
+        this.options.onMetadataStartError(this.options.getErrorMessage(error));
+      }
+
+      return;
+    }
+
+    if (!client) {
+      return;
+    }
+
+    this.options.state.setMetadataRefreshing(true);
+
+    let handledError = false;
+    const handleRefreshError = (error: unknown): void => {
+      if (handledError || !this.isCurrentMetadataRefresh(sessionGeneration, refreshId)) {
+        return;
+      }
+
+      handledError = true;
+      this.options.onError(this.options.getErrorMessage(error));
+    };
+
+    try {
+      await Promise.all([
+        this.options.restoreInitialSessionHistory(client, sessionGeneration, () => this.isCurrentMetadataRefresh(sessionGeneration, refreshId)),
+        this.refreshModelMeta(client, sessionGeneration, refreshId),
+        this.refreshContextUsageForMetadata(client, sessionGeneration, refreshId),
+        this.refreshModelOptions(client, sessionGeneration, refreshId)
+      ].map((refresh) => refresh.catch(handleRefreshError)));
+    } finally {
+      if (this.isCurrentMetadataRefresh(sessionGeneration, refreshId)) {
+        this.options.state.setMetadataRefreshing(false);
+      }
+    }
+  }
+
+  private async refreshModelMeta(
+    client: SessionMetadataClient,
+    sessionGeneration: number,
+    refreshId: number
+  ): Promise<void> {
+    const state = await client.getState();
+
+    if (!this.isCurrentMetadataRefresh(sessionGeneration, refreshId)) {
+      return;
+    }
+
+    const { sessionFileChanged, sessionNameChanged } = this.options.applySessionState(state);
+
+    if (sessionFileChanged) {
+      this.options.refreshSessions();
+    }
+
+    if (sessionNameChanged || this.options.state.applyModelState(state)) {
+      this.options.postState();
+    }
+  }
+
+  private async refreshContextUsageForMetadata(
+    client: SessionMetadataClient,
+    sessionGeneration: number,
+    refreshId: number
+  ): Promise<void> {
+    const stats = await client.getSessionStats();
+
+    if (!this.isCurrentMetadataRefresh(sessionGeneration, refreshId)) {
+      return;
+    }
+
+    this.applySessionStats(stats);
+  }
+
+  private async runContextUsageRefresh(
+    options: { startClient?: boolean; silent?: boolean },
+    sessionGeneration: number
+  ): Promise<void> {
+    let client: SessionMetadataClient | undefined;
+
+    try {
+      client = this.options.getClient(options);
+    } catch (error) {
+      if (!options.silent && sessionGeneration === this.options.getSessionGeneration()) {
+        this.options.onError(this.options.getErrorMessage(error));
+      }
+
+      return;
+    }
+
+    if (!client) {
+      return;
+    }
+
+    try {
+      const stats = await client.getSessionStats();
+
+      if (sessionGeneration !== this.options.getSessionGeneration()) {
+        return;
+      }
+
+      this.applySessionStats(stats);
+    } catch (error) {
+      if (!options.silent && sessionGeneration === this.options.getSessionGeneration()) {
+        this.options.onError(this.options.getErrorMessage(error));
+      }
+    }
+  }
+
+  private applySessionStats(stats: PiSessionStats): void {
+    const { sessionFileChanged, sessionNameChanged } = this.options.applySessionStatsIdentity(stats);
+
+    if (sessionFileChanged) {
+      this.options.refreshSessions();
+    }
+
+    if (sessionNameChanged || this.options.state.applySessionStats(stats)) {
+      this.options.postState();
+    }
+  }
+
+  private async refreshModelOptions(
+    client: SessionMetadataClient,
+    sessionGeneration: number,
+    refreshId: number
+  ): Promise<void> {
+    const availableModels = await client.getAvailableModels();
+
+    if (!this.isCurrentMetadataRefresh(sessionGeneration, refreshId)) {
+      return;
+    }
+
+    if (this.options.state.applyAvailableModels(availableModels.models)) {
+      this.options.postState();
+    }
+  }
+
+  private async runSlashCommandsRefresh(
+    options: { startClient?: boolean },
+    sessionGeneration: number,
+    refreshId: number
+  ): Promise<void> {
+    let client: SessionMetadataClient | undefined;
+
+    try {
+      client = this.options.getClient(options);
+    } catch (error) {
+      if (sessionGeneration === this.options.getSessionGeneration()) {
+        this.options.onError(this.options.getErrorMessage(error));
+      }
+
+      return;
+    }
+
+    if (!client) {
+      return;
+    }
+
+    this.options.state.setSlashCommandsRefreshing(true);
+
+    try {
+      const availableCommands = await client.getCommands();
+
+      if (!this.isCurrentSlashCommandRefresh(sessionGeneration, refreshId)) {
+        return;
+      }
+
+      if (this.options.state.applyAvailableCommands(availableCommands.commands)) {
+        this.options.postState();
+      }
+    } catch (error) {
+      if (this.isCurrentSlashCommandRefresh(sessionGeneration, refreshId)) {
+        this.options.onError(this.options.getErrorMessage(error));
+      }
+    } finally {
+      if (this.isCurrentSlashCommandRefresh(sessionGeneration, refreshId)) {
+        this.options.state.setSlashCommandsRefreshing(false);
+      }
+    }
+  }
+
+  private isCurrentMetadataRefresh(sessionGeneration: number, refreshId: number): boolean {
+    return sessionGeneration === this.options.getSessionGeneration()
+      && refreshId === this.metadataRefreshSequence;
+  }
+
+  private isCurrentSlashCommandRefresh(sessionGeneration: number, refreshId: number): boolean {
+    return sessionGeneration === this.options.getSessionGeneration()
+      && refreshId === this.slashCommandsRefreshSequence;
+  }
+}
+
 
 export class SessionMetadataState {
   private modelLabel = '';
