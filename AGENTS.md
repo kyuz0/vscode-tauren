@@ -24,7 +24,9 @@ Do not add transient notes, guesses, one-off debugging observations, or broad ge
 - `src/chatSession.ts` owns pure in-memory transcript/session state and has no VS Code or Pi process dependencies.
 - `src/chatWebview.ts` owns public sidebar webview HTML composition plus webview state/message types.
 - `src/chatWebviewStyles.ts` owns the static sidebar CSS string.
+- `src/shikiCodeRenderer.ts` owns extension-host Shiki syntax rendering, VS Code theme/language registration resolution, fallback bundled Shiki themes/languages, and highlight-result caching.
 - Browser-side sidebar logic lives under `src/webview` and is bundled by esbuild to `resources/webview/chat.js`; keep generated webview assets in `resources/webview`.
+- `src/webview/codeHighlighting.ts` owns browser-side asynchronous code-highlight requests/results for markdown code fences and read-tool code boxes; reuse it for future code/diff panes where practical.
 - `src/nonce.ts` owns nonce generation for CSP-protected inline scripts.
 - `src/piEventMapper.ts` owns pure Pi RPC event-to-UI action mapping helpers.
 - `src/extensionUiRequestHandler.ts` owns extension UI request routing through an injected VS Code UI adapter, safe cancellation, and stale request cleanup.
@@ -32,6 +34,7 @@ Do not add transient notes, guesses, one-off debugging observations, or broad ge
 - `src/slashCommands.ts` owns shared local slash command metadata used by both the extension host and browser webview.
 - `src/piRpcClient.ts` owns the `pi --mode rpc` subprocess, strict JSONL parsing, request/response tracking, stderr collection, and process cleanup.
 - Third-party webview browser bundles are vendored in `resources/vendor`; generated first-party webview bundles live in `resources/webview`; keep browser-only libraries out of runtime `dependencies` unless extension-host code imports them.
+- Shiki and `vscode-shiki-bridge` are runtime dependencies because syntax highlighting runs in the extension host, not as a vendored webview browser bundle.
 - The extension host still compiles with direct `tsc`; browser-side webview code is bundled separately with esbuild through `npm run compile:webview`.
 
 ## Pi Integration
@@ -66,6 +69,9 @@ Do not add transient notes, guesses, one-off debugging observations, or broad ge
 
 - Keep the sidebar simple, clean, and VS Code-native.
 - Use VS Code theme CSS variables for colors, fonts, focus, inputs, buttons, and borders.
+- Code highlighting uses Shiki asynchronously through the extension host. Do not reintroduce highlight.js unless explicitly requested.
+- Keep Shiki highlighting failure-tolerant: code must remain readable as plain text if theme/language resolution or highlighting fails.
+- Preserve the bundled Shiki fallback path in `src/shikiCodeRenderer.ts`; it prevents read boxes from silently losing highlighting when VS Code theme/grammar resolution is unreliable.
 - Keep transcript state in memory until persistence is explicitly requested.
 - The sidebar `/resume` command opens the session switcher for switching session files. `/tree` opens a first-version in-session session tree view backed by the persisted JSONL session file and attempts navigation through Pi RPC `navigate_tree`; keep a graceful unsupported-RPC error until Pi exposes that command in released RPC builds.
 - Disable submit while Pi is streaming; do not invent steering or follow-up queue behavior without a specific iteration goal.
@@ -79,6 +85,7 @@ Do not add transient notes, guesses, one-off debugging observations, or broad ge
 - Run `npm test` after changes to `src/chatSession.ts` or `src/piEventMapper.ts`.
 - Use `git diff --check` before finishing edits.
 - For UI behavior changes, manually verify in the VS Code Extension Host when practical.
+- For syntax-highlighting changes, manually verify fresh and resumed read-tool boxes, markdown fenced code, theme switching, and unsupported-extension fallback.
 - Keep changes small and scoped to the requested iteration.
 - Do not touch unrelated files.
 
