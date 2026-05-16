@@ -1,4 +1,4 @@
-import type { MarkdownRenderer } from './types';
+import type { HighlightJs, MarkdownRenderer } from './types';
 
 export type RenderMarkdownOptions = {
   animateFromText?: string;
@@ -28,6 +28,31 @@ export function renderMarkdownInto(element: HTMLElement, text: string, options: 
   });
   linkifyFileReferences(element);
   animateNewVisibleText(element, options.animateFromText);
+}
+
+export function renderHighlightedCodeInto(element: HTMLElement, code: string, filePath: string): boolean {
+  if (!window.hljs || !window.DOMPurify) {
+    return false;
+  }
+
+  const language = getLanguageForPath(filePath, window.hljs);
+
+  if (!language) {
+    return false;
+  }
+
+  try {
+    const highlighted = window.hljs.highlight(code, {
+      language,
+      ignoreIllegals: true
+    }).value;
+    element.innerHTML = window.DOMPurify.sanitize(highlighted, {
+      USE_PROFILES: { html: true }
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function linkifyFileReferences(root: HTMLElement): void {
@@ -295,6 +320,31 @@ function normalizeCodeLanguage(language: string): string {
   };
 
   return aliases[normalized] || normalized;
+}
+
+function getLanguageForPath(filePath: string, hljs: HighlightJs): string | undefined {
+  const language = normalizeCodeLanguage(getPathLanguageHint(filePath));
+
+  if (!language || !hljs.getLanguage(language)) {
+    return undefined;
+  }
+
+  return language;
+}
+
+function getPathLanguageHint(filePath: string): string {
+  const basename = filePath.replace(/\\/g, '/').split('/').pop()?.toLowerCase() ?? '';
+
+  if (basename === 'dockerfile') {
+    return 'dockerfile';
+  }
+
+  if (basename === 'makefile') {
+    return 'makefile';
+  }
+
+  const extensionMatch = basename.match(/\.([a-z0-9]+)$/);
+  return extensionMatch?.[1] ?? '';
 }
 
 function escapeHtml(value: string): string {

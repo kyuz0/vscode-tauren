@@ -622,57 +622,82 @@ const messageStyles = /* css */ `    .message {
     }
 
     .message__body--markdown .hljs-comment,
-    .message__body--markdown .hljs-quote {
+    .message__body--markdown .hljs-quote,
+    .activity__body--code .hljs-comment,
+    .activity__body--code .hljs-quote {
       color: var(--vscode-descriptionForeground);
     }
 
     .message__body--markdown .hljs-keyword,
     .message__body--markdown .hljs-selector-tag,
-    .message__body--markdown .hljs-subst {
+    .message__body--markdown .hljs-subst,
+    .activity__body--code .hljs-keyword,
+    .activity__body--code .hljs-selector-tag,
+    .activity__body--code .hljs-subst {
       color: var(--vscode-symbolIcon-keywordForeground, #569cd6);
     }
 
     .message__body--markdown .hljs-literal,
     .message__body--markdown .hljs-number,
-    .message__body--markdown .hljs-doctag {
+    .message__body--markdown .hljs-doctag,
+    .activity__body--code .hljs-literal,
+    .activity__body--code .hljs-number,
+    .activity__body--code .hljs-doctag {
       color: var(--vscode-symbolIcon-numberForeground, #b5cea8);
     }
 
     .message__body--markdown .hljs-string,
     .message__body--markdown .hljs-regexp,
-    .message__body--markdown .hljs-addition {
+    .message__body--markdown .hljs-addition,
+    .activity__body--code .hljs-string,
+    .activity__body--code .hljs-regexp,
+    .activity__body--code .hljs-addition {
       color: var(--vscode-symbolIcon-stringForeground, #ce9178);
     }
 
     .message__body--markdown .hljs-title,
     .message__body--markdown .hljs-section,
-    .message__body--markdown .hljs-selector-id {
+    .message__body--markdown .hljs-selector-id,
+    .activity__body--code .hljs-title,
+    .activity__body--code .hljs-section,
+    .activity__body--code .hljs-selector-id {
       color: var(--vscode-symbolIcon-functionForeground, #dcdcaa);
     }
 
     .message__body--markdown .hljs-class .hljs-title,
     .message__body--markdown .hljs-type,
-    .message__body--markdown .hljs-built_in {
+    .message__body--markdown .hljs-built_in,
+    .activity__body--code .hljs-class .hljs-title,
+    .activity__body--code .hljs-type,
+    .activity__body--code .hljs-built_in {
       color: var(--vscode-symbolIcon-classForeground, #4ec9b0);
     }
 
     .message__body--markdown .hljs-attr,
     .message__body--markdown .hljs-variable,
     .message__body--markdown .hljs-template-variable,
-    .message__body--markdown .hljs-attribute {
+    .message__body--markdown .hljs-attribute,
+    .activity__body--code .hljs-attr,
+    .activity__body--code .hljs-variable,
+    .activity__body--code .hljs-template-variable,
+    .activity__body--code .hljs-attribute {
       color: var(--vscode-symbolIcon-variableForeground, #9cdcfe);
     }
 
     .message__body--markdown .hljs-deletion,
-    .message__body--markdown .hljs-meta {
+    .message__body--markdown .hljs-meta,
+    .activity__body--code .hljs-deletion,
+    .activity__body--code .hljs-meta {
       color: var(--vscode-errorForeground, #f44747);
     }
 
-    .message__body--markdown .hljs-emphasis {
+    .message__body--markdown .hljs-emphasis,
+    .activity__body--code .hljs-emphasis {
       font-style: italic;
     }
 
-    .message__body--markdown .hljs-strong {
+    .message__body--markdown .hljs-strong,
+    .activity__body--code .hljs-strong {
       font-weight: 600;
     }
 

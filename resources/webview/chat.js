@@ -65,6 +65,27 @@
     linkifyFileReferences(element);
     animateNewVisibleText(element, options.animateFromText);
   }
+  function renderHighlightedCodeInto(element, code, filePath) {
+    if (!window.hljs || !window.DOMPurify) {
+      return false;
+    }
+    const language = getLanguageForPath(filePath, window.hljs);
+    if (!language) {
+      return false;
+    }
+    try {
+      const highlighted = window.hljs.highlight(code, {
+        language,
+        ignoreIllegals: true
+      }).value;
+      element.innerHTML = window.DOMPurify.sanitize(highlighted, {
+        USE_PROFILES: { html: true }
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
   function linkifyFileReferences(root) {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode: (node) => shouldLinkifyTextNode(node) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
@@ -271,6 +292,24 @@
     };
     return aliases[normalized] || normalized;
   }
+  function getLanguageForPath(filePath, hljs) {
+    const language = normalizeCodeLanguage(getPathLanguageHint(filePath));
+    if (!language || !hljs.getLanguage(language)) {
+      return void 0;
+    }
+    return language;
+  }
+  function getPathLanguageHint(filePath) {
+    const basename = filePath.replace(/\\/g, "/").split("/").pop()?.toLowerCase() ?? "";
+    if (basename === "dockerfile") {
+      return "dockerfile";
+    }
+    if (basename === "makefile") {
+      return "makefile";
+    }
+    const extensionMatch = basename.match(/\.([a-z0-9]+)$/);
+    return extensionMatch?.[1] ?? "";
+  }
   function escapeHtml(value) {
     return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
@@ -392,13 +431,32 @@
       const body = document.createElement(activity.code ? "pre" : "div");
       body.className = `activity__body${activity.code ? " activity__body--code" : " activity__body--markdown"}`;
       if (activity.code) {
-        renderAnsiTextInto(body, activity.body);
+        if (!renderReadActivityCodeInto(body, activity)) {
+          renderAnsiTextInto(body, activity.body);
+        }
       } else {
         renderMarkdownInto(body, activity.body);
       }
       details.append(body);
     }
     return details;
+  }
+  function renderReadActivityCodeInto(element, activity) {
+    if (activity.kind !== "tool_execution" || typeof activity.title !== "string" || typeof activity.body !== "string") {
+      return false;
+    }
+    const filePath = parseReadActivityPath(activity.title);
+    if (!filePath || containsAnsiEscape(activity.body)) {
+      return false;
+    }
+    return renderHighlightedCodeInto(element, activity.body, filePath);
+  }
+  function parseReadActivityPath(title) {
+    const match = title.match(/^read\s+(.+?)(?::\d+(?:-\d+)?)?$/);
+    return match?.[1];
+  }
+  function containsAnsiEscape(value) {
+    return /\x1b\[[0-?]*(?:[ -/][0-?]*)?[@-~]/.test(value);
   }
   function renderAnsiTextInto(element, value) {
     element.replaceChildren();

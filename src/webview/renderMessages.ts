@@ -1,4 +1,4 @@
-import { renderMarkdownInto, type RenderMarkdownOptions } from './markdown';
+import { renderHighlightedCodeInto, renderMarkdownInto, type RenderMarkdownOptions } from './markdown';
 import type { Activity, ChatMessage } from './types';
 
 const activityExpansion = new Map<string, boolean>();
@@ -170,7 +170,9 @@ function createActivityElement(activity: Activity): HTMLElement {
     body.className = `activity__body${activity.code ? ' activity__body--code' : ' activity__body--markdown'}`;
 
     if (activity.code) {
-      renderAnsiTextInto(body, activity.body);
+      if (!renderReadActivityCodeInto(body, activity)) {
+        renderAnsiTextInto(body, activity.body);
+      }
     } else {
       renderMarkdownInto(body, activity.body);
     }
@@ -179,6 +181,29 @@ function createActivityElement(activity: Activity): HTMLElement {
   }
 
   return details;
+}
+
+function renderReadActivityCodeInto(element: HTMLElement, activity: Activity): boolean {
+  if (activity.kind !== 'tool_execution' || typeof activity.title !== 'string' || typeof activity.body !== 'string') {
+    return false;
+  }
+
+  const filePath = parseReadActivityPath(activity.title);
+
+  if (!filePath || containsAnsiEscape(activity.body)) {
+    return false;
+  }
+
+  return renderHighlightedCodeInto(element, activity.body, filePath);
+}
+
+function parseReadActivityPath(title: string): string | undefined {
+  const match = title.match(/^read\s+(.+?)(?::\d+(?:-\d+)?)?$/);
+  return match?.[1];
+}
+
+function containsAnsiEscape(value: string): boolean {
+  return /\x1b\[[0-?]*(?:[ -/][0-?]*)?[@-~]/.test(value);
 }
 
 type AnsiStyle = {
