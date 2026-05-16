@@ -18,8 +18,6 @@ import {
 import type { PiRpcClientFactory, PiRpcClientLike } from './rpc/clientTypes';
 import type {
   PiPromptStreamingBehavior,
-  PiSessionState,
-  PiSessionStats,
   RpcEvent
 } from './rpc/types';
 import { formatPromptForPi as formatPromptForPiMessage } from './prompt/formatting';
@@ -38,12 +36,11 @@ import {
   isClientLifecycleError
 } from './controller/errors';
 import { parseLocalSlashCommand } from './controller/slashCommandParsing';
-import { getSessionFile } from './controller/sessionFormatting';
 import { LocalSlashCommandController } from './controller/localSlashCommandController';
+import { SessionHistoryController } from './controller/sessionHistoryController';
 import { PiClientManager } from './controller/piClientManager';
 import { PiRpcEventHandler } from './controller/piRpcEventHandler';
 import { SessionViewController } from './controller/sessionViewController';
-import { formatAgentMessages } from './controller/transcriptFormatting';
 
 export type { PiChatContextUsage, PiChatModelMeta, PiChatSessionMetaSnapshot } from './sessionMetadata';
 
@@ -84,8 +81,7 @@ export class PiChatController {
   private pendingComposerText: { text: string; revision: number } | undefined;
   private composerTextRevision = 0;
   private readonly clientManager: PiClientManager;
-  private shouldRestoreInitialSessionHistory: boolean;
-  private sessionHistoryLoading: boolean;
+  private readonly sessionHistory: SessionHistoryController;
   private abortRequested = false;
   private abortNoticeAdded = false;
   private readonly sessionDiffController: SessionDiffController;
@@ -96,9 +92,6 @@ export class PiChatController {
   private readonly extensionUiRequestHandler: ExtensionUiRequestHandler;
 
   public constructor(private readonly options: PiChatControllerOptions) {
-    this.shouldRestoreInitialSessionHistory = Boolean(options.initialSessionFile);
-    this.sessionHistoryLoading = Boolean(options.initialSessionFile);
-
     this.sessionDiffController = new SessionDiffController({
       initialSessionFile: options.initialSessionFile,
       getSessionGeneration: () => this.session.generation,
@@ -121,7 +114,7 @@ export class PiChatController {
       showSessionChanges: options.showSessionChanges,
       showToast: options.showToast,
       applySessionFile: (sessionFile) => this.sessionDiffController.applySessionFile(sessionFile),
-      adoptReplacedSession: (adoptOptions) => this.adoptReplacedSession(adoptOptions),
+      adoptReplacedSession: (adoptOptions) => this.sessionHistory.adoptReplacedSession(adoptOptions),
       getClient: () => this.getClient(),
       handleCompactCurrentSession: () => this.slashCommandController.handleCompactSlashCommand(''),
       isBusy: () => this.session.isBusy,
@@ -129,7 +122,7 @@ export class PiChatController {
       setComposerText: (text) => this.setComposerText(text),
       setCurrentSessionName: (name, nameOptions) => this.slashCommandController.setCurrentSessionName(name, nameOptions),
       setSessionHistoryLoading: (value) => {
-        this.sessionHistoryLoading = value;
+        this.sessionHistory.setLoading(value);
       },
       startNewSession: (sessionOptions) => this.startNewSession(sessionOptions)
     });
@@ -161,6 +154,19 @@ export class PiChatController {
       resetAbortState: () => this.resetAbortState(),
       handleExtensionUiRequest: (event) => this.handleExtensionUiRequest(event)
     });
+    this.sessionHistory = new SessionHistoryController({
+      initialSessionFile: options.initialSessionFile,
+      session: this.session,
+      sessionView: this.sessionView,
+      rpcEventHandler: this.rpcEventHandler,
+      getClient: () => this.getClient(),
+      startNewExtensionUiGeneration: () => this.extensionUiRequestHandler.startNewGeneration(),
+      invalidateMetadata: () => this.sessionMetadataRefresh.invalidate(),
+      resetSessionMeta: () => this.resetSessionMeta(),
+      refreshSessionDiffStats: () => void this.refreshSessionDiffStats(),
+      refreshSessionMeta: (refreshOptions) => this.refreshSessionMeta(refreshOptions),
+      postState: () => this.postState()
+    });
 
     this.sessionMetadata = new SessionMetadataState({
       initialSessionMeta: options.initialSessionMeta,
@@ -171,13 +177,13 @@ export class PiChatController {
       state: this.sessionMetadata,
       getSessionGeneration: () => this.session.generation,
       getClient: ({ startClient }) => startClient ? this.getClient() : this.getExistingClient(),
-      restoreInitialSessionHistory: (client, sessionGeneration, isCurrent) => this.restoreInitialSessionHistory(client, sessionGeneration, isCurrent),
-      applySessionState: (state) => this.applySessionStateIdentity(state),
-      applySessionStatsIdentity: (stats) => this.applySessionStatsIdentity(stats),
+      restoreInitialSessionHistory: (client, sessionGeneration, isCurrent) => this.sessionHistory.restoreInitialSessionHistory(client, sessionGeneration, isCurrent),
+      applySessionState: (state) => this.sessionHistory.applySessionStateIdentity(state),
+      applySessionStatsIdentity: (stats) => this.sessionHistory.applySessionStatsIdentity(stats),
       refreshSessions: () => void this.sessionView.refreshSessions(),
       postState: () => this.postState(),
       onMetadataStartError: (message) => {
-        this.sessionHistoryLoading = false;
+        this.sessionHistory.setLoading(false);
         this.handleClientError(message);
       },
       onError: (message) => this.handleClientError(message),
@@ -195,7 +201,7 @@ export class PiChatController {
       postState: () => this.postState(),
       refreshSessionMeta: (refreshOptions) => this.refreshSessionMeta(refreshOptions),
       refreshSlashCommands: (refreshOptions) => this.refreshSlashCommands(refreshOptions),
-      adoptReplacedSession: (adoptOptions) => this.adoptReplacedSession(adoptOptions),
+      adoptReplacedSession: (adoptOptions) => this.sessionHistory.adoptReplacedSession(adoptOptions),
       setComposerText: (text) => this.setComposerText(text),
       restartClientForReload: (sessionFile) => {
         this.clientManager.setNextSessionFile(sessionFile);
@@ -322,7 +328,7 @@ export class PiChatController {
       return;
     }
 
-    if (this.shouldRestoreInitialSessionHistory) {
+    if (this.sessionHistory.needsInitialHistoryRestore) {
       await this.refreshSessionMeta({ startClient: true });
     }
 
@@ -377,8 +383,7 @@ export class PiChatController {
     this.sessionView.startNewSession(options.viewMode ?? 'chat');
     this.sessionDiffController.reset(undefined);
     this.clientManager.setNextSessionFile(undefined);
-    this.shouldRestoreInitialSessionHistory = false;
-    this.sessionHistoryLoading = false;
+    this.sessionHistory.startNewSession();
     this.resetReadyScriptArming();
     this.resetSessionMeta();
     this.disposeClient();
@@ -447,7 +452,7 @@ export class PiChatController {
       contextUsage: metadataState.contextUsage,
       metadataRefreshing: metadataState.metadataRefreshing,
       workspaceDiffStats: this.sessionDiffController.getStats(),
-      sessionView: this.sessionView.getWebviewState(this.sessionHistoryLoading)
+      sessionView: this.sessionView.getWebviewState(this.sessionHistory.isLoading)
     });
   }
 
@@ -469,115 +474,6 @@ export class PiChatController {
 
   public refreshSlashCommands(options: { startClient?: boolean; force?: boolean } = {}): Promise<void> {
     return this.sessionMetadataRefresh.refreshSlashCommands(options);
-  }
-
-  private async adoptReplacedSession(options: { fallbackSessionFile?: string; refreshSessions?: boolean } = {}): Promise<void> {
-    const client = this.getClient();
-
-    this.extensionUiRequestHandler.startNewGeneration();
-    this.rpcEventHandler.reset();
-    this.resetAbortState();
-    this.sessionMetadataRefresh.invalidate();
-    this.shouldRestoreInitialSessionHistory = false;
-    this.sessionHistoryLoading = true;
-    this.resetSessionMeta();
-
-    let messagesResult: Awaited<ReturnType<PiRpcClientLike['getMessages']>>;
-    let stateResult: Awaited<ReturnType<PiRpcClientLike['getState']>> | undefined;
-
-    try {
-      [messagesResult, stateResult] = await Promise.all([
-        client.getMessages(),
-        client.getState().catch(() => undefined)
-      ]);
-    } catch (error) {
-      this.sessionHistoryLoading = false;
-      this.postState();
-      throw error;
-    }
-
-    const sessionFile = stateResult
-      ? getSessionFile(stateResult) ?? options.fallbackSessionFile
-      : options.fallbackSessionFile;
-    this.applyCurrentSessionFile(sessionFile);
-    this.applyCurrentSessionName(stateResult?.sessionName);
-    this.rpcEventHandler.clearLiveToolCalls();
-    this.session.replaceMessages(formatAgentMessages(messagesResult.messages));
-    this.sessionHistoryLoading = false;
-    this.sessionView.showChat({ clearSessionsError: true });
-    void this.refreshSessionDiffStats();
-    this.postState();
-
-    void this.refreshSessionMeta({ startClient: true, force: true });
-
-    if (options.refreshSessions) {
-      void this.sessionView.refreshSessions();
-    }
-  }
-
-  private async restoreInitialSessionHistory(
-    client: Pick<PiRpcClientLike, 'getMessages'>,
-    _sessionGeneration: number,
-    isCurrent: () => boolean
-  ): Promise<void> {
-    if (!this.shouldRestoreInitialSessionHistory) {
-      return;
-    }
-
-    let result: Awaited<ReturnType<PiRpcClientLike['getMessages']>>;
-
-    try {
-      result = await client.getMessages();
-    } catch (error) {
-      if (isCurrent()) {
-        this.sessionHistoryLoading = false;
-        this.postState();
-      }
-
-      throw error;
-    }
-
-    if (!isCurrent()) {
-      return;
-    }
-
-    this.shouldRestoreInitialSessionHistory = false;
-    this.sessionHistoryLoading = false;
-
-    if (this.session.isEmpty) {
-      const messages = formatAgentMessages(result.messages);
-
-      if (messages.length > 0) {
-        this.rpcEventHandler.clearLiveToolCalls();
-        this.session.replaceMessages(messages);
-      }
-    }
-
-    this.postState();
-  }
-
-  private applySessionStateIdentity(state: PiSessionState): { sessionFileChanged: boolean; sessionNameChanged: boolean } {
-    return {
-      sessionFileChanged: this.applyCurrentSessionFile(getSessionFile(state)),
-      sessionNameChanged: this.applyCurrentSessionName(state.sessionName)
-    };
-  }
-
-  private applySessionStatsIdentity(stats: PiSessionStats): { sessionFileChanged: boolean; sessionNameChanged: boolean } {
-    const statsSessionFile = getSessionFile(stats);
-
-    return {
-      sessionFileChanged: Boolean(statsSessionFile && this.applyCurrentSessionFile(statsSessionFile)),
-      sessionNameChanged: this.applyCurrentSessionName(stats.sessionName)
-    };
-  }
-
-  private applyCurrentSessionFile(sessionFile: string | undefined): boolean {
-    return this.sessionView.applyCurrentSessionFile(sessionFile);
-  }
-
-  private applyCurrentSessionName(name: string | undefined): boolean {
-    return this.sessionView.applyCurrentSessionName(name);
   }
 
   private formatPromptForPi(userText: string, context: PiPromptContextAttachment[]): string {
@@ -776,7 +672,7 @@ export class PiChatController {
     this.session.setBusy(false);
     this.slashCommandController.clearCompacting();
     this.sessionMetadata.clearRefreshing();
-    this.sessionHistoryLoading = false;
+    this.sessionHistory.setLoading(false);
     this.postState();
     this.restartClientForConfigurationChangeIfIdle();
   }
