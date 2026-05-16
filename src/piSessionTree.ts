@@ -146,14 +146,6 @@ function formatEntry(entry: RawEntry): { role: string; text: string } {
     return { role: customType, text: label + summarizeText(entry.content) };
   }
 
-  if (entry.type === 'model_change') {
-    return { role: 'model', text: label + summarizeText(entry.modelId) };
-  }
-
-  if (entry.type === 'thinking_level_change') {
-    return { role: 'thinking', text: label + summarizeText(entry.thinkingLevel) };
-  }
-
   return { role: entry.type ?? 'entry', text: label + entry.type };
 }
 
