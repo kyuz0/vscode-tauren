@@ -57,6 +57,74 @@ suite('PiChatController', () => {
     harness.controller.dispose();
   });
 
+  test('ready script runs once after live state refresh succeeds', async () => {
+    const readyScripts: Array<{ scriptPath: string; cwd: string | undefined }> = [];
+    const client = new FakePiClient();
+    const harness = createControllerHarness([client], {
+      cwd: '/workspace',
+      getReadyScript: () => 'scripts/ready.sh',
+      runReadyScript: (scriptPath, cwd) => readyScripts.push({ scriptPath, cwd })
+    });
+
+    await harness.controller.refreshSessionMeta({ startClient: true });
+    await harness.controller.refreshSessionMeta({ startClient: true, force: true });
+
+    assert.deepStrictEqual(readyScripts, [{ scriptPath: 'scripts/ready.sh', cwd: '/workspace' }]);
+    harness.controller.dispose();
+  });
+
+  test('ready script runs after each agent run completes', async () => {
+    const readyScripts: Array<{ scriptPath: string; cwd: string | undefined }> = [];
+    const client = new FakePiClient();
+    const harness = createControllerHarness([client], {
+      cwd: '/workspace',
+      getReadyScript: () => 'scripts/ready.sh',
+      runReadyScript: (scriptPath, cwd) => readyScripts.push({ scriptPath, cwd })
+    });
+
+    await harness.controller.refreshSessionMeta({ startClient: true });
+    client.emit({ type: 'agent_end', messages: [] });
+    await flushPromises();
+    client.emit({ type: 'agent_end', messages: [] });
+    await flushPromises();
+
+    assert.deepStrictEqual(readyScripts, [
+      { scriptPath: 'scripts/ready.sh', cwd: '/workspace' },
+      { scriptPath: 'scripts/ready.sh', cwd: '/workspace' },
+      { scriptPath: 'scripts/ready.sh', cwd: '/workspace' }
+    ]);
+    harness.controller.dispose();
+  });
+
+  test('ready script does not run when disabled, unset, or when state refresh fails', async () => {
+    const readyScripts: Array<{ scriptPath: string; cwd: string | undefined }> = [];
+    const failingClient = new FakePiClient({
+      stateResult: new Promise((_resolve, reject) => setImmediate(() => reject(new Error('state failed'))))
+    });
+    const disabledHarness = createControllerHarness([new FakePiClient()], {
+      getReadyScript: () => 'scripts/ready.sh',
+      getReadyScriptEnabled: () => false,
+      runReadyScript: (scriptPath, cwd) => readyScripts.push({ scriptPath, cwd })
+    });
+    const unsetHarness = createControllerHarness([new FakePiClient()], {
+      getReadyScript: () => '',
+      runReadyScript: (scriptPath, cwd) => readyScripts.push({ scriptPath, cwd })
+    });
+    const failingHarness = createControllerHarness([failingClient], {
+      getReadyScript: () => 'scripts/ready.sh',
+      runReadyScript: (scriptPath, cwd) => readyScripts.push({ scriptPath, cwd })
+    });
+
+    await disabledHarness.controller.refreshSessionMeta({ startClient: true });
+    await unsetHarness.controller.refreshSessionMeta({ startClient: true });
+    await failingHarness.controller.refreshSessionMeta({ startClient: true });
+
+    assert.deepStrictEqual(readyScripts, []);
+    disabledHarness.controller.dispose();
+    unsetHarness.controller.dispose();
+    failingHarness.controller.dispose();
+  });
+
   test('initial cached session metadata is visible before live refresh completes', async () => {
     const client = new FakePiClient({
       stateResult: createDeferred<PiSessionState>().promise,
@@ -153,6 +221,34 @@ suite('PiChatController', () => {
       },
       { role: 'assistant', text: 'Earlier failure', error: true }
     ]);
+    harness.controller.dispose();
+  });
+
+  test('ready script skips resume readiness but still runs after resumed agent completes', async () => {
+    const readyScripts: Array<{ scriptPath: string; cwd: string | undefined }> = [];
+    const client = new FakePiClient({
+      state: {
+        model: { provider: 'openai', id: 'gpt-test', reasoning: false },
+        thinkingLevel: 'off',
+        sessionFile: '/sessions/current.jsonl'
+      }
+    });
+    const harness = createControllerHarness([client], {
+      cwd: '/workspace',
+      initialSessionFile: '/sessions/current.jsonl',
+      getReadyScript: () => 'scripts/ready.sh',
+      runReadyScript: (scriptPath, cwd) => readyScripts.push({ scriptPath, cwd })
+    });
+
+    await harness.controller.handleWebviewMessage({ type: 'ready' });
+    await flushPromises();
+
+    assert.deepStrictEqual(readyScripts, []);
+
+    client.emit({ type: 'agent_end', messages: [] });
+    await flushPromises();
+
+    assert.deepStrictEqual(readyScripts, [{ scriptPath: 'scripts/ready.sh', cwd: '/workspace' }]);
     harness.controller.dispose();
   });
 
@@ -1737,6 +1833,9 @@ type ControllerHarnessOptions = {
   listSessionTree?: (sessionFile: string | undefined) => Promise<WebviewTreeItem[]>;
   deleteSession?: (sessionPath: string, displayName: string) => Promise<boolean>;
   getWorkspaceDiffStats?: PiChatControllerOptions['getWorkspaceDiffStats'];
+  getReadyScript?: () => string | undefined;
+  getReadyScriptEnabled?: () => boolean;
+  runReadyScript?: PiChatControllerOptions['runReadyScript'];
 };
 
 function createControllerHarness(
@@ -1778,7 +1877,10 @@ function createControllerHarness(
     listSessions: options.listSessions,
     listSessionTree: options.listSessionTree,
     deleteSession: options.deleteSession,
-    getWorkspaceDiffStats: options.getWorkspaceDiffStats
+    getWorkspaceDiffStats: options.getWorkspaceDiffStats,
+    getReadyScript: options.getReadyScript,
+    getReadyScriptEnabled: options.getReadyScriptEnabled,
+    runReadyScript: options.runReadyScript
   };
 
   const controller = new PiChatController(controllerOptions);

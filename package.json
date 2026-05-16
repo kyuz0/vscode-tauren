@@ -91,6 +91,16 @@
           "type": "boolean",
           "default": true,
           "description": "Enable ANSI and syntax colors in Tau output boxes. When disabled, ANSI escape sequences are stripped."
+        },
+        "tau.readyScript": {
+          "type": "string",
+          "default": "",
+          "description": "Path to an executable script to run when Pi becomes ready: after starting a new Pi process without resuming a session, and after each agent run completes. Relative paths resolve from the workspace folder. Leave empty to disable."
+        },
+        "tau.readyScriptEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable running tau.readyScript when Pi becomes ready. Turn this off to temporarily disable the script without clearing its path."
         }
       }
     }

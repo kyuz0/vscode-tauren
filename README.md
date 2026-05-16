@@ -128,6 +128,14 @@ Command used to launch Pi. This can be an executable name or a full command, suc
 - `npx pi`
 - `"/path with spaces/pi"`
 
+### `tau.readyScript`
+
+Optional path to an executable script to run when Pi becomes ready: after starting a new Pi process without resuming a session, and after each agent run completes. Relative paths resolve from the workspace folder.
+
+### `tau.readyScriptEnabled`
+
+Boolean toggle for `tau.readyScript`. Turn it off to temporarily disable the script without clearing the path.
+
 ## Development
 
 ```sh

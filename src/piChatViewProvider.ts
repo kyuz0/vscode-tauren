@@ -16,6 +16,7 @@ import { PiRpcClient } from './piRpcClient';
 import { ShikiCodeRenderer } from './shikiCodeRenderer';
 import { TauSessionManager } from './tauSessionManager';
 import { listPiSessions } from './piSessionList';
+import { runReadyScript } from './readyScript';
 import type { WebviewModelOption } from './chatWebview';
 
 export const chatViewType = 'tau.chatView';
@@ -46,6 +47,13 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
       getCwd: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
       getPiPath: () => getPiPathSetting(),
       getOutputColors: () => getOutputColorsSetting(),
+      getReadyScript: () => getReadyScriptSetting(),
+      getReadyScriptEnabled: () => getReadyScriptEnabledSetting(),
+      runReadyScript: (scriptPath, cwd) => {
+        runReadyScript(scriptPath, cwd, {
+          onError: (message) => this.showNotification(message, 'warning')
+        });
+      },
       postState: (message) => {
         void this.webviewView?.webview.postMessage(message);
       },
@@ -479,6 +487,15 @@ function getPiPathSetting(): string | undefined {
 
 function getOutputColorsSetting(): boolean {
   return vscode.workspace.getConfiguration('tau').get<boolean>('outputColors', true);
+}
+
+function getReadyScriptSetting(): string | undefined {
+  const value = vscode.workspace.getConfiguration('tau').get<string>('readyScript', '').trim();
+  return value || undefined;
+}
+
+function getReadyScriptEnabledSetting(): boolean {
+  return vscode.workspace.getConfiguration('tau').get<boolean>('readyScriptEnabled', true);
 }
 
 function resolveWorkspaceFileUri(filePath: string): vscode.Uri | undefined {

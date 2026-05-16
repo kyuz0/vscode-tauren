@@ -136,6 +136,9 @@ export type PiChatControllerOptions = {
   getCwd?: () => string | undefined;
   getPiPath?: () => string | undefined;
   getOutputColors?: () => boolean;
+  getReadyScript?: () => string | undefined;
+  getReadyScriptEnabled?: () => boolean;
+  runReadyScript?: (scriptPath: string, cwd: string | undefined) => void;
   stateScheduler?: StatePublisherScheduler;
   initialSessionMeta?: PiChatSessionMetaSnapshot;
   initialSessionFile?: string;
@@ -198,6 +201,8 @@ export class PiChatController {
   private workspaceDiffStatsPollTimeout: ReturnType<typeof setTimeout> | undefined;
   private workspaceDiffStatsRefreshInFlight: Promise<void> | undefined;
   private workspaceDiffStatsDisposed = false;
+  private readyScriptClient: PiRpcClientLike | undefined;
+  private resumedClient: PiRpcClientLike | undefined;
   private readonly liveToolCallsById = new Map<string, RestoredToolCall>();
   private readonly session = new ChatSession();
   private readonly clientDisposables: DisposableLike[] = [];
@@ -1222,6 +1227,8 @@ export class PiChatController {
       return;
     }
 
+    this.maybeRunReadyScript(client);
+
     const sessionFileChanged = this.applyCurrentSessionFile(getSessionFile(state));
     const sessionNameChanged = this.applyCurrentSessionName(state.sessionName);
 
@@ -2094,6 +2101,37 @@ export class PiChatController {
 
     this.client?.dispose();
     this.client = undefined;
+    this.readyScriptClient = undefined;
+    this.resumedClient = undefined;
+  }
+
+  private maybeRunReadyScript(client: PiRpcClientLike): void {
+    if (this.readyScriptClient === client) {
+      return;
+    }
+
+    this.readyScriptClient = client;
+
+    if (this.resumedClient === client) {
+      return;
+    }
+
+    this.runReadyScript();
+  }
+
+  private runReadyScript(): boolean {
+    if (this.options.getReadyScriptEnabled?.() === false || !this.options.runReadyScript) {
+      return false;
+    }
+
+    const scriptPath = this.options.getReadyScript?.()?.trim();
+
+    if (!scriptPath) {
+      return false;
+    }
+
+    this.options.runReadyScript(scriptPath, this.options.getCwd?.());
+    return true;
   }
 
   private getExistingClient(): PiRpcClientLike | undefined {
@@ -2125,6 +2163,10 @@ export class PiChatController {
     const client = this.options.createClient(clientOptions);
     const sessionGeneration = this.session.generation;
     this.client = client;
+
+    if (sessionFile) {
+      this.resumedClient = client;
+    }
     this.clientDisposables.push(
       { dispose: client.onEvent((event) => {
         if (sessionGeneration === this.session.generation) {
@@ -2158,6 +2200,9 @@ export class PiChatController {
         this.session.handleAgentEnd();
         this.stopWorkspaceDiffStatsPolling();
         this.resetAbortState();
+        if (this.runReadyScript() && this.client) {
+          this.readyScriptClient = this.client;
+        }
         void this.refreshWorkspaceDiffStats();
         this.postState();
         void this.refreshSessionMeta().then(
