@@ -1,6 +1,6 @@
 export type WebviewStreamingBehavior = 'steer' | 'followUp';
 export type ViewMode = 'chat' | 'sessions' | 'tree';
-export type SessionItemCommand = 'rename' | 'fork' | 'clone' | 'compact' | 'export' | 'delete';
+export type SessionItemCommand = 'rename' | 'showChanges' | 'fork' | 'clone' | 'compact' | 'export' | 'delete';
 
 export type WebviewApi = {
   postMessage(message: unknown): void;

@@ -805,7 +805,16 @@ function createSessionItemMenuElement(session: SessionItem, index: number): HTML
   menu.hidden = openSessionListMenuIndex !== index;
 
   for (let commandIndex = 0; commandIndex < sessionItemMenuCommands.length; commandIndex += 1) {
-    menu.append(createSessionItemMenuButton(sessionItemMenuCommands[commandIndex], session, commandIndex));
+    const command = sessionItemMenuCommands[commandIndex];
+
+    if (command === 'showChanges') {
+      const separator = document.createElement('span');
+      separator.className = 'pi-toolbar__menu-separator';
+      separator.setAttribute('role', 'separator');
+      menu.append(separator);
+    }
+
+    menu.append(createSessionItemMenuButton(command, session, commandIndex));
   }
 
   wrap.append(menu);
@@ -1519,7 +1528,7 @@ function closeSessionCommandMenu(): void {
 function syncSessionCommandMenuItems(): void {
   for (const item of sessionMenuItemElements) {
     const command = item.getAttribute('data-session-command');
-    item.disabled = state.busy || sessionNameEditing || (command === 'delete' && !getCurrentSessionPath());
+    item.disabled = state.busy || sessionNameEditing || ((command === 'delete' || command === 'showChanges') && !getCurrentSessionPath());
   }
 }
 
@@ -1531,6 +1540,19 @@ function runSessionMenuCommand(command: string | null): void {
   if (command === 'rename') {
     closeSessionCommandMenu();
     startSessionNameEdit();
+    return;
+  }
+
+  if (command === 'showChanges') {
+    const sessionPath = getCurrentSessionPath();
+
+    if (!sessionPath) {
+      return;
+    }
+
+    closeSessionCommandMenu();
+    vscode.postMessage({ type: 'sessionItemCommand', sessionPath, command });
+    focusPromptInput();
     return;
   }
 

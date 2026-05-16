@@ -13,6 +13,7 @@ import {
   type PiRpcClientFactory
 } from './piChatController';
 import { PiRpcClient } from './piRpcClient';
+import { SessionDiffViewer } from './sessionDiffViewer';
 import { ShikiCodeRenderer } from './shikiCodeRenderer';
 import { TauSessionManager } from './tauSessionManager';
 import { listPiSessions } from './piSessionList';
@@ -36,6 +37,7 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
   private webviewReady = false;
   private readonly controller: TauSessionManager;
   private readonly codeRenderer = new ShikiCodeRenderer();
+  private readonly sessionDiffViewer = new SessionDiffViewer((message, notifyType) => this.showNotification(message, notifyType));
   private contextUsagePollTimer: NodeJS.Timeout | undefined;
   private sessionDiffStatsRefreshTimer: NodeJS.Timeout | undefined;
   private readonly disposables: vscode.Disposable[] = [];
@@ -85,7 +87,8 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
       loadSessionDiffSnapshot: (sessionFile) => this.readSessionDiffSnapshot(sessionFile),
       saveSessionDiffSnapshot: (sessionFile, snapshot) => this.writeSessionDiffSnapshot(sessionFile, snapshot),
       listSessions: (cwd, currentSessionFile) => listPiSessions({ cwd, currentSessionFile }),
-      deleteSession: (sessionPath, displayName) => this.deleteSession(sessionPath, displayName)
+      deleteSession: (sessionPath, displayName) => this.deleteSession(sessionPath, displayName),
+      showSessionChanges: (sessionPath, displayName) => this.sessionDiffViewer.showSessionChanges(sessionPath, displayName)
     });
 
     this.disposables.push(
@@ -118,6 +121,7 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
     }
 
     this.codeRenderer.dispose();
+    this.sessionDiffViewer.dispose();
     this.controller.dispose();
   }
 

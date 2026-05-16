@@ -10,6 +10,18 @@ export type SessionDiffSnapshot = {
   stats?: SessionDiffStats;
 };
 
+export type SessionFileDiff = {
+  path: string;
+  absolutePath: string;
+  originalContent: string;
+  modifiedContent: string;
+};
+
+export type SessionFileDiffsResult = {
+  diffs: SessionFileDiff[];
+  reconstructed: boolean;
+};
+
 export class SessionDiffTracker {
   private stats: SessionDiffStats = emptySessionDiffStats();
 
@@ -101,6 +113,36 @@ export async function parseSessionDiffStatsFromFile(sessionFile: string): Promis
   return await parseSessionNetDiffStats(content) ?? parseSessionDiffStats(content);
 }
 
+export async function parseSessionFileDiffsFromFile(sessionFile: string): Promise<SessionFileDiff[] | undefined> {
+  let content: string;
+
+  try {
+    content = await fs.readFile(sessionFile, 'utf8');
+  } catch {
+    return undefined;
+  }
+
+  return parseSessionFileDiffs(content);
+}
+
+export async function parseSessionBestEffortFileDiffsFromFile(sessionFile: string): Promise<SessionFileDiffsResult | undefined> {
+  let content: string;
+
+  try {
+    content = await fs.readFile(sessionFile, 'utf8');
+  } catch {
+    return undefined;
+  }
+
+  const reconstructedDiffs = await parseSessionFileDiffs(content);
+
+  if (reconstructedDiffs !== undefined) {
+    return { diffs: reconstructedDiffs, reconstructed: true };
+  }
+
+  return { diffs: parseSessionMutationFileDiffs(content), reconstructed: false };
+}
+
 export function parseSessionDiffStats(content: string): SessionDiffStats {
   const toolExecutionStats: SessionDiffStats[] = [];
   const toolCallStats: SessionDiffStats[] = [];
@@ -163,7 +205,37 @@ type FileMutation =
   | { toolName: 'edit'; path: string; edits: Array<{ oldText: string; newText: string }> }
   | { toolName: 'write'; path: string; content: string };
 
+export async function parseSessionFileDiffs(content: string): Promise<SessionFileDiff[] | undefined> {
+  const { cwd, mutations } = parseSessionMutationHistory(content);
+
+  if (mutations.length === 0) {
+    return [];
+  }
+
+  if (!cwd) {
+    return undefined;
+  }
+
+  return computeSessionFileDiffs(cwd, mutations);
+}
+
+export function parseSessionMutationFileDiffs(content: string): SessionFileDiff[] {
+  const { cwd, mutations } = parseSessionMutationHistory(content);
+  return computeSyntheticSessionFileDiffs(cwd, mutations);
+}
+
 async function parseSessionNetDiffStats(content: string): Promise<SessionDiffStats | undefined> {
+  const { cwd, mutations } = parseSessionMutationHistory(content);
+
+  if (!cwd || mutations.length === 0) {
+    return undefined;
+  }
+
+  const fileDiffs = await computeSessionFileDiffs(cwd, mutations);
+  return fileDiffs === undefined ? undefined : sumStats(fileDiffs.map((diff) => getLineDiffStats(diff.originalContent, diff.modifiedContent)));
+}
+
+function parseSessionMutationHistory(content: string): { cwd: string | undefined; mutations: FileMutation[] } {
   const executionMutations: FileMutation[] = [];
   const toolCallMutations: FileMutation[] = [];
   let cwd: string | undefined;
@@ -188,13 +260,10 @@ async function parseSessionNetDiffStats(content: string): Promise<SessionDiffSta
     }
   }
 
-  const mutations = executionMutations.length > 0 ? executionMutations : toolCallMutations;
-
-  if (!cwd || mutations.length === 0) {
-    return undefined;
-  }
-
-  return computeNetDiffStats(cwd, mutations);
+  return {
+    cwd,
+    mutations: executionMutations.length > 0 ? executionMutations : toolCallMutations
+  };
 }
 
 function collectToolMutations(value: unknown, executionMutations: FileMutation[], toolCallMutations: FileMutation[]): void {
@@ -279,7 +348,7 @@ function getEditMutations(value: unknown): Array<{ oldText: string; newText: str
   return edits;
 }
 
-async function computeNetDiffStats(cwd: string, mutations: FileMutation[]): Promise<SessionDiffStats | undefined> {
+async function computeSessionFileDiffs(cwd: string, mutations: FileMutation[]): Promise<SessionFileDiff[] | undefined> {
   const mutationsByPath = new Map<string, FileMutation[]>();
 
   for (const mutation of mutations) {
@@ -292,9 +361,10 @@ async function computeNetDiffStats(cwd: string, mutations: FileMutation[]): Prom
     }
   }
 
-  const fileStats: SessionDiffStats[] = [];
+  const fileDiffs: SessionFileDiff[] = [];
 
   for (const [filePath, fileMutations] of mutationsByPath) {
+    const absolutePath = path.resolve(cwd, filePath);
     const currentContent = await readCurrentFileContent(cwd, filePath);
 
     if (currentContent === undefined) {
@@ -307,10 +377,66 @@ async function computeNetDiffStats(cwd: string, mutations: FileMutation[]): Prom
       return undefined;
     }
 
-    fileStats.push(getLineDiffStats(baselineContent, currentContent));
+    if (baselineContent !== currentContent) {
+      fileDiffs.push({
+        path: filePath,
+        absolutePath,
+        originalContent: baselineContent,
+        modifiedContent: currentContent
+      });
+    }
   }
 
-  return sumStats(fileStats);
+  return fileDiffs;
+}
+
+function computeSyntheticSessionFileDiffs(cwd: string | undefined, mutations: FileMutation[]): SessionFileDiff[] {
+  const fileDiffs = new Map<string, { originalParts: string[]; modifiedParts: string[]; editCount: number }>();
+
+  for (const mutation of mutations) {
+    const diff = fileDiffs.get(mutation.path) ?? { originalParts: [], modifiedParts: [], editCount: 0 };
+    diff.editCount += 1;
+
+    if (mutation.toolName === 'write') {
+      appendSyntheticSnippet(diff.originalParts, '');
+      appendSyntheticSnippet(diff.modifiedParts, mutation.content);
+    } else {
+      for (const edit of mutation.edits) {
+        appendSyntheticSnippet(diff.originalParts, edit.oldText);
+        appendSyntheticSnippet(diff.modifiedParts, edit.newText);
+      }
+    }
+
+    fileDiffs.set(mutation.path, diff);
+  }
+
+  const result: SessionFileDiff[] = [];
+
+  for (const [filePath, diff] of fileDiffs) {
+    const originalContent = diff.originalParts.join('');
+    const modifiedContent = diff.modifiedParts.join('');
+
+    if (originalContent === modifiedContent) {
+      continue;
+    }
+
+    result.push({
+      path: filePath,
+      absolutePath: cwd ? path.resolve(cwd, filePath) : path.resolve('/', filePath),
+      originalContent,
+      modifiedContent
+    });
+  }
+
+  return result;
+}
+
+function appendSyntheticSnippet(parts: string[], text: string): void {
+  if (!text) {
+    return;
+  }
+
+  parts.push(text.endsWith('\n') ? text : `${text}\n`);
 }
 
 async function readCurrentFileContent(cwd: string, filePath: string): Promise<string | undefined> {

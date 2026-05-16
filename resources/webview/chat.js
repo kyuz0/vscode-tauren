@@ -1002,9 +1002,10 @@
   }
 
   // src/webview/sessionItemCommands.ts
-  var sessionItemMenuCommands = ["rename", "fork", "clone", "compact", "export", "delete"];
+  var sessionItemMenuCommands = ["rename", "fork", "clone", "compact", "export", "delete", "showChanges"];
   var sessionItemCommandIcons = {
     rename: '<svg class="pi-toolbar__menu-icon" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4.1 11.9L5.45 11.6L11.15 5.9C11.55 5.5 11.55 4.85 11.15 4.45L10.9 4.2C10.5 3.8 9.85 3.8 9.45 4.2L3.75 9.9L3.45 11.25C3.37 11.65 3.7 11.98 4.1 11.9Z" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.85 4.8L10.55 6.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/></svg>',
+    showChanges: '<svg class="pi-toolbar__menu-icon" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 3.5H13" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M3 8H13" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M3 12.5H13" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M5.5 2.25V4.75M10.5 6.75V9.25M7.5 11.25V13.75" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
     fork: '<svg class="pi-toolbar__menu-icon" aria-hidden="true" width="14" height="14" viewBox="0 0 19 19" fill="none"><path d="M5.5 4.25V8.5C5.5 10.16 6.84 11.5 8.5 11.5H10.5" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.5 4.25V14.75" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/><path d="M10.25 8.5L13.25 11.5L10.25 14.5" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/><circle cx="5.5" cy="4.25" r="1.55" fill="currentColor"/><circle cx="5.5" cy="14.75" r="1.55" fill="currentColor"/></svg>',
     clone: '<svg class="pi-toolbar__menu-icon" aria-hidden="true" width="14" height="14" viewBox="0 0 19 19" fill="none"><rect x="4.25" y="6.25" width="8.5" height="8.5" rx="1.5" stroke="currentColor" stroke-width="1.35"/><path d="M7.25 4.25H13.25C14.08 4.25 14.75 4.92 14.75 5.75V11.75" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     compact: '<svg class="pi-toolbar__menu-icon" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M5 3.5H3.5V5" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 3.5H12.5V5" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 12.5H3.5V11" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 12.5H12.5V11" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.3 5.3L7.05 7.05M10.7 5.3L8.95 7.05M5.3 10.7L7.05 8.95M10.7 10.7L8.95 8.95" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
@@ -1012,12 +1013,14 @@
     delete: '<svg class="pi-toolbar__menu-icon" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16"><path fill="currentColor" d="M6 2h4l1 1h3v1H2V3h3l1-1Zm-2 3h8l-.6 9.2A2 2 0 0 1 9.4 16H6.6a2 2 0 0 1-2-1.8L4 5Zm2 1v8h1V6H6Zm3 0v8h1V6H9Z"/></svg>'
   };
   function parseSessionItemCommand(command) {
-    return command === "rename" || command === "fork" || command === "clone" || command === "compact" || command === "export" || command === "delete" ? command : void 0;
+    return command === "rename" || command === "showChanges" || command === "fork" || command === "clone" || command === "compact" || command === "export" || command === "delete" ? command : void 0;
   }
   function getSessionItemCommandLabel(command) {
     switch (command) {
       case "rename":
         return "Rename session";
+      case "showChanges":
+        return "Show changes";
       case "fork":
         return "Fork session";
       case "clone":
@@ -1756,7 +1759,14 @@
     menu.setAttribute("role", "menu");
     menu.hidden = openSessionListMenuIndex !== index;
     for (let commandIndex = 0; commandIndex < sessionItemMenuCommands.length; commandIndex += 1) {
-      menu.append(createSessionItemMenuButton(sessionItemMenuCommands[commandIndex], session, commandIndex));
+      const command = sessionItemMenuCommands[commandIndex];
+      if (command === "showChanges") {
+        const separator = document.createElement("span");
+        separator.className = "pi-toolbar__menu-separator";
+        separator.setAttribute("role", "separator");
+        menu.append(separator);
+      }
+      menu.append(createSessionItemMenuButton(command, session, commandIndex));
     }
     wrap.append(menu);
     return wrap;
@@ -2309,7 +2319,7 @@
   function syncSessionCommandMenuItems() {
     for (const item of sessionMenuItemElements) {
       const command = item.getAttribute("data-session-command");
-      item.disabled = state.busy || sessionNameEditing || command === "delete" && !getCurrentSessionPath();
+      item.disabled = state.busy || sessionNameEditing || (command === "delete" || command === "showChanges") && !getCurrentSessionPath();
     }
   }
   function setSessionMenuItemHover(item, hovered) {
@@ -2319,6 +2329,16 @@
     if (command === "rename") {
       closeSessionCommandMenu();
       startSessionNameEdit();
+      return;
+    }
+    if (command === "showChanges") {
+      const sessionPath = getCurrentSessionPath();
+      if (!sessionPath) {
+        return;
+      }
+      closeSessionCommandMenu();
+      vscode.postMessage({ type: "sessionItemCommand", sessionPath, command });
+      focusPromptInput();
       return;
     }
     if (command === "fork" || command === "clone") {

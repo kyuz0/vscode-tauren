@@ -150,6 +150,7 @@ export type PiChatControllerOptions = {
   listSessions?: (cwd: string | undefined, currentSessionFile: string | undefined) => Promise<WebviewSessionItem[]>;
   listSessionTree?: (sessionFile: string | undefined) => Promise<WebviewTreeItem[]>;
   deleteSession?: (sessionPath: string, displayName: string) => Promise<boolean>;
+  showSessionChanges?: (sessionPath: string, displayName: string) => Promise<void>;
   loadSessionDiffSnapshot?: (sessionFile: string) => SessionDiffSnapshot | undefined;
   saveSessionDiffSnapshot?: (sessionFile: string, snapshot: SessionDiffSnapshot) => void;
 };
@@ -933,6 +934,11 @@ export class PiChatController {
     }
 
     await this.runSessionAction(sessionPath, async (session, isCurrentSession) => {
+      if (command === 'showChanges') {
+        await this.showSessionChanges(session);
+        return;
+      }
+
       if (command === 'compact' && isCurrentSession) {
         await this.handleCompactSlashCommand('');
         return;
@@ -996,6 +1002,15 @@ export class PiChatController {
         this.postState();
       }
     }
+  }
+
+  private async showSessionChanges(session: WebviewSessionItem): Promise<void> {
+    if (!this.options.showSessionChanges) {
+      this.options.showNotification('Session changes view is not available in this environment.', 'warning');
+      return;
+    }
+
+    await this.options.showSessionChanges(session.path, getSessionDisplayName(session, session.path));
   }
 
   private async forkSessionWithClient(client: PiRpcClientLike): Promise<void> {

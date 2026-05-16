@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
-import { getToolExecutionDiffStats, parseSessionDiffStats, SessionDiffTracker } from '../../sessionDiffTracker';
+import { getToolExecutionDiffStats, parseSessionBestEffortFileDiffsFromFile, parseSessionDiffStats, parseSessionFileDiffsFromFile, SessionDiffTracker } from '../../sessionDiffTracker';
 
 suite('SessionDiffTracker', () => {
   test('counts actual changed edit lines and write tool content lines', () => {
@@ -90,6 +90,51 @@ suite('SessionDiffTracker', () => {
     const tracker = new SessionDiffTracker({ stats: { addedLines: 10, removedLines: 10 } });
 
     assert.deepStrictEqual(await tracker.restoreFromSessionFile(sessionFile), { addedLines: 2, removedLines: 1 });
+  });
+
+  test('reconstructs per-file session diffs', async () => {
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'tau-session-diff-files-'));
+    const sessionFile = path.join(cwd, 'session.jsonl');
+    const editedFile = path.join(cwd, 'src', 'example.ts');
+    await fs.mkdir(path.dirname(editedFile), { recursive: true });
+
+    await fs.writeFile(editedFile, 'const value = 2;\n');
+    await fs.writeFile(sessionFile, [
+      JSON.stringify({ type: 'session', cwd }),
+      JSON.stringify({
+        type: 'tool_execution_end',
+        toolName: 'edit',
+        args: { path: 'src/example.ts', edits: [{ oldText: 'const value = 1;\n', newText: 'const value = 2;\n' }] }
+      })
+    ].join('\n'));
+
+    assert.deepStrictEqual(await parseSessionFileDiffsFromFile(sessionFile), [{
+      path: 'src/example.ts',
+      absolutePath: editedFile,
+      originalContent: 'const value = 1;\n',
+      modifiedContent: 'const value = 2;\n'
+    }]);
+  });
+
+  test('falls back to recorded edit snippets when full file reconstruction is unavailable', async () => {
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'tau-session-diff-synthetic-'));
+    const sessionFile = path.join(cwd, 'session.jsonl');
+
+    await fs.writeFile(sessionFile, JSON.stringify({
+      type: 'tool_execution_end',
+      toolName: 'edit',
+      args: { path: 'src/example.ts', edits: [{ oldText: 'const value = 1;\n', newText: 'const value = 2;\n' }] }
+    }));
+
+    assert.deepStrictEqual(await parseSessionBestEffortFileDiffsFromFile(sessionFile), {
+      reconstructed: false,
+      diffs: [{
+        path: 'src/example.ts',
+        absolutePath: path.resolve('/', 'src/example.ts'),
+        originalContent: 'const value = 1;\n',
+        modifiedContent: 'const value = 2;\n'
+      }]
+    });
   });
 
   test('restores net historical stats across repeated edits to the same file', async () => {

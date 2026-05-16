@@ -7,6 +7,10 @@ import {
 } from '../../webview/sessionItemCommands';
 
 suite('Webview session item commands', () => {
+  test('orders Tau-specific commands after core Pi commands', () => {
+    assert.deepStrictEqual(sessionItemMenuCommands, ['rename', 'fork', 'clone', 'compact', 'export', 'delete', 'showChanges']);
+  });
+
   test('parses only supported session item commands', () => {
     for (const command of sessionItemMenuCommands) {
       assert.strictEqual(parseSessionItemCommand(command), command);

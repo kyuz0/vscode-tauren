@@ -116,6 +116,10 @@ suite('Chat webview helpers', () => {
       { type: 'sessionItemCommand', sessionPath: '/sessions/old.jsonl', command: 'compact' }
     );
     assert.deepStrictEqual(
+      parseWebviewMessage({ type: 'sessionItemCommand', sessionPath: '/sessions/old.jsonl', command: 'showChanges' }),
+      { type: 'sessionItemCommand', sessionPath: '/sessions/old.jsonl', command: 'showChanges' }
+    );
+    assert.deepStrictEqual(
       parseWebviewMessage({ type: 'setSessionItemName', sessionPath: '/sessions/old.jsonl', name: 'Old work' }),
       { type: 'setSessionItemName', sessionPath: '/sessions/old.jsonl', name: 'Old work' }
     );
@@ -226,10 +230,14 @@ suite('Chat webview helpers', () => {
     assert.ok(!html.includes('class="pi-toolbar__edit"'));
     assert.ok(html.includes('class="pi-toolbar__title-input"'));
     assert.ok(html.includes('data-session-command="rename"'));
+    assert.ok(html.includes('data-session-command="showChanges"'));
     assert.ok(html.includes('data-session-command="fork"'));
     assert.ok(html.includes('data-session-command="clone"'));
     assert.ok(html.includes('data-session-command="delete"'));
     assert.ok(html.includes('<span class="pi-toolbar__menu-label">Rename session</span>'));
+    assert.ok(html.includes('<span class="pi-toolbar__menu-label">Show changes</span>'));
+    assert.ok(html.includes('class="pi-toolbar__menu-separator" role="separator"'));
+    assert.ok(html.indexOf('data-session-command="showChanges"') > html.indexOf('data-session-command="delete"'));
     assert.ok(html.includes('<span class="pi-toolbar__menu-label">Fork session</span>'));
     assert.ok(html.includes('<span class="pi-toolbar__menu-label">Clone session</span>'));
     assert.ok(html.includes('<span class="pi-toolbar__menu-label">Move session to trash</span>'));

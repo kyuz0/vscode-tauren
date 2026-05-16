@@ -262,6 +262,13 @@ const toolbarStyles = /* css */ `    .pi-toolbar {
       opacity: 0.78;
     }
 
+    .pi-toolbar__menu-separator {
+      display: block;
+      height: 1px;
+      margin: 6px 4px;
+      background: color-mix(in srgb, var(--vscode-foreground) 32%, transparent);
+    }
+
     .pi-toolbar__menu-item:hover:not(:disabled),
     .pi-toolbar__menu-item:focus-visible,
     .pi-toolbar__menu-item--hover:not(:disabled) {
