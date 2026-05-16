@@ -1,22 +1,7 @@
-import { spawn, type SpawnOptions } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { homedir } from 'node:os';
 import * as path from 'node:path';
-
-export type ReadyScriptProcess = {
-  once(event: 'error', listener: (error: Error) => void): unknown;
-  unref(): void;
-};
-
-export type ReadyScriptSpawnFactory = (
-  command: string,
-  args: readonly string[],
-  options: SpawnOptions
-) => ReadyScriptProcess;
-
-export type RunReadyScriptOptions = {
-  spawnFactory?: ReadyScriptSpawnFactory;
-  onError?: (message: string) => void;
-};
+import type { ReadyScriptProcess, RunReadyScriptOptions } from './types';
 
 export function runReadyScript(
   scriptPath: string,

@@ -1,9 +1,4 @@
-export type ReadyScriptStreamingBehavior = 'steer' | 'followUp';
-
-export type ReadyScriptArmSnapshot = {
-  currentRunArmed: boolean;
-  queuedRuns: number;
-};
+import type { ReadyScriptArmSnapshot, ReadyScriptStreamingBehavior } from './types';
 
 export class ReadyScriptState {
   private currentRunArmed = false;

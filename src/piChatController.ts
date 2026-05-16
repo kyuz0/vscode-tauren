@@ -49,7 +49,7 @@ import {
   isBuiltinSlashCommand,
   isSupportedBuiltinSlashCommand
 } from './slashCommands';
-import { ReadyScriptState } from './readyScriptState';
+import { ReadyScriptState } from './readyScript';
 import {
   formatContextUsage,
   formatInteger,

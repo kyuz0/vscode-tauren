@@ -31,7 +31,7 @@ Do not add transient notes, guesses, one-off debugging observations, or broad ge
 - `src/nonce.ts` owns nonce generation for CSP-protected inline scripts.
 - `src/piEventMapper.ts` owns pure Pi RPC event-to-UI action mapping helpers.
 - `src/promptContext.ts` owns one-shot IDE prompt context attachment state, normalization, labels, and webview projection.
-- `src/readyScriptState.ts` owns controller-side ready-script arming/queued-run state transitions.
+- `src/readyScript/` owns ready-script running, arming/queued-run state transitions, and shared ready-script types.
 - `src/sessionMetadata.ts` owns session model/context/slash-command metadata state, refresh orchestration, formatting, equality checks, and cached metadata snapshots.
 - `src/extensionUiRequestHandler.ts` owns extension UI request routing through an injected VS Code UI adapter, safe cancellation, and stale request cleanup.
 - `src/sessions/piSessionList.ts` owns extension-side discovery/parsing of persisted Pi session JSONL files for the sidebar session switcher.

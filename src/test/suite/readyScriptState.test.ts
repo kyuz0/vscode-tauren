@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { ReadyScriptState } from '../../readyScriptState';
+import { ReadyScriptState } from '../../readyScript';
 
 suite('ReadyScriptState', () => {
   test('arms immediate user prompts for the current run', () => {
