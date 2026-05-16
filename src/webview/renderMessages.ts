@@ -387,10 +387,13 @@ function isBrightAnsiBackground(code: number): boolean {
 
 function ansiBasicColor(index: number, bright: boolean): string {
   const names = bright
-    ? ['brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite']
-    : ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white'];
+    ? ['BrightBlack', 'BrightRed', 'BrightGreen', 'BrightYellow', 'BrightBlue', 'BrightMagenta', 'BrightCyan', 'BrightWhite']
+    : ['Black', 'Red', 'Green', 'Yellow', 'Blue', 'Magenta', 'Cyan', 'White'];
+  const fallbacks = bright
+    ? ['#666666', '#f14c4c', '#23d18b', '#f5f543', '#3b8eea', '#d670d6', '#29b8db', '#e5e5e5']
+    : ['#000000', '#cd3131', '#0dbc79', '#e5e510', '#2472c8', '#bc3fbc', '#11a8cd', '#e5e5e5'];
 
-  return `var(--vscode-terminal-ansi${names[index] ?? 'white'})`;
+  return `var(--vscode-terminal-ansi${names[index] ?? 'White'}, ${fallbacks[index] ?? '#e5e5e5'})`;
 }
 
 function ansi256Color(value: number): string | undefined {

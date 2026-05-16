@@ -6,6 +6,11 @@ import type { RpcEvent } from './piRpcClient';
 
 const toolResultPreviewMaxLines = 8;
 const toolResultPreviewMaxCharacters = 2400;
+const editDiffPreviewMaxLines = 40;
+const editDiffLineMaxCharacters = 500;
+const ansiRed = '\x1b[31m';
+const ansiGreen = '\x1b[32m';
+const ansiReset = '\x1b[0m';
 
 export type MessageUpdateAction =
   | { type: 'text_delta'; delta: string }
@@ -61,7 +66,9 @@ export function formatToolExecutionActivity({
   status
 }: ToolExecutionActivityOptions): ChatActivityInput {
   const display = formatToolExecutionDisplay({ toolName, args });
-  const body = formatToolResultPreview(status === 'running' ? partialResult : result, display.toolName);
+  const body = status !== 'error' && display.toolName === 'edit'
+    ? formatEditDiffPreview(args) ?? formatToolResultPreview(status === 'running' ? partialResult : result, display.toolName)
+    : formatToolResultPreview(status === 'running' ? partialResult : result, display.toolName);
 
   return {
     kind: 'tool_execution',
@@ -608,6 +615,62 @@ function summarizeEditCount(args: Record<string, unknown> | undefined): string |
   }
 
   return `${edits.length} replacement${edits.length === 1 ? '' : 's'}`;
+}
+
+function formatEditDiffPreview(args: unknown): string | undefined {
+  if (!isRecord(args) || !Array.isArray(args.edits)) {
+    return undefined;
+  }
+
+  const lines: string[] = [];
+
+  for (const [index, edit] of args.edits.entries()) {
+    if (!isRecord(edit)) {
+      continue;
+    }
+
+    const oldText = getRecordString(edit, 'oldText');
+    const newText = getRecordString(edit, 'newText');
+
+    if (oldText === undefined || newText === undefined) {
+      continue;
+    }
+
+    if (args.edits.length > 1) {
+      lines.push(`@@ replacement ${index + 1} @@`);
+    }
+
+    lines.push(...formatDiffLines('-', oldText, ansiRed));
+    lines.push(...formatDiffLines('+', newText, ansiGreen));
+  }
+
+  if (lines.length === 0) {
+    return undefined;
+  }
+
+  return previewEditDiffLines(lines);
+}
+
+function formatDiffLines(prefix: '-' | '+', value: string, color: string): string[] {
+  const lines = value.split('\n');
+  return lines.map((line) => `${color}${prefix}${truncateDiffLine(line)}${ansiReset}`);
+}
+
+function truncateDiffLine(line: string): string {
+  if (line.length <= editDiffLineMaxCharacters) {
+    return line;
+  }
+
+  return `${line.slice(0, editDiffLineMaxCharacters - 3)}...`;
+}
+
+function previewEditDiffLines(lines: string[]): string {
+  if (lines.length <= editDiffPreviewMaxLines) {
+    return lines.join('\n');
+  }
+
+  const hiddenLineCount = lines.length - editDiffPreviewMaxLines;
+  return `${lines.slice(0, editDiffPreviewMaxLines).join('\n')}\n... (${hiddenLineCount} more diff lines)`;
 }
 
 function getPositiveNumber(value: unknown): number | undefined {

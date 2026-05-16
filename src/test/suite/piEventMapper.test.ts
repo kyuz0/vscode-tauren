@@ -474,6 +474,31 @@ suite('Pi event mapper', () => {
         }
       }
     );
+
+    assert.deepStrictEqual(
+      mapRpcActivity({
+        type: 'tool_execution_end',
+        toolCallId: 'call-edit',
+        toolName: 'edit',
+        args: {
+          path: 'src/example.ts',
+          edits: [{ oldText: 'const value = 1;', newText: 'const value = 2;' }]
+        },
+        result: { content: [{ type: 'text', text: 'Successfully edited src/example.ts' }] }
+      }, { fullCommunication: false }),
+      {
+        type: 'activity_update',
+        sourceId: 'tool:call-edit',
+        activity: {
+          kind: 'tool_execution',
+          title: 'edit src/example.ts',
+          status: 'completed',
+          summary: '1 replacement',
+          body: '\x1b[31m-const value = 1;\x1b[0m\n\x1b[32m+const value = 2;\x1b[0m',
+          code: true
+        }
+      }
+    );
   });
 
   test('mapRpcActivity keeps concise tool execution visible when full communication is disabled', () => {
