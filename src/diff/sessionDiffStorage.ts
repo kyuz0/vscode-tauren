@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { SessionDiffSnapshot } from './sessionDiffTracker';
+import type { SessionDiffSnapshot } from './types';
 
 const sessionDiffSnapshotsStorageKey = 'tau.sessionDiffSnapshots';
 

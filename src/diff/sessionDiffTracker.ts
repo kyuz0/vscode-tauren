@@ -1,26 +1,13 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
-
-export type SessionDiffStats = {
-  addedLines: number;
-  removedLines: number;
-};
-
-export type SessionDiffSnapshot = {
-  stats?: SessionDiffStats;
-};
-
-export type SessionFileDiff = {
-  path: string;
-  absolutePath: string;
-  originalContent: string;
-  modifiedContent: string;
-};
-
-export type SessionFileDiffsResult = {
-  diffs: SessionFileDiff[];
-  reconstructed: boolean;
-};
+import type {
+  FileMutation,
+  SessionDiffSnapshot,
+  SessionDiffStats,
+  SessionFileDiff,
+  SessionFileDiffsResult,
+  ToolExecutionInput
+} from './types';
 
 export class SessionDiffTracker {
   private stats: SessionDiffStats = emptySessionDiffStats();
@@ -61,13 +48,6 @@ export class SessionDiffTracker {
     return this.getStats();
   }
 }
-
-export type ToolExecutionInput = {
-  toolName?: unknown;
-  args?: unknown;
-  result?: unknown;
-  isError?: unknown;
-};
 
 export function emptySessionDiffStats(): SessionDiffStats {
   return { addedLines: 0, removedLines: 0 };
@@ -200,10 +180,6 @@ function collectToolStats(value: unknown, toolExecutionStats: SessionDiffStats[]
     }
   }
 }
-
-type FileMutation =
-  | { toolName: 'edit'; path: string; edits: Array<{ oldText: string; newText: string }> }
-  | { toolName: 'write'; path: string; content: string };
 
 export async function parseSessionFileDiffs(content: string): Promise<SessionFileDiff[] | undefined> {
   const { cwd, mutations } = parseSessionMutationHistory(content);

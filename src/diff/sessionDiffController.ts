@@ -1,18 +1,10 @@
-import {
-  emptySessionDiffStats,
-  SessionDiffTracker,
-  type SessionDiffSnapshot,
-  type SessionDiffStats,
-  type ToolExecutionInput
-} from './sessionDiffTracker';
-
-export type SessionDiffControllerOptions = {
-  initialSessionFile?: string;
-  getSessionGeneration: () => number;
-  postState: () => void;
-  loadSnapshot?: (sessionFile: string) => SessionDiffSnapshot | undefined;
-  saveSnapshot?: (sessionFile: string, snapshot: SessionDiffSnapshot) => void;
-};
+import { emptySessionDiffStats, SessionDiffTracker } from './sessionDiffTracker';
+import type {
+  SessionDiffControllerOptions,
+  SessionDiffSnapshot,
+  SessionDiffStats,
+  ToolExecutionInput
+} from './types';
 
 export class SessionDiffController {
   private currentSessionFile: string | undefined;

@@ -1,21 +1,9 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import {
-  parseSessionBestEffortFileDiffsFromFile,
-  type SessionFileDiff
-} from './sessionDiffTracker';
+import { parseSessionBestEffortFileDiffsFromFile } from './sessionDiffTracker';
+import type { SessionDiffDocument, SessionDiffDocumentContext, SessionFileDiff } from './types';
 
 export const sessionDiffScheme = 'tau-session-diff';
-
-export type SessionDiffDocumentContext = {
-  path: string;
-  side: 'original' | 'modified';
-};
-
-type SessionDiffDocument = {
-  uri: vscode.Uri;
-  content: string;
-};
 
 export class SessionDiffViewer implements vscode.TextDocumentContentProvider, vscode.Disposable {
   private readonly documents = new Map<string, string>();

@@ -58,7 +58,7 @@ import {
   type PiChatSessionMetaSnapshot
 } from './sessionMetadata';
 import { SessionDiffController } from './diff/sessionDiffController';
-import type { SessionDiffSnapshot } from './diff/sessionDiffTracker';
+import type { SessionDiffSnapshot } from './diff/types';
 
 export type PiRpcClientLike = Pick<
   PiRpcClient,
