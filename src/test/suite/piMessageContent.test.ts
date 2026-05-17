@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { extractPiMessageText } from '../../piMessageContent';
+import { extractPiMessageText } from '../../pi/messageContent';
 
 suite('Pi message content helpers', () => {
   test('returns string content unchanged', () => {

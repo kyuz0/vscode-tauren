@@ -4,7 +4,7 @@ import {
   getFailedResponseError,
   mapMessageUpdate,
   mapRpcActivity
-} from '../../piEventMapper';
+} from '../../pi/eventMapper';
 
 suite('Pi event mapper', () => {
   test('mapMessageUpdate maps assistant response lifecycle activity', () => {

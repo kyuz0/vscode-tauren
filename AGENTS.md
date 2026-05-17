@@ -38,7 +38,7 @@ Do not add transient notes, guesses, one-off debugging observations, or broad ge
 - `src/webview/messages/renderMessages.ts`, `src/webview/messages/markdown.ts`, and `src/webview/messages/ansi.ts` own browser-side transcript rendering and markdown/ANSI output formatting.
 - `src/webview/sessions/sessionFormat.ts` and `src/webview/sessions/sessionItemCommands.ts` own browser-side session row formatting and command metadata.
 - `src/sidebar/nonce.ts` owns nonce generation for CSP-protected inline scripts.
-- `src/piEventMapper.ts` owns pure Pi RPC event-to-UI action mapping helpers.
+- `src/pi/eventMapper.ts` owns pure Pi RPC event-to-UI action mapping helpers.
 - `src/prompt/` owns one-shot IDE prompt context attachment types, state, normalization, labels, editor extraction, prompt formatting, and webview projection.
 - `src/readyScript/` owns ready-script running, arming/queued-run state transitions, and shared ready-script types.
 - `src/metadata/sessionMetadata.ts` owns session model/context/slash-command metadata state, refresh orchestration, formatting, and equality checks.
@@ -46,6 +46,7 @@ Do not add transient notes, guesses, one-off debugging observations, or broad ge
 - `src/extensionUi/requestHandler.ts` owns extension UI request routing through an injected VS Code UI adapter, safe cancellation, and stale request cleanup.
 - `src/sessions/piSessionList.ts` owns extension-side discovery/parsing of persisted Pi session JSONL files for the sidebar session switcher.
 - `src/sessions/piSessionTree.ts` owns extension-side parsing of persisted Pi session JSONL files for the in-session tree view.
+- `src/pi/messageContent.ts` owns tolerant Pi message content text extraction shared by transcript and session readers.
 - `src/pi/sessionJsonl.ts` owns tolerant Pi session JSONL record parsing shared by session-list, session-tree, and diff-history readers.
 - `src/diff/sessionDiffController.ts` owns `PiChatController`'s session diff lifecycle: current session file binding, snapshot restore/save, refresh deduping, and state-post callbacks.
 - `src/diff/sessionDiffTracker.ts` owns per-session changed-line baselines, net line diff stats, reconstructed per-file snapshot diffs, and recorded-edit fallback diffs for files modified through Pi edit/write tool executions; do not replace this with git diff for the sidebar counter or session changes view.
@@ -104,7 +105,7 @@ Do not add transient notes, guesses, one-off debugging observations, or broad ge
 - Tests live in `src/test/suite` as TypeScript Mocha tests and run through `vscode-test`.
 - Keep automated tests independent from the real `pi` CLI; test RPC framing and event mapping with local helpers or fixtures.
 - Run `npm run compile` after TypeScript changes.
-- Run `npm test` after changes to `src/chatSession.ts` or `src/piEventMapper.ts`.
+- Run `npm test` after changes to `src/chatSession.ts` or `src/pi/eventMapper.ts`.
 - Use `git diff --check` before finishing edits.
 - For UI behavior changes, manually verify in the VS Code Extension Host when practical.
 - For syntax-highlighting changes, manually verify fresh and resumed read-tool boxes, markdown fenced code, theme switching, and unsupported-extension fallback.

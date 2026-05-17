@@ -2,7 +2,7 @@ import { existsSync } from 'fs';
 import { readdir, readFile, stat } from 'fs/promises';
 import { homedir } from 'os';
 import { dirname, isAbsolute, join, resolve } from 'path';
-import { extractPiMessageText } from '../piMessageContent';
+import { extractPiMessageText } from '../pi/messageContent';
 import { parseSessionJsonlRecords } from '../pi/sessionJsonl';
 import type { ListPiSessionsOptions, PiSessionListItem, RawSessionInfo, SessionTreeNode } from './types';
 export type { ListPiSessionsOptions, PiSessionListItem } from './types';

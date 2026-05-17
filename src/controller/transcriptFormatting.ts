@@ -1,6 +1,6 @@
 import type { ChatActivityInput, ChatMessage } from '../chatSession';
-import { formatToolExecutionActivity } from '../piEventMapper';
-import { extractPiMessageText } from '../piMessageContent';
+import { formatToolExecutionActivity } from '../pi/eventMapper';
+import { extractPiMessageText } from '../pi/messageContent';
 import type { PiAgentMessage } from '../rpc/types';
 import { isRecord } from './typeGuards';
 

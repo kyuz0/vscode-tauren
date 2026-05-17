@@ -7,7 +7,7 @@ import {
   type ActivityAddAction,
   type ActivityRemoveAction,
   type ActivityUpdateAction
-} from '../piEventMapper';
+} from '../pi/eventMapper';
 import type { RpcEvent } from '../rpc/types';
 import { isAbortMessage, isMessageUpdateStart } from './errors';
 import { getRecordString, isRecord } from './typeGuards';
