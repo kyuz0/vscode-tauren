@@ -1567,6 +1567,12 @@
 
   // src/webview/messages/renderMessages.ts
   var activityExpansion = /* @__PURE__ */ new Map();
+  var activityBodyExpansion = /* @__PURE__ */ new Map();
+  function toggleActivityBodyExpansion(activityId) {
+    const next = !activityBodyExpansion.get(activityId);
+    activityBodyExpansion.set(activityId, next);
+    return next;
+  }
   function createMessageElement(message, showRole, messageIndex, options = {}) {
     const article = document.createElement("article");
     article.className = `message message--${message.role}${message.error ? " message--error" : ""}${message.variant === "thinking" ? " message--thinking" : ""}`;
@@ -1590,7 +1596,7 @@
       return article;
     }
     if (activities.length > 0) {
-      article.append(createActivityListElement(activities, options));
+      article.append(createActivityListElement(activities, messageIndex, options));
     }
     if (hasBody) {
       if (activities.length > 0) {
@@ -1643,15 +1649,15 @@
     actions.append(button);
     return actions;
   }
-  function createActivityListElement(activities, options) {
+  function createActivityListElement(activities, messageIndex, options) {
     const list = document.createElement("div");
     list.className = "activity-list";
     for (const activity of activities) {
-      list.append(createActivityElement(activity, options));
+      list.append(createActivityElement(activity, messageIndex, options));
     }
     return list;
   }
-  function createActivityElement(activity, options) {
+  function createActivityElement(activity, messageIndex, options) {
     const details = document.createElement("details");
     details.className = `activity activity--${activity.kind || "rpc"} activity--${activity.status || "info"}`;
     const activityId = typeof activity.id === "string" ? activity.id : "";
@@ -1679,28 +1685,136 @@
     }
     details.append(summary);
     if (typeof activity.body === "string" && activity.body.length > 0) {
+      const bodyExpanded = Boolean(activityId && activityBodyExpansion.get(activityId) && activity.expandedBody);
+      const bodyText = bodyExpanded && typeof activity.expandedBody === "string" ? activity.expandedBody : activity.body;
       const body = document.createElement(activity.code ? "pre" : "div");
-      body.className = `activity__body${activity.code ? " activity__body--code" : " activity__body--markdown"}`;
+      body.className = `activity__body${activity.code ? " activity__body--code" : " activity__body--markdown"}${bodyExpanded ? " activity__body--expanded" : ""}`;
       if (activity.code) {
-        if (options.outputColors === false || !renderReadActivityCodeInto(body, activity)) {
-          renderAnsiTextInto(body, activity.body, options.outputColors !== false);
-        }
+        renderCodeActivityBody(body, activity, bodyText, {
+          bodyExpanded,
+          messageIndex,
+          outputColors: options.outputColors !== false
+        });
       } else {
-        renderMarkdownInto(body, activity.body);
+        renderMarkdownInto(body, bodyText);
       }
       details.append(body);
+      if (bodyExpanded && shouldScrollExpandedBodyToBottom(activity.body)) {
+        scheduleActivityBodyScrollToBottom(body);
+      }
     }
     return details;
   }
-  function renderReadActivityCodeInto(element, activity) {
-    if (activity.kind !== "tool_execution" || typeof activity.title !== "string" || typeof activity.body !== "string") {
-      return false;
+  function renderCodeActivityBody(element, activity, bodyText, options) {
+    const activityId = typeof activity.id === "string" ? activity.id : "";
+    const filePath = getReadActivityPath(activity, bodyText);
+    const hasExpandedToggle = Boolean(options.bodyExpanded && activityId && typeof activity.expandedBody === "string");
+    const marker = !options.bodyExpanded && activityId && typeof activity.expandedBody === "string" ? findTruncationMarker(bodyText) : void 0;
+    if (filePath && !containsAnsiEscape(bodyText)) {
+      renderHighlightedActivityCodeInto(element, bodyText, filePath, marker, activityId, options.messageIndex, hasExpandedToggle);
+    } else {
+      renderAnsiActivityCodeInto(element, bodyText, marker, activityId, options.messageIndex, options.outputColors);
     }
-    const filePath = parseReadActivityPath(activity.title);
-    if (!filePath || containsAnsiEscape(activity.body)) {
-      return false;
+    if (hasExpandedToggle) {
+      if (!bodyText.endsWith("\n")) {
+        element.append(document.createTextNode("\n"));
+      }
+      appendActivityBodyToggle(element, "Show less", activityId, options.messageIndex, true);
     }
-    return renderHighlightedCodeInto(element, activity.body, filePath);
+  }
+  function getReadActivityPath(activity, bodyText) {
+    if (activity.kind !== "tool_execution" || typeof activity.title !== "string" || containsAnsiEscape(bodyText)) {
+      return void 0;
+    }
+    return parseReadActivityPath(activity.title);
+  }
+  function renderHighlightedActivityCodeInto(element, bodyText, filePath, marker, activityId, messageIndex, renderAsChild = false) {
+    if (!marker) {
+      if (renderAsChild) {
+        element.replaceChildren();
+        appendHighlightedCodeChunk(element, bodyText, filePath);
+        return;
+      }
+      if (!renderHighlightedCodeInto(element, bodyText, filePath)) {
+        element.textContent = bodyText;
+      }
+      return;
+    }
+    element.replaceChildren();
+    appendHighlightedCodeChunk(element, marker.before, filePath);
+    appendActivityBodyToggle(element, marker.text, activityId, messageIndex, false);
+    appendHighlightedCodeChunk(element, marker.after, filePath);
+  }
+  function appendHighlightedCodeChunk(element, value, filePath) {
+    if (!value) {
+      return;
+    }
+    const code = document.createElement("code");
+    if (!renderHighlightedCodeInto(code, value, filePath)) {
+      code.textContent = value;
+    }
+    element.append(code);
+  }
+  function renderAnsiActivityCodeInto(element, bodyText, marker, activityId, messageIndex, outputColors) {
+    if (!marker) {
+      renderAnsiTextInto(element, bodyText, outputColors);
+      return;
+    }
+    element.replaceChildren();
+    appendAnsiCodeChunk(element, marker.before, outputColors);
+    appendActivityBodyToggle(element, marker.text, activityId, messageIndex, false);
+    appendAnsiCodeChunk(element, marker.after, outputColors);
+  }
+  function appendAnsiCodeChunk(element, value, outputColors) {
+    if (!value) {
+      return;
+    }
+    const chunk = document.createElement("span");
+    renderAnsiTextInto(chunk, value, outputColors);
+    element.append(...Array.from(chunk.childNodes));
+  }
+  function findTruncationMarker(value) {
+    const markerPattern = /^\.\.\. \((?:\d+ (?:more|earlier)[^)]+|output truncated)\)$/m;
+    const match = markerPattern.exec(value);
+    if (!match || match.index === void 0) {
+      return void 0;
+    }
+    const text = match[0];
+    const markerStart = match.index;
+    const markerEnd = markerStart + text.length;
+    return {
+      before: value.slice(0, markerStart),
+      text,
+      after: value.slice(markerEnd)
+    };
+  }
+  function shouldScrollExpandedBodyToBottom(collapsedBody) {
+    const marker = findTruncationMarker(collapsedBody);
+    return Boolean(marker && marker.before.length === 0);
+  }
+  function scheduleActivityBodyScrollToBottom(element) {
+    const scroll = () => {
+      element.scrollTop = element.scrollHeight;
+    };
+    requestAnimationFrame(() => {
+      scroll();
+      requestAnimationFrame(scroll);
+    });
+    setTimeout(scroll, 80);
+    setTimeout(scroll, 220);
+  }
+  function appendActivityBodyToggle(element, label, activityId, messageIndex, expanded) {
+    const button = document.createElement("button");
+    button.className = "activity__body-toggle";
+    button.type = "button";
+    button.textContent = label;
+    button.title = expanded ? "Collapse output" : "Show full output";
+    button.setAttribute("aria-expanded", expanded ? "true" : "false");
+    button.dataset.activityBodyToggle = activityId;
+    if (typeof messageIndex === "number") {
+      button.dataset.messageIndex = String(messageIndex);
+    }
+    element.append(button);
   }
   function parseReadActivityPath(title) {
     const match = title.match(/^read\s+(.+?)(?::\d+(?:-\d+)?)?$/);
@@ -1813,6 +1927,17 @@
     handleMessageClick(event) {
       const state2 = this.options.getState();
       const target = eventTargetElement2(event);
+      const toggleButton = target?.closest("[data-activity-body-toggle]");
+      if (toggleButton instanceof HTMLElement) {
+        const activityId = toggleButton.dataset.activityBodyToggle;
+        if (activityId) {
+          event.preventDefault();
+          event.stopPropagation();
+          toggleActivityBodyExpansion(activityId);
+          this.rerenderMessageAtIndex(parseDatasetInteger(toggleButton.dataset.messageIndex));
+        }
+        return;
+      }
       const copyButton = target?.closest(".message__copy");
       if (copyButton instanceof HTMLElement) {
         const index = Number(copyButton.dataset.copyMessageIndex);
@@ -1898,6 +2023,31 @@
       this.renderedMessageViews[index] = nextView;
       return nextView;
     }
+    rerenderMessageAtIndex(index) {
+      const state2 = this.options.getState();
+      if (index === void 0 || !state2.messages[index]) {
+        this.renderMessageList();
+        return;
+      }
+      const existingView = this.renderedMessageViews[index];
+      const previousMessage = index > 0 ? state2.messages[index - 1] : void 0;
+      const showRole = state2.messages[index].role !== previousMessage?.role;
+      const nextView = {
+        element: createMessageElement(
+          state2.messages[index],
+          showRole,
+          index,
+          { outputColors: state2.outputColors }
+        ),
+        message: state2.messages[index],
+        showRole,
+        activitiesSignature: this.getActivitiesSignature(state2.messages[index]),
+        copyable: canCopyAssistantMessage2(state2.messages[index])
+      };
+      existingView?.element.replaceWith(nextView.element);
+      this.renderedMessageViews[index] = nextView;
+      requestCodeHighlightsIn(nextView.element);
+    }
     getStreamingAnimationStartText(existingView, message, index) {
       if (!existingView || !this.shouldAnimateStreamingAppend(existingView.message, message, index)) {
         return void 0;
@@ -1971,6 +2121,13 @@
       return {};
     }
     return key === "line" ? { line: numberValue } : { column: numberValue };
+  }
+  function parseDatasetInteger(value) {
+    if (!value) {
+      return void 0;
+    }
+    const numberValue = Number(value);
+    return Number.isInteger(numberValue) ? numberValue : void 0;
   }
   function parseCssPixelValue2(value) {
     return Number.parseFloat(value) || 0;

@@ -12,6 +12,11 @@ const ansiRed = '\x1b[31m';
 const ansiGreen = '\x1b[32m';
 const ansiReset = '\x1b[0m';
 
+type ToolTextPreview = {
+  body: string;
+  expandedBody?: string;
+};
+
 export type MessageUpdateAction =
   | { type: 'text_delta'; delta: string }
   | { type: 'thinking_start'; sourceId: string }
@@ -66,7 +71,7 @@ export function formatToolExecutionActivity({
   status
 }: ToolExecutionActivityOptions): ChatActivityInput {
   const display = formatToolExecutionDisplay({ toolName, args });
-  const body = status !== 'error' && display.toolName === 'edit'
+  const preview = status !== 'error' && display.toolName === 'edit'
     ? formatEditDiffPreview(args) ?? formatToolResultPreview(status === 'running' ? partialResult : result, display.toolName)
     : formatToolResultPreview(status === 'running' ? partialResult : result, display.toolName);
 
@@ -75,7 +80,7 @@ export function formatToolExecutionActivity({
     title: display.title,
     status,
     ...(display.summary ? { summary: display.summary } : {}),
-    ...(body ? { body, code: true } : {})
+    ...(preview ? { body: preview.body, ...(preview.expandedBody ? { expandedBody: preview.expandedBody } : {}), code: true } : {})
   };
 }
 
@@ -617,7 +622,7 @@ function summarizeEditCount(args: Record<string, unknown> | undefined): string |
   return `${edits.length} replacement${edits.length === 1 ? '' : 's'}`;
 }
 
-function formatEditDiffPreview(args: unknown): string | undefined {
+function formatEditDiffPreview(args: unknown): ToolTextPreview | undefined {
   if (!isRecord(args) || !Array.isArray(args.edits)) {
     return undefined;
   }
@@ -664,13 +669,18 @@ function truncateDiffLine(line: string): string {
   return `${line.slice(0, editDiffLineMaxCharacters - 3)}...`;
 }
 
-function previewEditDiffLines(lines: string[]): string {
+function previewEditDiffLines(lines: string[]): ToolTextPreview {
+  const expandedBody = lines.join('\n');
+
   if (lines.length <= editDiffPreviewMaxLines) {
-    return lines.join('\n');
+    return { body: expandedBody };
   }
 
   const hiddenLineCount = lines.length - editDiffPreviewMaxLines;
-  return `${lines.slice(0, editDiffPreviewMaxLines).join('\n')}\n... (${hiddenLineCount} more diff lines)`;
+  return {
+    body: `${lines.slice(0, editDiffPreviewMaxLines).join('\n')}\n... (${hiddenLineCount} more diff lines)`,
+    expandedBody
+  };
 }
 
 function getPositiveNumber(value: unknown): number | undefined {
@@ -771,7 +781,7 @@ function formatKnownEventBody(event: RpcEvent, omittedKeys: string[]): string | 
   return Object.keys(details).length > 0 ? formatJson(details) : undefined;
 }
 
-function formatToolResultPreview(value: unknown, toolName: string): string | undefined {
+function formatToolResultPreview(value: unknown, toolName: string): ToolTextPreview | undefined {
   const result = formatToolResult(value);
 
   if (!result) {
@@ -836,34 +846,46 @@ function formatJson(value: unknown): string {
   }
 }
 
-function previewToolText(value: string, mode: 'head' | 'tail'): string {
+function previewToolText(value: string, mode: 'head' | 'tail'): ToolTextPreview {
   const linePreview = previewToolTextByLines(value, mode);
 
-  if (linePreview.length <= toolResultPreviewMaxCharacters) {
+  if (linePreview.body.length <= toolResultPreviewMaxCharacters) {
     return linePreview;
   }
 
   if (mode === 'tail') {
-    return `... (output truncated)\n${linePreview.slice(linePreview.length - toolResultPreviewMaxCharacters)}`;
+    return {
+      body: `... (output truncated)\n${linePreview.body.slice(linePreview.body.length - toolResultPreviewMaxCharacters)}`,
+      expandedBody: value
+    };
   }
 
-  return `${linePreview.slice(0, toolResultPreviewMaxCharacters)}\n... (output truncated)`;
+  return {
+    body: `${linePreview.body.slice(0, toolResultPreviewMaxCharacters)}\n... (output truncated)`,
+    expandedBody: value
+  };
 }
 
-function previewToolTextByLines(value: string, mode: 'head' | 'tail'): string {
+function previewToolTextByLines(value: string, mode: 'head' | 'tail'): ToolTextPreview {
   const lines = value.split('\n');
 
   if (lines.length <= toolResultPreviewMaxLines) {
-    return value;
+    return { body: value };
   }
 
   const hiddenLineCount = lines.length - toolResultPreviewMaxLines;
 
   if (mode === 'tail') {
-    return `... (${hiddenLineCount} earlier lines)\n${lines.slice(-toolResultPreviewMaxLines).join('\n')}`;
+    return {
+      body: `... (${hiddenLineCount} earlier lines)\n${lines.slice(-toolResultPreviewMaxLines).join('\n')}`,
+      expandedBody: value
+    };
   }
 
-  return `${lines.slice(0, toolResultPreviewMaxLines).join('\n')}\n... (${hiddenLineCount} more lines)`;
+  return {
+    body: `${lines.slice(0, toolResultPreviewMaxLines).join('\n')}\n... (${hiddenLineCount} more lines)`,
+    expandedBody: value
+  };
 }
 
 function compactText(value: string): string {

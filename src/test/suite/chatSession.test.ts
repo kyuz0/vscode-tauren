@@ -254,19 +254,20 @@ suite('ChatSession', () => {
   test('activity replace bodies are truncated for display', () => {
     const session = new ChatSession();
     const longBody = 'x'.repeat(chatActivityBodyMaxDisplayLength + 1);
+    const longExpandedBody = 'y'.repeat(chatActivityBodyMaxDisplayLength + 1);
 
     session.beginSubmit('show activity');
     session.addActivity({
       kind: 'rpc',
       title: 'Large RPC event',
       status: 'info',
-      body: longBody
+      body: longBody,
+      expandedBody: longExpandedBody
     });
 
-    assert.strictEqual(
-      session.snapshot().messages[1].activities![0].body,
-      truncateForTest(longBody)
-    );
+    const activity = session.snapshot().messages[1].activities![0];
+    assert.strictEqual(activity.body, truncateForTest(longBody));
+    assert.strictEqual(activity.expandedBody, truncateForTest(longExpandedBody));
   });
 
   test('activity append bodies are truncated for display', () => {
@@ -286,13 +287,13 @@ suite('ChatSession', () => {
       kind: 'thinking',
       title: 'Thinking',
       status: 'running',
-      body: secondChunk
+      body: secondChunk,
+      expandedBody: longBodyForTest('expanded')
     }, 'append');
 
-    assert.strictEqual(
-      session.snapshot().messages[1].activities![0].body,
-      truncateForTest(`${firstChunk}${secondChunk}`)
-    );
+    const activity = session.snapshot().messages[1].activities![0];
+    assert.strictEqual(activity.body, truncateForTest(`${firstChunk}${secondChunk}`));
+    assert.strictEqual(activity.expandedBody, truncateForTest(longBodyForTest('expanded')));
   });
 
   test('normal short activity bodies are unchanged', () => {
@@ -412,6 +413,10 @@ suite('ChatSession', () => {
     assert.strictEqual(id, 'activity-1-1');
   });
 });
+
+function longBodyForTest(prefix: string): string {
+  return `${prefix}${'x'.repeat(chatActivityBodyMaxDisplayLength + 1)}`;
+}
 
 function truncateForTest(value: string): string {
   return `${value.slice(0, chatActivityBodyMaxDisplayLength - chatTruncationMarker.length)}${chatTruncationMarker}`;

@@ -449,6 +449,7 @@ suite('Pi event mapper', () => {
           title: 'read package.json:1-120',
           status: 'completed',
           body: '1\n2\n3\n4\n5\n6\n7\n8\n... (2 more lines)',
+          expandedBody: '1\n2\n3\n4\n5\n6\n7\n8\n9\n10',
           code: true
         }
       }
@@ -470,6 +471,7 @@ suite('Pi event mapper', () => {
           title: '$ npm run compile',
           status: 'completed',
           body: '... (2 earlier lines)\n3\n4\n5\n6\n7\n8\n9\n10',
+          expandedBody: '1\n2\n3\n4\n5\n6\n7\n8\n9\n10',
           code: true
         }
       }

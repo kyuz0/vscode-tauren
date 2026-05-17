@@ -1,6 +1,6 @@
 import { requestCodeHighlightsIn } from '../codeHighlighting';
 import { messagesBottomThreshold } from '../constants';
-import { createMessageElement, updateMessageBodyElement } from './renderMessages';
+import { createMessageElement, toggleActivityBodyExpansion, updateMessageBodyElement } from './renderMessages';
 import type { Activity, ChatMessage, WebviewState } from '../types';
 
 type PostMessage = (message: unknown) => void;
@@ -128,6 +128,21 @@ export class MessageListController {
   public handleMessageClick(event: MouseEvent): void {
     const state = this.options.getState();
     const target = eventTargetElement(event);
+    const toggleButton = target?.closest('[data-activity-body-toggle]');
+
+    if (toggleButton instanceof HTMLElement) {
+      const activityId = toggleButton.dataset.activityBodyToggle;
+
+      if (activityId) {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleActivityBodyExpansion(activityId);
+        this.rerenderMessageAtIndex(parseDatasetInteger(toggleButton.dataset.messageIndex));
+      }
+
+      return;
+    }
+
     const copyButton = target?.closest('.message__copy');
 
     if (copyButton instanceof HTMLElement) {
@@ -228,6 +243,35 @@ export class MessageListController {
     existingView?.element.replaceWith(nextView.element);
     this.renderedMessageViews[index] = nextView;
     return nextView;
+  }
+
+  private rerenderMessageAtIndex(index: number | undefined): void {
+    const state = this.options.getState();
+
+    if (index === undefined || !state.messages[index]) {
+      this.renderMessageList();
+      return;
+    }
+
+    const existingView = this.renderedMessageViews[index];
+    const previousMessage = index > 0 ? state.messages[index - 1] : undefined;
+    const showRole = state.messages[index].role !== previousMessage?.role;
+    const nextView: RenderedMessageView = {
+      element: createMessageElement(
+        state.messages[index],
+        showRole,
+        index,
+        { outputColors: state.outputColors }
+      ),
+      message: state.messages[index],
+      showRole,
+      activitiesSignature: this.getActivitiesSignature(state.messages[index]),
+      copyable: canCopyAssistantMessage(state.messages[index])
+    };
+
+    existingView?.element.replaceWith(nextView.element);
+    this.renderedMessageViews[index] = nextView;
+    requestCodeHighlightsIn(nextView.element);
   }
 
   private getStreamingAnimationStartText(
@@ -362,6 +406,15 @@ function parseDatasetPositiveInteger(value: string | undefined, key: 'line' | 'c
   }
 
   return key === 'line' ? { line: numberValue } : { column: numberValue };
+}
+
+function parseDatasetInteger(value: string | undefined): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const numberValue = Number(value);
+  return Number.isInteger(numberValue) ? numberValue : undefined;
 }
 
 function parseCssPixelValue(value: string): number {

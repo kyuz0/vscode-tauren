@@ -3,6 +3,13 @@ import { renderHighlightedCodeInto, renderMarkdownInto, type RenderMarkdownOptio
 import type { Activity, ChatMessage } from '../types';
 
 const activityExpansion = new Map<string, boolean>();
+const activityBodyExpansion = new Map<string, boolean>();
+
+export function toggleActivityBodyExpansion(activityId: string): boolean {
+  const next = !activityBodyExpansion.get(activityId);
+  activityBodyExpansion.set(activityId, next);
+  return next;
+}
 
 export type MessageRenderOptions = RenderMarkdownOptions & {
   outputColors?: boolean;
@@ -42,7 +49,7 @@ export function createMessageElement(
   }
 
   if (activities.length > 0) {
-    article.append(createActivityListElement(activities, options));
+    article.append(createActivityListElement(activities, messageIndex, options));
   }
 
   if (hasBody) {
@@ -119,18 +126,18 @@ function createCopyButtonElement(messageIndex: number): HTMLElement {
   return actions;
 }
 
-function createActivityListElement(activities: Activity[], options: MessageRenderOptions): HTMLElement {
+function createActivityListElement(activities: Activity[], messageIndex: number | undefined, options: MessageRenderOptions): HTMLElement {
   const list = document.createElement('div');
   list.className = 'activity-list';
 
   for (const activity of activities) {
-    list.append(createActivityElement(activity, options));
+    list.append(createActivityElement(activity, messageIndex, options));
   }
 
   return list;
 }
 
-function createActivityElement(activity: Activity, options: MessageRenderOptions): HTMLElement {
+function createActivityElement(activity: Activity, messageIndex: number | undefined, options: MessageRenderOptions): HTMLElement {
   const details = document.createElement('details');
   details.className = `activity activity--${activity.kind || 'rpc'} activity--${activity.status || 'info'}`;
 
@@ -169,35 +176,201 @@ function createActivityElement(activity: Activity, options: MessageRenderOptions
   details.append(summary);
 
   if (typeof activity.body === 'string' && activity.body.length > 0) {
+    const bodyExpanded = Boolean(activityId && activityBodyExpansion.get(activityId) && activity.expandedBody);
+    const bodyText = bodyExpanded && typeof activity.expandedBody === 'string' ? activity.expandedBody : activity.body;
     const body = document.createElement(activity.code ? 'pre' : 'div');
-    body.className = `activity__body${activity.code ? ' activity__body--code' : ' activity__body--markdown'}`;
+    body.className = `activity__body${activity.code ? ' activity__body--code' : ' activity__body--markdown'}${bodyExpanded ? ' activity__body--expanded' : ''}`;
 
     if (activity.code) {
-      if (options.outputColors === false || !renderReadActivityCodeInto(body, activity)) {
-        renderAnsiTextInto(body, activity.body, options.outputColors !== false);
-      }
+      renderCodeActivityBody(body, activity, bodyText, {
+        bodyExpanded,
+        messageIndex,
+        outputColors: options.outputColors !== false
+      });
     } else {
-      renderMarkdownInto(body, activity.body);
+      renderMarkdownInto(body, bodyText);
     }
 
     details.append(body);
+
+    if (bodyExpanded && shouldScrollExpandedBodyToBottom(activity.body)) {
+      scheduleActivityBodyScrollToBottom(body);
+    }
   }
 
   return details;
 }
 
-function renderReadActivityCodeInto(element: HTMLElement, activity: Activity): boolean {
-  if (activity.kind !== 'tool_execution' || typeof activity.title !== 'string' || typeof activity.body !== 'string') {
-    return false;
+function renderCodeActivityBody(
+  element: HTMLElement,
+  activity: Activity,
+  bodyText: string,
+  options: { bodyExpanded: boolean; messageIndex: number | undefined; outputColors: boolean }
+): void {
+  const activityId = typeof activity.id === 'string' ? activity.id : '';
+  const filePath = getReadActivityPath(activity, bodyText);
+  const hasExpandedToggle = Boolean(options.bodyExpanded && activityId && typeof activity.expandedBody === 'string');
+  const marker = !options.bodyExpanded && activityId && typeof activity.expandedBody === 'string'
+    ? findTruncationMarker(bodyText)
+    : undefined;
+
+  if (filePath && !containsAnsiEscape(bodyText)) {
+    renderHighlightedActivityCodeInto(element, bodyText, filePath, marker, activityId, options.messageIndex, hasExpandedToggle);
+  } else {
+    renderAnsiActivityCodeInto(element, bodyText, marker, activityId, options.messageIndex, options.outputColors);
   }
 
-  const filePath = parseReadActivityPath(activity.title);
+  if (hasExpandedToggle) {
+    if (!bodyText.endsWith('\n')) {
+      element.append(document.createTextNode('\n'));
+    }
 
-  if (!filePath || containsAnsiEscape(activity.body)) {
-    return false;
+    appendActivityBodyToggle(element, 'Show less', activityId, options.messageIndex, true);
+  }
+}
+
+function getReadActivityPath(activity: Activity, bodyText: string): string | undefined {
+  if (activity.kind !== 'tool_execution' || typeof activity.title !== 'string' || containsAnsiEscape(bodyText)) {
+    return undefined;
   }
 
-  return renderHighlightedCodeInto(element, activity.body, filePath);
+  return parseReadActivityPath(activity.title);
+}
+
+function renderHighlightedActivityCodeInto(
+  element: HTMLElement,
+  bodyText: string,
+  filePath: string,
+  marker: TruncationMarker | undefined,
+  activityId: string,
+  messageIndex: number | undefined,
+  renderAsChild = false
+): void {
+  if (!marker) {
+    if (renderAsChild) {
+      element.replaceChildren();
+      appendHighlightedCodeChunk(element, bodyText, filePath);
+      return;
+    }
+
+    if (!renderHighlightedCodeInto(element, bodyText, filePath)) {
+      element.textContent = bodyText;
+    }
+    return;
+  }
+
+  element.replaceChildren();
+  appendHighlightedCodeChunk(element, marker.before, filePath);
+  appendActivityBodyToggle(element, marker.text, activityId, messageIndex, false);
+  appendHighlightedCodeChunk(element, marker.after, filePath);
+}
+
+function appendHighlightedCodeChunk(element: HTMLElement, value: string, filePath: string): void {
+  if (!value) {
+    return;
+  }
+
+  const code = document.createElement('code');
+
+  if (!renderHighlightedCodeInto(code, value, filePath)) {
+    code.textContent = value;
+  }
+
+  element.append(code);
+}
+
+function renderAnsiActivityCodeInto(
+  element: HTMLElement,
+  bodyText: string,
+  marker: TruncationMarker | undefined,
+  activityId: string,
+  messageIndex: number | undefined,
+  outputColors: boolean
+): void {
+  if (!marker) {
+    renderAnsiTextInto(element, bodyText, outputColors);
+    return;
+  }
+
+  element.replaceChildren();
+  appendAnsiCodeChunk(element, marker.before, outputColors);
+  appendActivityBodyToggle(element, marker.text, activityId, messageIndex, false);
+  appendAnsiCodeChunk(element, marker.after, outputColors);
+}
+
+function appendAnsiCodeChunk(element: HTMLElement, value: string, outputColors: boolean): void {
+  if (!value) {
+    return;
+  }
+
+  const chunk = document.createElement('span');
+  renderAnsiTextInto(chunk, value, outputColors);
+  element.append(...Array.from(chunk.childNodes));
+}
+
+type TruncationMarker = {
+  before: string;
+  text: string;
+  after: string;
+};
+
+function findTruncationMarker(value: string): TruncationMarker | undefined {
+  const markerPattern = /^\.\.\. \((?:\d+ (?:more|earlier)[^)]+|output truncated)\)$/m;
+  const match = markerPattern.exec(value);
+
+  if (!match || match.index === undefined) {
+    return undefined;
+  }
+
+  const text = match[0];
+  const markerStart = match.index;
+  const markerEnd = markerStart + text.length;
+
+  return {
+    before: value.slice(0, markerStart),
+    text,
+    after: value.slice(markerEnd)
+  };
+}
+
+function shouldScrollExpandedBodyToBottom(collapsedBody: string): boolean {
+  const marker = findTruncationMarker(collapsedBody);
+  return Boolean(marker && marker.before.length === 0);
+}
+
+function scheduleActivityBodyScrollToBottom(element: HTMLElement): void {
+  const scroll = () => {
+    element.scrollTop = element.scrollHeight;
+  };
+
+  requestAnimationFrame(() => {
+    scroll();
+    requestAnimationFrame(scroll);
+  });
+  setTimeout(scroll, 80);
+  setTimeout(scroll, 220);
+}
+
+function appendActivityBodyToggle(
+  element: HTMLElement,
+  label: string,
+  activityId: string,
+  messageIndex: number | undefined,
+  expanded: boolean
+): void {
+  const button = document.createElement('button');
+  button.className = 'activity__body-toggle';
+  button.type = 'button';
+  button.textContent = label;
+  button.title = expanded ? 'Collapse output' : 'Show full output';
+  button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  button.dataset.activityBodyToggle = activityId;
+
+  if (typeof messageIndex === 'number') {
+    button.dataset.messageIndex = String(messageIndex);
+  }
+
+  element.append(button);
 }
 
 function parseReadActivityPath(title: string): string | undefined {

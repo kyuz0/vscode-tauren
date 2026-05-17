@@ -1006,6 +1006,24 @@ const activityStyles = /* css */ `    .activity-list {
       white-space: normal;
     }
 
+    .activity__body-toggle {
+      margin: 0;
+      padding: 0;
+      color: var(--vscode-textLink-foreground);
+      background: transparent;
+      border: 0;
+      font: inherit;
+      cursor: pointer;
+      white-space: pre-wrap;
+    }
+
+    .activity__body-toggle:hover,
+    .activity__body-toggle:focus-visible {
+      color: var(--vscode-textLink-activeForeground, var(--vscode-textLink-foreground));
+      text-decoration: underline;
+      outline: none;
+    }
+
     .status {
       display: inline-flex;
       align-items: center;

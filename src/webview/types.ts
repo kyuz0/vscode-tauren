@@ -59,6 +59,7 @@ export type Activity = {
   status?: string;
   title?: string;
   body?: string;
+  expandedBody?: string;
   summary?: string;
   code?: boolean;
 };
