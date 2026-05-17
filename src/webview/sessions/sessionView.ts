@@ -347,6 +347,10 @@ export class SessionViewController {
   private handleSessionListKeydown(event: KeyboardEvent): boolean {
     const state = this.options.getState();
 
+    if (eventTargetElement(event)?.closest('.sessions__search-input')) {
+      return false;
+    }
+
     if (state.viewMode !== 'sessions' && state.viewMode !== 'tree') {
       return false;
     }
@@ -786,6 +790,10 @@ export class SessionViewController {
   }
 
   private handleSessionSearchKeydown(event: KeyboardEvent, input: HTMLInputElement): boolean {
+    if (event.altKey || event.ctrlKey || event.metaKey) {
+      return false;
+    }
+
     if (event.key === 'ArrowDown' || (event.key === 'Enter' && !event.shiftKey)) {
       event.preventDefault();
       event.stopPropagation();

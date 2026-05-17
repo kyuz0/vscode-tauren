@@ -2763,6 +2763,9 @@
     }
     handleSessionListKeydown(event) {
       const state2 = this.options.getState();
+      if (eventTargetElement3(event)?.closest(".sessions__search-input")) {
+        return false;
+      }
       if (state2.viewMode !== "sessions" && state2.viewMode !== "tree") {
         return false;
       }
@@ -3105,6 +3108,9 @@
       });
     }
     handleSessionSearchKeydown(event, input) {
+      if (event.altKey || event.ctrlKey || event.metaKey) {
+        return false;
+      }
       if (event.key === "ArrowDown" || event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         event.stopPropagation();
