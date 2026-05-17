@@ -1,11 +1,10 @@
-import { buildSessionTreePrefix, formatSessionMeta, getSessionDisplayName, shortenPath } from './sessionFormat';
+import { createSessionItemElement, createTreeItemElement } from './sessionElements';
+import { getSessionDisplayName } from './sessionFormat';
 import {
-  getSessionItemCommandIcon,
-  getSessionItemCommandLabel,
   parseSessionItemCommand,
   sessionItemMenuCommands
 } from './sessionItemCommands';
-import type { SessionItem, SessionItemCommand, TreeItem, WebviewState } from '../types';
+import type { SessionItem, SessionItemCommand, WebviewState } from '../types';
 
 type PostMessage = (message: unknown) => void;
 
@@ -178,7 +177,21 @@ export class SessionViewController {
     }
 
     for (let index = 0; index < state.sessions.length; index += 1) {
-      this.options.sessionsElement.append(this.createSessionItemElement(state.sessions[index], index));
+      this.options.sessionsElement.append(createSessionItemElement({
+        session: state.sessions[index],
+        index,
+        selectedIndex: this.sessionListSelectedIndex,
+        nameEditPath: this.sessionListNameEditPath,
+        nameEditInitialValue: this.sessionListNameEditInitialValue,
+        openMenuIndex: this.openSessionListMenuIndex,
+        canRunSessionItemCommand: (session, command) => this.canRunSessionItemCommand(session, command),
+        onNameInputBlur: () => this.cancelSessionListNameEdit(),
+        onCommandActivate: (commandIndex, button) => {
+          this.openSessionListMenuCommandIndex = commandIndex;
+          this.setSessionMenuItemHover(button, true);
+        },
+        onCommandHover: (button, hovered) => this.setSessionMenuItemHover(button, hovered)
+      }));
     }
 
     if (this.sessionListNameEditPath) {
@@ -219,7 +232,10 @@ export class SessionViewController {
     }
 
     for (let index = 0; index < state.treeItems.length; index += 1) {
-      this.options.sessionsElement.append(this.createTreeItemElement(state.treeItems[index], index));
+      this.options.sessionsElement.append(createTreeItemElement(state.treeItems[index], index, {
+        selectedIndex: this.treeListSelectedIndex,
+        disabled: state.busy || state.treeRefreshing
+      }));
     }
   }
 
@@ -337,146 +353,6 @@ export class SessionViewController {
     this.closeSessionItemMenus();
     const index = Number(item.getAttribute('data-index'));
     state.viewMode === 'tree' ? this.selectTreeIndex(index) : this.selectSessionIndex(index);
-  }
-
-  private createSessionItemElement(session: SessionItem, index: number): HTMLElement {
-    const item = document.createElement('div');
-    item.id = 'session-' + index;
-    item.className = 'sessions__item'
-      + (index === this.sessionListSelectedIndex ? ' sessions__item--active' : '')
-      + (session.current ? ' sessions__item--current' : '')
-      + (session.liveStatus ? ' sessions__item--' + session.liveStatus : '')
-      + (session.unread ? ' sessions__item--unread' : '');
-    item.setAttribute('role', 'option');
-    item.setAttribute('aria-selected', index === this.sessionListSelectedIndex ? 'true' : 'false');
-    item.setAttribute('data-index', String(index));
-
-    const prefix = document.createElement('span');
-    prefix.className = 'sessions__prefix';
-    prefix.textContent = (session.liveStatus === 'running' ? '● ' : '') + buildSessionTreePrefix(session);
-    item.append(prefix);
-
-    const title = document.createElement('span');
-    title.className = 'sessions__title';
-
-    if (this.sessionListNameEditPath === session.path) {
-      title.append(this.createSessionListNameInput(session));
-    } else {
-      const titleText = document.createElement('span');
-      titleText.className = 'sessions__title-text';
-      titleText.textContent = getSessionDisplayName(session);
-      title.append(titleText);
-    }
-
-    item.append(title);
-
-    const meta = document.createElement('span');
-    meta.className = 'sessions__meta';
-    meta.textContent = formatSessionMeta(session);
-    item.append(meta);
-
-    if (session.cwd) {
-      const cwd = document.createElement('span');
-      cwd.className = 'sessions__cwd';
-      cwd.textContent = shortenPath(session.cwd);
-      item.append(cwd);
-    }
-
-    item.append(this.createSessionItemMenuElement(session, index));
-
-    return item;
-  }
-
-  private createSessionListNameInput(session: SessionItem): HTMLInputElement {
-    const input = document.createElement('input');
-    input.className = 'sessions__name-input';
-    input.type = 'text';
-    input.value = this.sessionListNameEditInitialValue;
-    input.placeholder = getSessionDisplayName(session);
-    input.setAttribute('aria-label', 'Session name');
-    input.addEventListener('click', (event) => event.stopPropagation());
-    input.addEventListener('blur', () => this.cancelSessionListNameEdit());
-    return input;
-  }
-
-  private createSessionItemMenuElement(session: SessionItem, index: number): HTMLElement {
-    const wrap = document.createElement('span');
-    wrap.className = 'sessions__menu-wrap';
-
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'sessions__menu-button';
-    button.title = 'Session commands';
-    button.setAttribute('aria-label', 'Session commands');
-    button.setAttribute('aria-haspopup', 'menu');
-    button.setAttribute('aria-expanded', this.openSessionListMenuIndex === index ? 'true' : 'false');
-    button.disabled = !this.canRunSessionItemCommand(session);
-    button.innerHTML = '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M5 8C5 8.55229 4.55228 9 4 9C3.44772 9 3 8.55229 3 8C3 7.44772 3.44772 7 4 7C4.55228 7 5 7.44772 5 8ZM9 8C9 8.55229 8.55229 9 8 9C7.44772 9 7 8.55229 7 8C7 7.44772 7.44772 7 8 7C8.55229 7 9 7.44772 9 8ZM12 9C12.5523 9 13 8.55229 13 8C13 7.44772 12.5523 7 12 7C11.4477 7 11 7.44772 11 8C11 8.55229 11.4477 9 12 9Z"/></svg>';
-    wrap.append(button);
-
-    const menu = document.createElement('span');
-    menu.className = 'sessions__menu';
-    menu.setAttribute('role', 'menu');
-    menu.hidden = this.openSessionListMenuIndex !== index;
-
-    for (let commandIndex = 0; commandIndex < sessionItemMenuCommands.length; commandIndex += 1) {
-      const command = sessionItemMenuCommands[commandIndex];
-
-      if (command === 'showChanges') {
-        const separator = document.createElement('span');
-        separator.className = 'pi-toolbar__menu-separator';
-        separator.setAttribute('role', 'separator');
-        menu.append(separator);
-      }
-
-      menu.append(this.createSessionItemMenuButton(command, session, commandIndex));
-    }
-
-    wrap.append(menu);
-    return wrap;
-  }
-
-  private createSessionItemMenuButton(command: SessionItemCommand, session: SessionItem, commandIndex: number): HTMLButtonElement {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'pi-toolbar__menu-item sessions__menu-item';
-    button.setAttribute('role', 'menuitem');
-    button.setAttribute('data-session-command', command);
-    button.setAttribute('data-session-command-index', String(commandIndex));
-    button.disabled = !this.canRunSessionItemCommand(session, command);
-    button.innerHTML = '<span class="pi-toolbar__menu-label">' + getSessionItemCommandLabel(command) + '</span>' + getSessionItemCommandIcon(command);
-    button.addEventListener('pointerenter', () => {
-      this.openSessionListMenuCommandIndex = commandIndex;
-      this.setSessionMenuItemHover(button, true);
-    });
-    button.addEventListener('pointerleave', () => this.setSessionMenuItemHover(button, false));
-    button.addEventListener('focus', () => {
-      this.openSessionListMenuCommandIndex = commandIndex;
-      this.setSessionMenuItemHover(button, true);
-    });
-    button.addEventListener('blur', () => this.setSessionMenuItemHover(button, false));
-    return button;
-  }
-
-  private createTreeItemElement(treeItem: TreeItem, index: number): HTMLElement {
-    const state = this.options.getState();
-    const item = document.createElement('button');
-    item.type = 'button';
-    item.id = 'tree-' + index;
-    item.className = 'sessions__item'
-      + (index === this.treeListSelectedIndex ? ' sessions__item--active' : '')
-      + (treeItem.current ? ' sessions__item--current' : '');
-    item.setAttribute('role', 'option');
-    item.setAttribute('aria-selected', index === this.treeListSelectedIndex ? 'true' : 'false');
-    item.setAttribute('data-index', String(index));
-    item.disabled = state.busy || state.treeRefreshing;
-
-    const title = document.createElement('span');
-    title.className = 'sessions__title';
-    title.textContent = treeItem.role + ': ' + (treeItem.text || '(empty)');
-    item.append(title);
-
-    return item;
   }
 
   private getCurrentSessionTitle(): string {
