@@ -1045,6 +1045,307 @@
     return Array.from(document.querySelectorAll(selector));
   }
 
+  // src/webview/messages/ansi.ts
+  function containsAnsiEscape(value) {
+    return /\x1b\[[0-?]*(?:[ -/][0-?]*)?[@-~]/.test(value);
+  }
+  function stripAnsiSequences(value) {
+    return value.replace(/\x1b\[[0-?]*(?:[ -/][0-?]*)?[@-~]/g, "");
+  }
+  function renderAnsiTextInto(element, value, outputColors) {
+    element.replaceChildren();
+    if (!outputColors) {
+      element.textContent = stripAnsiSequences(value);
+      return;
+    }
+    const csiPattern = /\x1b\[([0-?]*)([ -/]*)?([@-~])/g;
+    let style = {};
+    let index = 0;
+    let match;
+    while ((match = csiPattern.exec(value)) !== null) {
+      appendAnsiText(element, value.slice(index, match.index), style);
+      if (match[3] === "m") {
+        style = applyAnsiSgr(match[1], style);
+      }
+      index = match.index + match[0].length;
+    }
+    appendAnsiText(element, value.slice(index), style);
+  }
+  function appendAnsiText(element, value, style) {
+    if (!value) {
+      return;
+    }
+    if (isEmptyAnsiStyle(style)) {
+      element.append(document.createTextNode(value));
+      return;
+    }
+    const span = document.createElement("span");
+    span.textContent = value;
+    applyAnsiStyle(span, style);
+    element.append(span);
+  }
+  function applyAnsiSgr(parameters, current) {
+    const codes = parseAnsiCodes(parameters);
+    let next = { ...current };
+    for (let index = 0; index < codes.length; index += 1) {
+      const code = codes[index];
+      if (code === 0) {
+        next = {};
+      } else if (code === 1) {
+        next.bold = true;
+        next.dim = false;
+      } else if (code === 2) {
+        next.dim = true;
+        next.bold = false;
+      } else if (code === 22) {
+        delete next.bold;
+        delete next.dim;
+      } else if (code === 3) {
+        next.italic = true;
+      } else if (code === 23) {
+        delete next.italic;
+      } else if (code === 4) {
+        next.underline = true;
+      } else if (code === 24) {
+        delete next.underline;
+      } else if (code === 7) {
+        next.inverse = true;
+      } else if (code === 27) {
+        delete next.inverse;
+      } else if (code === 9) {
+        next.strikethrough = true;
+      } else if (code === 29) {
+        delete next.strikethrough;
+      } else if (code === 39) {
+        delete next.foreground;
+      } else if (code === 49) {
+        delete next.background;
+      } else if (isBasicAnsiForeground(code)) {
+        next.foreground = ansiBasicColor(code - 30, false);
+      } else if (isBrightAnsiForeground(code)) {
+        next.foreground = ansiBasicColor(code - 90, true);
+      } else if (isBasicAnsiBackground(code)) {
+        next.background = ansiBasicColor(code - 40, false);
+      } else if (isBrightAnsiBackground(code)) {
+        next.background = ansiBasicColor(code - 100, true);
+      } else if ((code === 38 || code === 48) && codes[index + 1] === 5 && codes[index + 2] !== void 0) {
+        const color = ansi256Color(codes[index + 2]);
+        if (color) {
+          if (code === 38) {
+            next.foreground = color;
+          } else {
+            next.background = color;
+          }
+        }
+        index += 2;
+      } else if ((code === 38 || code === 48) && codes[index + 1] === 2 && codes[index + 2] !== void 0 && codes[index + 3] !== void 0 && codes[index + 4] !== void 0) {
+        const color = ansiRgbColor(
+          clampColor(codes[index + 2]),
+          clampColor(codes[index + 3]),
+          clampColor(codes[index + 4])
+        );
+        if (code === 38) {
+          next.foreground = color;
+        } else {
+          next.background = color;
+        }
+        index += 4;
+      }
+    }
+    return next;
+  }
+  function parseAnsiCodes(parameters) {
+    if (!parameters || parameters === "?") {
+      return [0];
+    }
+    return parameters.split(";").map((part) => part === "" ? 0 : Number(part)).filter((part) => Number.isInteger(part));
+  }
+  function applyAnsiStyle(element, style) {
+    const foreground = style.inverse ? style.background : style.foreground;
+    const background = style.inverse ? style.foreground : style.background;
+    if (foreground) {
+      element.style.color = foreground;
+    } else if (style.inverse && background) {
+      element.style.color = "var(--tau-code-background, var(--vscode-sideBar-background))";
+    }
+    if (background) {
+      element.style.backgroundColor = background;
+    } else if (style.inverse && foreground) {
+      element.style.backgroundColor = foreground;
+    }
+    if (style.bold) {
+      element.style.fontWeight = "700";
+    }
+    if (style.dim) {
+      element.style.opacity = "0.72";
+    }
+    if (style.italic) {
+      element.style.fontStyle = "italic";
+    }
+    const textDecoration = [
+      style.underline ? "underline" : "",
+      style.strikethrough ? "line-through" : ""
+    ].filter(Boolean).join(" ");
+    if (textDecoration) {
+      element.style.textDecoration = textDecoration;
+    }
+  }
+  function isEmptyAnsiStyle(style) {
+    return !style.foreground && !style.background && !style.bold && !style.dim && !style.italic && !style.underline && !style.inverse && !style.strikethrough;
+  }
+  function isBasicAnsiForeground(code) {
+    return code >= 30 && code <= 37;
+  }
+  function isBrightAnsiForeground(code) {
+    return code >= 90 && code <= 97;
+  }
+  function isBasicAnsiBackground(code) {
+    return code >= 40 && code <= 47;
+  }
+  function isBrightAnsiBackground(code) {
+    return code >= 100 && code <= 107;
+  }
+  var ANSI_COLOR_NAMES = ["Black", "Red", "Green", "Yellow", "Blue", "Magenta", "Cyan", "White"];
+  var ANSI_BRIGHT_COLOR_NAMES = ["BrightBlack", "BrightRed", "BrightGreen", "BrightYellow", "BrightBlue", "BrightMagenta", "BrightCyan", "BrightWhite"];
+  var ANSI_COLOR_FALLBACK_VARIABLES = [
+    "--tau-ansi-black-fallback",
+    "--tau-ansi-red-fallback",
+    "--tau-ansi-green-fallback",
+    "--tau-ansi-yellow-fallback",
+    "--tau-ansi-blue-fallback",
+    "--tau-ansi-magenta-fallback",
+    "--tau-ansi-cyan-fallback",
+    "--tau-ansi-white-fallback"
+  ];
+  var ANSI_BRIGHT_COLOR_FALLBACK_VARIABLES = [
+    "--tau-ansi-bright-black-fallback",
+    "--tau-ansi-bright-red-fallback",
+    "--tau-ansi-bright-green-fallback",
+    "--tau-ansi-bright-yellow-fallback",
+    "--tau-ansi-bright-blue-fallback",
+    "--tau-ansi-bright-magenta-fallback",
+    "--tau-ansi-bright-cyan-fallback",
+    "--tau-ansi-bright-white-fallback"
+  ];
+  var ANSI_COLOR_FALLBACKS = ["#000000", "#cd3131", "#0dbc79", "#e5e510", "#2472c8", "#bc3fbc", "#11a8cd", "#e5e5e5"];
+  var ANSI_BRIGHT_COLOR_FALLBACKS = ["#666666", "#f14c4c", "#23d18b", "#f5f543", "#3b8eea", "#d670d6", "#29b8db", "#e5e5e5"];
+  function ansiBasicColor(index, bright) {
+    const names = bright ? ANSI_BRIGHT_COLOR_NAMES : ANSI_COLOR_NAMES;
+    const fallbackVariables = bright ? ANSI_BRIGHT_COLOR_FALLBACK_VARIABLES : ANSI_COLOR_FALLBACK_VARIABLES;
+    const fallbacks = bright ? ANSI_BRIGHT_COLOR_FALLBACKS : ANSI_COLOR_FALLBACKS;
+    const fallbackVariable = fallbackVariables[index] ?? "--tau-ansi-white-fallback";
+    const fallback = fallbacks[index] ?? "#e5e5e5";
+    return `var(--vscode-terminal-ansi${names[index] ?? "White"}, var(${fallbackVariable}, ${fallback}))`;
+  }
+  function ansi256Color(value) {
+    if (value < 0 || value > 255) {
+      return void 0;
+    }
+    if (value < 8) {
+      return ansiBasicColor(value, false);
+    }
+    if (value < 16) {
+      return ansiBasicColor(value - 8, true);
+    }
+    if (value >= 232) {
+      const level = 8 + (value - 232) * 10;
+      return `rgb(${level}, ${level}, ${level})`;
+    }
+    const offset = value - 16;
+    const red = Math.floor(offset / 36);
+    const green = Math.floor(offset % 36 / 6);
+    const blue = offset % 6;
+    const terminalColor = ansiCubeTerminalColor(red, green, blue);
+    if (terminalColor) {
+      return terminalColor;
+    }
+    return `rgb(${ansi256Channel(red)}, ${ansi256Channel(green)}, ${ansi256Channel(blue)})`;
+  }
+  function ansiCubeTerminalColor(red, green, blue) {
+    if (red === 0 && green === 0 && blue === 0) {
+      return ansiBasicColor(0, false);
+    }
+    if (red > 0 && green === 0 && blue === 0) {
+      return ansiBasicColor(1, red >= 5);
+    }
+    if (red === 0 && green > 0 && blue === 0) {
+      return ansiBasicColor(2, green >= 5);
+    }
+    if (red > 0 && green > 0 && blue === 0 && Math.abs(red - green) <= 1) {
+      return ansiBasicColor(3, red >= 5 || green >= 5);
+    }
+    if (red === 0 && green === 0 && blue > 0) {
+      return ansiBasicColor(4, blue >= 5);
+    }
+    if (red > 0 && green === 0 && blue > 0 && Math.abs(red - blue) <= 1) {
+      return ansiBasicColor(5, red >= 5 || blue >= 5);
+    }
+    if (red === 0 && green > 0 && blue > 0 && Math.abs(green - blue) <= 1) {
+      return ansiBasicColor(6, green >= 5 || blue >= 5);
+    }
+    if (red === green && green === blue) {
+      if (red >= 5) {
+        return ansiBasicColor(7, true);
+      }
+      if (red >= 3) {
+        return ansiBasicColor(7, false);
+      }
+      return ansiBasicColor(0, true);
+    }
+    return void 0;
+  }
+  function ansi256Channel(value) {
+    return value === 0 ? 0 : 55 + value * 40;
+  }
+  function ansiRgbColor(red, green, blue) {
+    const terminalColor = ansiRgbTerminalColor(red, green, blue);
+    if (terminalColor) {
+      return terminalColor;
+    }
+    return `rgb(${red}, ${green}, ${blue})`;
+  }
+  function ansiRgbTerminalColor(red, green, blue) {
+    const low = 32;
+    const high = 128;
+    const bright = 220;
+    if (red <= low && green <= low && blue <= low) {
+      return ansiBasicColor(0, false);
+    }
+    if (red >= high && green <= low && blue <= low) {
+      return ansiBasicColor(1, red >= bright);
+    }
+    if (red <= low && green >= high && blue <= low) {
+      return ansiBasicColor(2, green >= bright);
+    }
+    if (red >= high && green >= high && blue <= low && Math.abs(red - green) <= 80) {
+      return ansiBasicColor(3, red >= bright || green >= bright);
+    }
+    if (red <= low && green <= low && blue >= high) {
+      return ansiBasicColor(4, blue >= bright);
+    }
+    if (red >= high && green <= low && blue >= high && Math.abs(red - blue) <= 80) {
+      return ansiBasicColor(5, red >= bright || blue >= bright);
+    }
+    if (red <= low && green >= high && blue >= high && Math.abs(green - blue) <= 80) {
+      return ansiBasicColor(6, green >= bright || blue >= bright);
+    }
+    if (Math.abs(red - green) <= 16 && Math.abs(green - blue) <= 16) {
+      if (red >= 220) {
+        return ansiBasicColor(7, true);
+      }
+      if (red >= 160) {
+        return ansiBasicColor(7, false);
+      }
+      if (red >= 80) {
+        return ansiBasicColor(0, true);
+      }
+    }
+    return void 0;
+  }
+  function clampColor(value) {
+    return Math.max(0, Math.min(255, value));
+  }
+
   // src/webview/messages/markdown.ts
   var markdownRenderer = window.markdownit ? window.markdownit({
     html: false,
@@ -1401,305 +1702,6 @@
   function parseReadActivityPath(title) {
     const match = title.match(/^read\s+(.+?)(?::\d+(?:-\d+)?)?$/);
     return match?.[1];
-  }
-  function containsAnsiEscape(value) {
-    return /\x1b\[[0-?]*(?:[ -/][0-?]*)?[@-~]/.test(value);
-  }
-  function stripAnsiSequences(value) {
-    return value.replace(/\x1b\[[0-?]*(?:[ -/][0-?]*)?[@-~]/g, "");
-  }
-  function renderAnsiTextInto(element, value, outputColors) {
-    element.replaceChildren();
-    if (!outputColors) {
-      element.textContent = stripAnsiSequences(value);
-      return;
-    }
-    const csiPattern = /\x1b\[([0-?]*)([ -/]*)?([@-~])/g;
-    let style = {};
-    let index = 0;
-    let match;
-    while ((match = csiPattern.exec(value)) !== null) {
-      appendAnsiText(element, value.slice(index, match.index), style);
-      if (match[3] === "m") {
-        style = applyAnsiSgr(match[1], style);
-      }
-      index = match.index + match[0].length;
-    }
-    appendAnsiText(element, value.slice(index), style);
-  }
-  function appendAnsiText(element, value, style) {
-    if (!value) {
-      return;
-    }
-    if (isEmptyAnsiStyle(style)) {
-      element.append(document.createTextNode(value));
-      return;
-    }
-    const span = document.createElement("span");
-    span.textContent = value;
-    applyAnsiStyle(span, style);
-    element.append(span);
-  }
-  function applyAnsiSgr(parameters, current) {
-    const codes = parseAnsiCodes(parameters);
-    let next = { ...current };
-    for (let index = 0; index < codes.length; index += 1) {
-      const code = codes[index];
-      if (code === 0) {
-        next = {};
-      } else if (code === 1) {
-        next.bold = true;
-        next.dim = false;
-      } else if (code === 2) {
-        next.dim = true;
-        next.bold = false;
-      } else if (code === 22) {
-        delete next.bold;
-        delete next.dim;
-      } else if (code === 3) {
-        next.italic = true;
-      } else if (code === 23) {
-        delete next.italic;
-      } else if (code === 4) {
-        next.underline = true;
-      } else if (code === 24) {
-        delete next.underline;
-      } else if (code === 7) {
-        next.inverse = true;
-      } else if (code === 27) {
-        delete next.inverse;
-      } else if (code === 9) {
-        next.strikethrough = true;
-      } else if (code === 29) {
-        delete next.strikethrough;
-      } else if (code === 39) {
-        delete next.foreground;
-      } else if (code === 49) {
-        delete next.background;
-      } else if (isBasicAnsiForeground(code)) {
-        next.foreground = ansiBasicColor(code - 30, false);
-      } else if (isBrightAnsiForeground(code)) {
-        next.foreground = ansiBasicColor(code - 90, true);
-      } else if (isBasicAnsiBackground(code)) {
-        next.background = ansiBasicColor(code - 40, false);
-      } else if (isBrightAnsiBackground(code)) {
-        next.background = ansiBasicColor(code - 100, true);
-      } else if ((code === 38 || code === 48) && codes[index + 1] === 5 && codes[index + 2] !== void 0) {
-        const color = ansi256Color(codes[index + 2]);
-        if (color) {
-          if (code === 38) {
-            next.foreground = color;
-          } else {
-            next.background = color;
-          }
-        }
-        index += 2;
-      } else if ((code === 38 || code === 48) && codes[index + 1] === 2 && codes[index + 2] !== void 0 && codes[index + 3] !== void 0 && codes[index + 4] !== void 0) {
-        const color = ansiRgbColor(
-          clampColor(codes[index + 2]),
-          clampColor(codes[index + 3]),
-          clampColor(codes[index + 4])
-        );
-        if (code === 38) {
-          next.foreground = color;
-        } else {
-          next.background = color;
-        }
-        index += 4;
-      }
-    }
-    return next;
-  }
-  function parseAnsiCodes(parameters) {
-    if (!parameters || parameters === "?") {
-      return [0];
-    }
-    return parameters.split(";").map((part) => part === "" ? 0 : Number(part)).filter((part) => Number.isInteger(part));
-  }
-  function applyAnsiStyle(element, style) {
-    const foreground = style.inverse ? style.background : style.foreground;
-    const background = style.inverse ? style.foreground : style.background;
-    if (foreground) {
-      element.style.color = foreground;
-    } else if (style.inverse && background) {
-      element.style.color = "var(--tau-code-background, var(--vscode-sideBar-background))";
-    }
-    if (background) {
-      element.style.backgroundColor = background;
-    } else if (style.inverse && foreground) {
-      element.style.backgroundColor = foreground;
-    }
-    if (style.bold) {
-      element.style.fontWeight = "700";
-    }
-    if (style.dim) {
-      element.style.opacity = "0.72";
-    }
-    if (style.italic) {
-      element.style.fontStyle = "italic";
-    }
-    const textDecoration = [
-      style.underline ? "underline" : "",
-      style.strikethrough ? "line-through" : ""
-    ].filter(Boolean).join(" ");
-    if (textDecoration) {
-      element.style.textDecoration = textDecoration;
-    }
-  }
-  function isEmptyAnsiStyle(style) {
-    return !style.foreground && !style.background && !style.bold && !style.dim && !style.italic && !style.underline && !style.inverse && !style.strikethrough;
-  }
-  function isBasicAnsiForeground(code) {
-    return code >= 30 && code <= 37;
-  }
-  function isBrightAnsiForeground(code) {
-    return code >= 90 && code <= 97;
-  }
-  function isBasicAnsiBackground(code) {
-    return code >= 40 && code <= 47;
-  }
-  function isBrightAnsiBackground(code) {
-    return code >= 100 && code <= 107;
-  }
-  var ANSI_COLOR_NAMES = ["Black", "Red", "Green", "Yellow", "Blue", "Magenta", "Cyan", "White"];
-  var ANSI_BRIGHT_COLOR_NAMES = ["BrightBlack", "BrightRed", "BrightGreen", "BrightYellow", "BrightBlue", "BrightMagenta", "BrightCyan", "BrightWhite"];
-  var ANSI_COLOR_FALLBACK_VARIABLES = [
-    "--tau-ansi-black-fallback",
-    "--tau-ansi-red-fallback",
-    "--tau-ansi-green-fallback",
-    "--tau-ansi-yellow-fallback",
-    "--tau-ansi-blue-fallback",
-    "--tau-ansi-magenta-fallback",
-    "--tau-ansi-cyan-fallback",
-    "--tau-ansi-white-fallback"
-  ];
-  var ANSI_BRIGHT_COLOR_FALLBACK_VARIABLES = [
-    "--tau-ansi-bright-black-fallback",
-    "--tau-ansi-bright-red-fallback",
-    "--tau-ansi-bright-green-fallback",
-    "--tau-ansi-bright-yellow-fallback",
-    "--tau-ansi-bright-blue-fallback",
-    "--tau-ansi-bright-magenta-fallback",
-    "--tau-ansi-bright-cyan-fallback",
-    "--tau-ansi-bright-white-fallback"
-  ];
-  var ANSI_COLOR_FALLBACKS = ["#000000", "#cd3131", "#0dbc79", "#e5e510", "#2472c8", "#bc3fbc", "#11a8cd", "#e5e5e5"];
-  var ANSI_BRIGHT_COLOR_FALLBACKS = ["#666666", "#f14c4c", "#23d18b", "#f5f543", "#3b8eea", "#d670d6", "#29b8db", "#e5e5e5"];
-  function ansiBasicColor(index, bright) {
-    const names = bright ? ANSI_BRIGHT_COLOR_NAMES : ANSI_COLOR_NAMES;
-    const fallbackVariables = bright ? ANSI_BRIGHT_COLOR_FALLBACK_VARIABLES : ANSI_COLOR_FALLBACK_VARIABLES;
-    const fallbacks = bright ? ANSI_BRIGHT_COLOR_FALLBACKS : ANSI_COLOR_FALLBACKS;
-    const fallbackVariable = fallbackVariables[index] ?? "--tau-ansi-white-fallback";
-    const fallback = fallbacks[index] ?? "#e5e5e5";
-    return `var(--vscode-terminal-ansi${names[index] ?? "White"}, var(${fallbackVariable}, ${fallback}))`;
-  }
-  function ansi256Color(value) {
-    if (value < 0 || value > 255) {
-      return void 0;
-    }
-    if (value < 8) {
-      return ansiBasicColor(value, false);
-    }
-    if (value < 16) {
-      return ansiBasicColor(value - 8, true);
-    }
-    if (value >= 232) {
-      const level = 8 + (value - 232) * 10;
-      return `rgb(${level}, ${level}, ${level})`;
-    }
-    const offset = value - 16;
-    const red = Math.floor(offset / 36);
-    const green = Math.floor(offset % 36 / 6);
-    const blue = offset % 6;
-    const terminalColor = ansiCubeTerminalColor(red, green, blue);
-    if (terminalColor) {
-      return terminalColor;
-    }
-    return `rgb(${ansi256Channel(red)}, ${ansi256Channel(green)}, ${ansi256Channel(blue)})`;
-  }
-  function ansiCubeTerminalColor(red, green, blue) {
-    if (red === 0 && green === 0 && blue === 0) {
-      return ansiBasicColor(0, false);
-    }
-    if (red > 0 && green === 0 && blue === 0) {
-      return ansiBasicColor(1, red >= 5);
-    }
-    if (red === 0 && green > 0 && blue === 0) {
-      return ansiBasicColor(2, green >= 5);
-    }
-    if (red > 0 && green > 0 && blue === 0 && Math.abs(red - green) <= 1) {
-      return ansiBasicColor(3, red >= 5 || green >= 5);
-    }
-    if (red === 0 && green === 0 && blue > 0) {
-      return ansiBasicColor(4, blue >= 5);
-    }
-    if (red > 0 && green === 0 && blue > 0 && Math.abs(red - blue) <= 1) {
-      return ansiBasicColor(5, red >= 5 || blue >= 5);
-    }
-    if (red === 0 && green > 0 && blue > 0 && Math.abs(green - blue) <= 1) {
-      return ansiBasicColor(6, green >= 5 || blue >= 5);
-    }
-    if (red === green && green === blue) {
-      if (red >= 5) {
-        return ansiBasicColor(7, true);
-      }
-      if (red >= 3) {
-        return ansiBasicColor(7, false);
-      }
-      return ansiBasicColor(0, true);
-    }
-    return void 0;
-  }
-  function ansi256Channel(value) {
-    return value === 0 ? 0 : 55 + value * 40;
-  }
-  function ansiRgbColor(red, green, blue) {
-    const terminalColor = ansiRgbTerminalColor(red, green, blue);
-    if (terminalColor) {
-      return terminalColor;
-    }
-    return `rgb(${red}, ${green}, ${blue})`;
-  }
-  function ansiRgbTerminalColor(red, green, blue) {
-    const low = 32;
-    const high = 128;
-    const bright = 220;
-    if (red <= low && green <= low && blue <= low) {
-      return ansiBasicColor(0, false);
-    }
-    if (red >= high && green <= low && blue <= low) {
-      return ansiBasicColor(1, red >= bright);
-    }
-    if (red <= low && green >= high && blue <= low) {
-      return ansiBasicColor(2, green >= bright);
-    }
-    if (red >= high && green >= high && blue <= low && Math.abs(red - green) <= 80) {
-      return ansiBasicColor(3, red >= bright || green >= bright);
-    }
-    if (red <= low && green <= low && blue >= high) {
-      return ansiBasicColor(4, blue >= bright);
-    }
-    if (red >= high && green <= low && blue >= high && Math.abs(red - blue) <= 80) {
-      return ansiBasicColor(5, red >= bright || blue >= bright);
-    }
-    if (red <= low && green >= high && blue >= high && Math.abs(green - blue) <= 80) {
-      return ansiBasicColor(6, green >= bright || blue >= bright);
-    }
-    if (Math.abs(red - green) <= 16 && Math.abs(green - blue) <= 16) {
-      if (red >= 220) {
-        return ansiBasicColor(7, true);
-      }
-      if (red >= 160) {
-        return ansiBasicColor(7, false);
-      }
-      if (red >= 80) {
-        return ansiBasicColor(0, true);
-      }
-    }
-    return void 0;
-  }
-  function clampColor(value) {
-    return Math.max(0, Math.min(255, value));
   }
   function shouldKeepActivityOpen(activity) {
     return typeof activity.body === "string" && activity.body.length > 0;
