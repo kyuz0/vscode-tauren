@@ -127,13 +127,6 @@ function createSessionItemMenuElement(options: CreateSessionItemElementOptions):
   for (let commandIndex = 0; commandIndex < sessionItemMenuCommands.length; commandIndex += 1) {
     const command = sessionItemMenuCommands[commandIndex];
 
-    if (command === 'showChanges') {
-      const separator = document.createElement('span');
-      separator.className = 'pi-toolbar__menu-separator';
-      separator.setAttribute('role', 'separator');
-      menu.append(separator);
-    }
-
     menu.append(createSessionItemMenuButton(command, commandIndex, options));
   }
 

@@ -282,16 +282,6 @@ ${chatWebviewStyles}
               <path fill="currentColor" d="M6 2h4l1 1h3v1H2V3h3l1-1Zm-2 3h8l-.6 9.2A2 2 0 0 1 9.4 16H6.6a2 2 0 0 1-2-1.8L4 5Zm2 1v8h1V6H6Zm3 0v8h1V6H9Z"/>
             </svg>
           </button>
-          <div class="pi-toolbar__menu-separator" role="separator"></div>
-          <button class="pi-toolbar__menu-item" type="button" role="menuitem" data-session-command="showChanges">
-            <span class="pi-toolbar__menu-label">Show changes</span>
-            <svg class="pi-toolbar__menu-icon" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <path d="M3 3.5H13" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-              <path d="M3 8H13" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-              <path d="M3 12.5H13" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-              <path d="M5.5 2.25V4.75M10.5 6.75V9.25M7.5 11.25V13.75" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-            </svg>
-          </button>
         </div>
       </div>
     </header>

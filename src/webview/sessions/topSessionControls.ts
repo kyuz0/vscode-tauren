@@ -200,7 +200,7 @@ export class TopSessionControls {
 
     for (const item of this.options.sessionMenuItemElements) {
       const command = item.getAttribute('data-session-command');
-      item.disabled = state.busy || this.sessionNameEditing || ((command === 'delete' || command === 'showChanges') && !this.options.getCurrentSessionPath());
+      item.disabled = state.busy || this.sessionNameEditing || (command === 'delete' && !this.options.getCurrentSessionPath());
     }
   }
 
@@ -212,19 +212,6 @@ export class TopSessionControls {
     if (command === 'rename') {
       this.closeSessionCommandMenu();
       this.startSessionNameEdit();
-      return;
-    }
-
-    if (command === 'showChanges') {
-      const sessionPath = this.options.getCurrentSessionPath();
-
-      if (!sessionPath) {
-        return;
-      }
-
-      this.closeSessionCommandMenu();
-      this.options.postMessage({ type: 'sessionItemCommand', sessionPath, command });
-      this.options.focusPromptInput();
       return;
     }
 
