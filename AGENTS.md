@@ -53,7 +53,7 @@ Do not add transient notes, guesses, one-off debugging observations, or broad ge
 - `src/diff/sessionDiffViewer.ts` owns the first native session changes viewer: read-only virtual snapshot documents plus the VS Code multi-file diff adapter. Keep the adapter isolated so a future custom annotated diff UI can replace it.
 - `src/diff/sessionDiffUri.ts` owns Tau session diff URI scheme/context helpers shared by the diff viewer and prompt-context extraction.
 - `src/diff/sessionDiffStorage.ts` owns VS Code storage and file-watcher helpers for session diff snapshots/stat refresh.
-- `src/slashCommands.ts` owns shared local slash command metadata used by both the extension host and browser webview.
+- `src/commands/slashCommands.ts` owns shared local slash command metadata used by both the extension host and browser webview.
 - `src/rpc/client.ts` owns the `pi --mode rpc` subprocess, request/response tracking, stderr collection, and process cleanup; `src/rpc/protocol.ts` owns strict JSONL parsing/serialization; `src/rpc/types.ts` owns shared RPC and Pi result types.
 - Third-party webview browser bundles are vendored in `resources/vendor`; generated first-party webview bundles live in `resources/webview`; keep browser-only libraries out of runtime `dependencies` unless extension-host code imports them.
 - Shiki and `vscode-shiki-bridge` are runtime dependencies because syntax highlighting runs in the extension host, not as a vendored webview browser bundle.

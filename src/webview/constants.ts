@@ -1,4 +1,4 @@
-import { localSlashMenuCommands as sharedLocalSlashMenuCommands } from '../slashCommands';
+import { localSlashMenuCommands as sharedLocalSlashMenuCommands } from '../commands/slashCommands';
 import type { SlashCommand } from './types';
 
 export const localSlashCommands: SlashCommand[] = sharedLocalSlashMenuCommands.map((command) => ({ ...command }));

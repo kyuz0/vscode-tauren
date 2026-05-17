@@ -1,4 +1,4 @@
-import { isBuiltinSlashCommand } from '../slashCommands';
+import { isBuiltinSlashCommand } from '../commands/slashCommands';
 
 export function parseLocalSlashCommand(text: string): { name: string; args: string } | undefined {
   const match = text.trim().match(/^\/([^\s]+)(?:\s+([\s\S]*))?$/);

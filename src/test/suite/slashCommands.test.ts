@@ -4,7 +4,7 @@ import {
   isSupportedBuiltinSlashCommand,
   localSlashCommands,
   localSlashMenuCommands
-} from '../../slashCommands';
+} from '../../commands/slashCommands';
 
 suite('Slash commands', () => {
   test('uses shared metadata for local menu commands and controller support checks', () => {

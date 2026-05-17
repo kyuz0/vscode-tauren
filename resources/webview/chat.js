@@ -306,7 +306,7 @@
     return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
   }
 
-  // src/slashCommands.ts
+  // src/commands/slashCommands.ts
   var localSlashCommandDefinitions = [
     { name: "model", description: "Select model", source: "builtin", supported: true },
     { name: "name", description: "Set or clear session name", source: "builtin", supported: true },
