@@ -1,20 +1,3 @@
-import type { WebviewStateMessage } from '../sidebar/types';
-import type { PiChatController, PiChatControllerOptions } from '../piChatController';
-
-export type TauSessionManagerOptions = PiChatControllerOptions;
-
-export type OpenSessionStatus = 'idle' | 'running' | 'done' | 'error';
-
-export type OpenSession = {
-  id: string;
-  controller: PiChatController;
-  state: WebviewStateMessage | undefined;
-  sessionFile: string | undefined;
-  status: OpenSessionStatus;
-  unread: boolean;
-  title: string;
-};
-
 export type PiSessionListItem = {
   path: string;
   id: string;

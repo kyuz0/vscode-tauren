@@ -2,20 +2,15 @@ import { ChatSession } from './chatSession';
 import { createWebviewStateMessage } from './sidebar/chatWebview';
 import type {
   WebviewMessage,
-  WebviewSessionItem,
-  WebviewStateMessage,
-  WebviewTreeItem
+  WebviewStateMessage
 } from './sidebar/types';
-import {
-  StatePublisher,
-  type StatePublisherScheduler
-} from './controller/statePublisher';
+import { StatePublisher } from './controller/statePublisher';
 import {
   createCancellingExtensionUi,
-  ExtensionUiRequestHandler,
-  type ExtensionUiRequestUi
+  ExtensionUiRequestHandler
 } from './extensionUi/requestHandler';
-import type { PiRpcClientFactory, PiRpcClientLike } from './rpc/clientTypes';
+import type { PiRpcClientLike } from './rpc/clientTypes';
+import type { PiChatControllerOptions } from './controller/types';
 import type {
   PiPromptStreamingBehavior,
   RpcEvent
@@ -26,11 +21,9 @@ import type { PiPromptContextAttachment, PiPromptContextInput } from './prompt/t
 import { ReadyScriptState } from './readyScript';
 import {
   SessionMetadataRefreshController,
-  SessionMetadataState,
-  type PiChatSessionMetaSnapshot
+  SessionMetadataState
 } from './sessionMetadata';
 import { SessionDiffController } from './diff/sessionDiffController';
-import type { SessionDiffSnapshot } from './diff/types';
 import {
   getErrorMessage,
   isClientLifecycleError
@@ -42,35 +35,10 @@ import { PiClientManager } from './controller/piClientManager';
 import { PiRpcEventHandler } from './controller/piRpcEventHandler';
 import { SessionViewController } from './controller/sessionViewController';
 
+export type { PiChatControllerOptions } from './controller/types';
 export type { PiChatContextUsage, PiChatModelMeta, PiChatSessionMetaSnapshot } from './sessionMetadata';
 
 export type { PiPromptContextAttachment, PiPromptContextInput } from './prompt/types';
-
-export type PiChatControllerOptions = {
-  createClient: PiRpcClientFactory;
-  postState: (message: WebviewStateMessage) => void;
-  showNotification: (message: string, notifyType: string) => void;
-  showToast?: (message: string) => void;
-  extensionUi?: ExtensionUiRequestUi;
-  getCwd?: () => string | undefined;
-  getPiPath?: () => string | undefined;
-  getOutputColors?: () => boolean;
-  getReadyScript?: () => string | undefined;
-  getReadyScriptEnabled?: () => boolean;
-  runReadyScript?: (scriptPath: string, cwd: string | undefined) => void;
-  stateScheduler?: StatePublisherScheduler;
-  initialSessionMeta?: PiChatSessionMetaSnapshot;
-  initialSessionFile?: string;
-  onSessionMetaChange?: (metadata: PiChatSessionMetaSnapshot) => void;
-  onSessionFileChange?: (sessionFile: string | undefined) => void;
-  writeClipboard?: (text: string) => PromiseLike<void> | Promise<void> | void;
-  listSessions?: (cwd: string | undefined, currentSessionFile: string | undefined) => Promise<WebviewSessionItem[]>;
-  listSessionTree?: (sessionFile: string | undefined) => Promise<WebviewTreeItem[]>;
-  deleteSession?: (sessionPath: string, displayName: string) => Promise<boolean>;
-  showSessionChanges?: (sessionPath: string, displayName: string) => Promise<void>;
-  loadSessionDiffSnapshot?: (sessionFile: string) => SessionDiffSnapshot | undefined;
-  saveSessionDiffSnapshot?: (sessionFile: string, snapshot: SessionDiffSnapshot) => void;
-};
 
 export class PiChatController {
   private readonly promptContext = new PromptContextStore();
