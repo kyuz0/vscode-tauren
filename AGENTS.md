@@ -33,7 +33,9 @@ Do not add transient notes, guesses, one-off debugging observations, or broad ge
 - `src/webview/messages/` owns browser-side message-list orchestration: incremental message rendering, message scrolling, busy status, and message click handling.
 - `src/webview/sessions/` owns browser-side session list/tree UI, session-list command menus, top session title/menu, and related keyboard navigation.
 - `src/webview/codeHighlighting.ts` owns browser-side asynchronous code-highlight requests/results for markdown code fences and read-tool code boxes; reuse it for future code/diff panes where practical.
-- `src/webview/diffCounter.ts` owns browser-side session diff counter formatting and animation.
+- `src/webview/composer/diffCounter.ts` owns browser-side session diff counter formatting and animation.
+- `src/webview/messages/renderMessages.ts` and `src/webview/messages/markdown.ts` own browser-side transcript rendering and markdown/ANSI output formatting.
+- `src/webview/sessions/sessionFormat.ts` and `src/webview/sessions/sessionItemCommands.ts` own browser-side session row formatting and command metadata.
 - `src/sidebar/nonce.ts` owns nonce generation for CSP-protected inline scripts.
 - `src/piEventMapper.ts` owns pure Pi RPC event-to-UI action mapping helpers.
 - `src/prompt/` owns one-shot IDE prompt context attachment types, state, normalization, labels, editor extraction, prompt formatting, and webview projection.

@@ -1,5 +1,5 @@
-import { requestCodeHighlight, requestCodeHighlightsIn } from './codeHighlighting';
-import type { MarkdownRenderer } from './types';
+import { requestCodeHighlight, requestCodeHighlightsIn } from '../codeHighlighting';
+import type { MarkdownRenderer } from '../types';
 
 export type RenderMarkdownOptions = {
   animateFromText?: string;

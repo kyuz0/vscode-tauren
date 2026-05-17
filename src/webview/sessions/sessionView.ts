@@ -1,10 +1,10 @@
-import { buildSessionTreePrefix, formatSessionMeta, getSessionDisplayName, shortenPath } from '../sessionFormat';
+import { buildSessionTreePrefix, formatSessionMeta, getSessionDisplayName, shortenPath } from './sessionFormat';
 import {
   getSessionItemCommandIcon,
   getSessionItemCommandLabel,
   parseSessionItemCommand,
   sessionItemMenuCommands
-} from '../sessionItemCommands';
+} from './sessionItemCommands';
 import type { SessionItem, SessionItemCommand, TreeItem, WebviewState } from '../types';
 
 type PostMessage = (message: unknown) => void;

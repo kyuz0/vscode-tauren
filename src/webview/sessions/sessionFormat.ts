@@ -1,4 +1,4 @@
-import type { SessionItem } from './types';
+import type { SessionItem } from '../types';
 
 export function getSessionDisplayName(session: SessionItem): string {
   const name = sanitizeSessionTitle(session.name);

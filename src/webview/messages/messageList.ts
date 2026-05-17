@@ -1,6 +1,6 @@
 import { requestCodeHighlightsIn } from '../codeHighlighting';
 import { messagesBottomThreshold } from '../constants';
-import { createMessageElement, updateMessageBodyElement } from '../renderMessages';
+import { createMessageElement, updateMessageBodyElement } from './renderMessages';
 import type { Activity, ChatMessage, WebviewState } from '../types';
 
 type PostMessage = (message: unknown) => void;

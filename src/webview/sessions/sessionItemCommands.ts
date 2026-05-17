@@ -1,4 +1,4 @@
-import type { SessionItemCommand } from './types';
+import type { SessionItemCommand } from '../types';
 
 export const sessionItemMenuCommands: SessionItemCommand[] = ['rename', 'fork', 'clone', 'compact', 'export', 'delete', 'showChanges'];
 

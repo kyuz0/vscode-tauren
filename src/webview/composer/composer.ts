@@ -1,4 +1,4 @@
-import { createDiffCounter, formatDiffLineCount, normalizeDiffLineCount, updateDiffCounter } from '../diffCounter';
+import { createDiffCounter, formatDiffLineCount, normalizeDiffLineCount, updateDiffCounter } from './diffCounter';
 import {
   localSlashCommands,
   maxTextareaHeight,

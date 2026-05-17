@@ -204,7 +204,7 @@
     return typeof value === "object" && value !== null;
   }
 
-  // src/webview/diffCounter.ts
+  // src/webview/composer/diffCounter.ts
   function createDiffCounter(element, prefix) {
     const value = parseDiffCounterValue(element.textContent, prefix);
     const counter = {
@@ -1045,7 +1045,7 @@
     return Array.from(document.querySelectorAll(selector));
   }
 
-  // src/webview/markdown.ts
+  // src/webview/messages/markdown.ts
   var markdownRenderer = window.markdownit ? window.markdownit({
     html: false,
     linkify: true,
@@ -1261,7 +1261,7 @@
     return extensionMatch?.[1] ?? "";
   }
 
-  // src/webview/renderMessages.ts
+  // src/webview/messages/renderMessages.ts
   var activityExpansion = /* @__PURE__ */ new Map();
   function createMessageElement(message, showRole, messageIndex, options = {}) {
     const article = document.createElement("article");
@@ -1974,7 +1974,7 @@
     return event.target instanceof Element ? event.target : null;
   }
 
-  // src/webview/sessionFormat.ts
+  // src/webview/sessions/sessionFormat.ts
   function getSessionDisplayName(session) {
     const name = sanitizeSessionTitle(session.name);
     const firstMessage = sanitizeSessionTitle(session.firstMessage);
@@ -2044,7 +2044,7 @@
     });
   }
 
-  // src/webview/sessionItemCommands.ts
+  // src/webview/sessions/sessionItemCommands.ts
   var sessionItemMenuCommands = ["rename", "fork", "clone", "compact", "export", "delete", "showChanges"];
   var sessionItemCommandIcons = {
     rename: '<svg class="pi-toolbar__menu-icon" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4.1 11.9L5.45 11.6L11.15 5.9C11.55 5.5 11.55 4.85 11.15 4.45L10.9 4.2C10.5 3.8 9.85 3.8 9.45 4.2L3.75 9.9L3.45 11.25C3.37 11.65 3.7 11.98 4.1 11.9Z" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.85 4.8L10.55 6.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/></svg>',

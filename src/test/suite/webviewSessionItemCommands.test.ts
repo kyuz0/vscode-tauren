@@ -4,7 +4,7 @@ import {
   getSessionItemCommandLabel,
   parseSessionItemCommand,
   sessionItemMenuCommands
-} from '../../webview/sessionItemCommands';
+} from '../../webview/sessions/sessionItemCommands';
 
 suite('Webview session item commands', () => {
   test('orders Tau-specific commands after core Pi commands', () => {

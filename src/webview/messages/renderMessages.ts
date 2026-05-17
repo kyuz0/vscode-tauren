@@ -1,5 +1,5 @@
 import { renderHighlightedCodeInto, renderMarkdownInto, type RenderMarkdownOptions } from './markdown';
-import type { Activity, ChatMessage } from './types';
+import type { Activity, ChatMessage } from '../types';
 
 const activityExpansion = new Map<string, boolean>();
 
