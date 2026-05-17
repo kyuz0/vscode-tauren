@@ -1,6 +1,6 @@
 import { readFile } from 'fs/promises';
 import { extractPiMessageText } from '../piMessageContent';
-import { parseSessionJsonlRecords } from './sessionJsonl';
+import { parseSessionJsonlRecords } from '../pi/sessionJsonl';
 import type { PiSessionTreeItem, RawEntry, TreeNode } from './types';
 export type { PiSessionTreeItem } from './types';
 

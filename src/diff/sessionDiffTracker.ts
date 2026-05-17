@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
-import { parseSessionJsonlRecords } from '../sessions/sessionJsonl';
+import { parseSessionJsonlRecords } from '../pi/sessionJsonl';
 import type {
   FileMutation,
   SessionDiffSnapshot,
