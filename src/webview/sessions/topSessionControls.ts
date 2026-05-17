@@ -1,0 +1,275 @@
+import type { WebviewState } from '../types';
+
+type PostMessage = (message: unknown) => void;
+
+type TopSessionControlsOptions = {
+  getState: () => WebviewState;
+  postMessage: PostMessage;
+  toolbarTitleElement: HTMLElement;
+  toolbarTitleTextElement: HTMLElement;
+  sessionNameInputElement: HTMLInputElement;
+  sessionToggleButton: HTMLButtonElement;
+  sessionMenuWrapElement: HTMLElement;
+  sessionMenuButton: HTMLButtonElement;
+  sessionMenuElement: HTMLElement;
+  sessionMenuItemElements: HTMLButtonElement[];
+  focusPromptInput: () => void;
+  closeSlashMenu: () => void;
+  closeModelMenu: () => void;
+  runSessionSlashCommand: (command: 'fork' | 'clone' | 'compact' | 'reload' | 'export') => void;
+  getCurrentSessionTitle: () => string;
+  getCurrentSessionName: () => string;
+  getCurrentSessionPath: () => string;
+};
+
+export class TopSessionControls {
+  private sessionNameEditing = false;
+  private sessionNameEditInitialValue = '';
+
+  public constructor(private readonly options: TopSessionControlsOptions) {}
+
+  public get isSessionNameEditing(): boolean {
+    return this.sessionNameEditing;
+  }
+
+  public attachEventListeners(): void {
+    this.options.sessionToggleButton.addEventListener('click', () => this.toggleSessionView());
+    this.options.toolbarTitleElement.addEventListener('dblclick', (event) => this.startSessionNameEdit(event));
+    this.options.sessionMenuButton.addEventListener('click', (event) => this.toggleSessionCommandMenu(event));
+
+    for (const item of this.options.sessionMenuItemElements) {
+      item.addEventListener('click', () => this.runSessionMenuCommand(item.getAttribute('data-session-command')));
+      item.addEventListener('pointerenter', () => this.setSessionMenuItemHover(item, true));
+      item.addEventListener('pointerleave', () => this.setSessionMenuItemHover(item, false));
+      item.addEventListener('focus', () => this.setSessionMenuItemHover(item, true));
+      item.addEventListener('blur', () => this.setSessionMenuItemHover(item, false));
+    }
+
+    this.options.sessionNameInputElement.addEventListener('blur', () => this.cancelSessionNameEdit());
+  }
+
+  public handleGlobalKeydown(event: KeyboardEvent): boolean {
+    if (!this.sessionNameEditing || event.target !== this.options.sessionNameInputElement) {
+      return false;
+    }
+
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.commitSessionNameEdit();
+      return true;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      this.cancelSessionNameEdit({ focusPrompt: true });
+      return true;
+    }
+
+    return true;
+  }
+
+  public syncForRender(isListView: boolean): void {
+    const state = this.options.getState();
+    const toolbarTitle = state.viewMode === 'sessions' ? 'Sessions' : state.viewMode === 'tree' ? 'Session tree' : this.options.getCurrentSessionTitle();
+
+    if ((isListView || state.busy) && this.sessionNameEditing) {
+      this.cancelSessionNameEdit();
+    }
+
+    this.options.toolbarTitleTextElement.textContent = toolbarTitle;
+    this.options.toolbarTitleElement.title = toolbarTitle;
+    this.options.toolbarTitleElement.classList.toggle('pi-toolbar__title--editing', this.sessionNameEditing);
+    this.options.toolbarTitleTextElement.hidden = this.sessionNameEditing;
+    this.options.sessionNameInputElement.hidden = !this.sessionNameEditing;
+    this.options.sessionMenuWrapElement.hidden = isListView;
+    this.options.sessionMenuButton.disabled = state.busy || this.sessionNameEditing;
+    this.syncSessionCommandMenuItems();
+
+    if (isListView || state.busy || this.sessionNameEditing) {
+      this.closeSessionCommandMenu();
+    }
+
+    this.options.sessionToggleButton.title = isListView ? 'Back to chat' : 'Show sessions';
+    this.options.sessionToggleButton.setAttribute('aria-label', this.options.sessionToggleButton.title);
+    this.options.sessionToggleButton.classList.toggle('pi-toolbar__sessions--back', isListView);
+  }
+
+  public cancelSessionNameEdit(options: { focusPrompt?: boolean } = {}): void {
+    if (!this.sessionNameEditing) {
+      return;
+    }
+
+    this.stopSessionNameEdit();
+
+    if (options.focusPrompt) {
+      this.options.focusPromptInput();
+    }
+  }
+
+  public closeSessionCommandMenu(): void {
+    this.options.sessionMenuElement.hidden = true;
+    this.options.sessionMenuButton.setAttribute('aria-expanded', 'false');
+    for (const item of this.options.sessionMenuItemElements) {
+      this.setSessionMenuItemHover(item, false);
+    }
+  }
+
+  public hasSessionCommandMenuOpen(): boolean {
+    return !this.options.sessionMenuElement.hidden;
+  }
+
+  private startSessionNameEdit(event?: MouseEvent): void {
+    const state = this.options.getState();
+    event?.preventDefault();
+    event?.stopPropagation();
+
+    if (state.viewMode === 'sessions' || state.viewMode === 'tree' || state.busy) {
+      return;
+    }
+
+    this.options.closeSlashMenu();
+    this.options.closeModelMenu();
+    this.closeSessionCommandMenu();
+
+    const initialName = this.options.getCurrentSessionName();
+    this.sessionNameEditing = true;
+    this.sessionNameEditInitialValue = initialName;
+    this.options.sessionNameInputElement.value = initialName;
+    this.options.sessionNameInputElement.placeholder = initialName ? '' : this.options.getCurrentSessionTitle();
+    this.syncSessionNameEditor();
+
+    requestAnimationFrame(() => {
+      this.options.sessionNameInputElement.focus({ preventScroll: true });
+      this.options.sessionNameInputElement.select();
+    });
+  }
+
+  private commitSessionNameEdit(): void {
+    if (!this.sessionNameEditing) {
+      return;
+    }
+
+    const nextName = this.options.sessionNameInputElement.value.trim();
+    const previousName = this.sessionNameEditInitialValue;
+    this.stopSessionNameEdit();
+
+    if (nextName !== previousName) {
+      this.options.postMessage({ type: 'setSessionName', name: nextName });
+    }
+
+    this.options.focusPromptInput();
+  }
+
+  private stopSessionNameEdit(): void {
+    this.sessionNameEditing = false;
+    this.sessionNameEditInitialValue = '';
+    this.options.sessionNameInputElement.value = '';
+    this.options.sessionNameInputElement.placeholder = '';
+    this.syncSessionNameEditor();
+  }
+
+  private syncSessionNameEditor(): void {
+    const state = this.options.getState();
+    this.options.toolbarTitleElement.classList.toggle('pi-toolbar__title--editing', this.sessionNameEditing);
+    this.options.toolbarTitleTextElement.hidden = this.sessionNameEditing;
+    this.options.sessionNameInputElement.hidden = !this.sessionNameEditing;
+    this.options.sessionMenuButton.disabled = state.busy || this.sessionNameEditing;
+  }
+
+  private toggleSessionCommandMenu(event?: MouseEvent): void {
+    const state = this.options.getState();
+    event?.preventDefault();
+    event?.stopPropagation();
+
+    if (state.viewMode === 'sessions' || state.viewMode === 'tree' || state.busy || this.sessionNameEditing) {
+      return;
+    }
+
+    this.options.closeSlashMenu();
+    this.options.closeModelMenu();
+
+    const isOpen = !this.options.sessionMenuElement.hidden;
+    this.options.sessionMenuElement.hidden = isOpen;
+    this.options.sessionMenuButton.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+  }
+
+  private syncSessionCommandMenuItems(): void {
+    const state = this.options.getState();
+
+    for (const item of this.options.sessionMenuItemElements) {
+      const command = item.getAttribute('data-session-command');
+      item.disabled = state.busy || this.sessionNameEditing || ((command === 'delete' || command === 'showChanges') && !this.options.getCurrentSessionPath());
+    }
+  }
+
+  private setSessionMenuItemHover(item: HTMLButtonElement, hovered: boolean): void {
+    item.classList.toggle('pi-toolbar__menu-item--hover', hovered);
+  }
+
+  private runSessionMenuCommand(command: string | null): void {
+    if (command === 'rename') {
+      this.closeSessionCommandMenu();
+      this.startSessionNameEdit();
+      return;
+    }
+
+    if (command === 'showChanges') {
+      const sessionPath = this.options.getCurrentSessionPath();
+
+      if (!sessionPath) {
+        return;
+      }
+
+      this.closeSessionCommandMenu();
+      this.options.postMessage({ type: 'sessionItemCommand', sessionPath, command });
+      this.options.focusPromptInput();
+      return;
+    }
+
+    if (command === 'fork' || command === 'clone') {
+      this.closeSessionCommandMenu();
+      this.options.runSessionSlashCommand(command);
+      return;
+    }
+
+    if (command === 'delete') {
+      this.closeSessionCommandMenu();
+      this.deleteCurrentSession();
+      return;
+    }
+
+    if (command !== 'reload' && command !== 'compact' && command !== 'export') {
+      return;
+    }
+
+    this.closeSessionCommandMenu();
+    this.options.postMessage({ type: 'submit', text: '/' + command });
+    this.options.focusPromptInput();
+  }
+
+  private deleteCurrentSession(): void {
+    const sessionPath = this.options.getCurrentSessionPath();
+
+    if (!sessionPath) {
+      return;
+    }
+
+    this.options.postMessage({ type: 'deleteSession', sessionPath });
+    this.options.focusPromptInput();
+  }
+
+  private toggleSessionView(): void {
+    const state = this.options.getState();
+    this.cancelSessionNameEdit();
+
+    if (state.viewMode === 'sessions' || state.viewMode === 'tree') {
+      this.options.postMessage({ type: 'hideSessions' });
+      this.options.focusPromptInput();
+      return;
+    }
+
+    this.options.postMessage({ type: 'showSessions' });
+  }
+}

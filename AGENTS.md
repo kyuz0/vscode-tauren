@@ -32,7 +32,7 @@ Do not add transient notes, guesses, one-off debugging observations, or broad ge
 - `src/webview/main.ts` is only the browser-side composition entrypoint for shared state, top-level events, and the ready message.
 - `src/webview/composer/` owns browser-side composer UI state: textarea sizing, submit/stop controls, model/thinking picker, prompt context badges, slash menu, and diff summary controls.
 - `src/webview/messages/` owns browser-side message-list orchestration: incremental message rendering, message scrolling, busy status, and message click handling.
-- `src/webview/sessions/` owns browser-side session list/tree UI, session-list command menus, top session title/menu, row/menu element creation, and related keyboard navigation.
+- `src/webview/sessions/` owns browser-side session list/tree UI, session-list command menus, top session title/menu controls, row/menu element creation, and related keyboard navigation.
 - `src/webview/codeHighlighting.ts` owns browser-side asynchronous code-highlight requests/results for markdown code fences and read-tool code boxes; reuse it for future code/diff panes where practical.
 - `src/webview/composer/diffCounter.ts` owns browser-side session diff counter formatting and animation.
 - `src/webview/messages/renderMessages.ts`, `src/webview/messages/markdown.ts`, and `src/webview/messages/ansi.ts` own browser-side transcript rendering and markdown/ANSI output formatting.
