@@ -2545,6 +2545,8 @@
     openSessionListMenuCommandIndex = 0;
     sessionListNameEditPath;
     sessionListNameEditInitialValue = "";
+    pendingSessionScrollIndex;
+    pendingSessionScrollFrame;
     topControls;
     treeController;
     attachEventListeners() {
@@ -2827,17 +2829,55 @@
       if (nextIndex === void 0) {
         return;
       }
+      const previousIndex = this.sessionListSelectedIndex;
+      if (nextIndex === previousIndex) {
+        return;
+      }
       this.sessionListSelectedIndex = nextIndex;
-      this.renderSessions();
-      document.getElementById("session-" + this.sessionListSelectedIndex)?.scrollIntoView({ block: "nearest" });
+      this.updateRenderedSessionSelection(previousIndex);
+      this.scheduleSessionSelectionIntoView(nextIndex);
     }
     moveSessionSelectionUpOrFocusSearch() {
       const visibleIndexes = this.getVisibleSessionIndexes();
       if (visibleIndexes.length === 0 || this.sessionListSelectedIndex === visibleIndexes[0]) {
-        this.focusSessionSearchInput();
+        this.focusSessionSearchInput({ reveal: true });
         return;
       }
       this.moveSessionSelection(-1);
+    }
+    updateRenderedSessionSelection(previousIndex) {
+      this.updateRenderedSessionItemSelection(previousIndex, false);
+      this.updateRenderedSessionItemSelection(this.sessionListSelectedIndex, true);
+    }
+    updateRenderedSessionItemSelection(index, selected) {
+      const item = document.getElementById("session-" + index);
+      if (!item) {
+        return;
+      }
+      item.classList.toggle("sessions__item--active", selected);
+      item.setAttribute("aria-selected", selected ? "true" : "false");
+    }
+    scheduleSessionSelectionIntoView(index) {
+      this.pendingSessionScrollIndex = index;
+      if (this.pendingSessionScrollFrame !== void 0) {
+        return;
+      }
+      this.pendingSessionScrollFrame = requestAnimationFrame(() => {
+        const scrollIndex = this.pendingSessionScrollIndex;
+        this.pendingSessionScrollIndex = void 0;
+        this.pendingSessionScrollFrame = void 0;
+        if (scrollIndex === void 0) {
+          return;
+        }
+        document.getElementById("session-" + scrollIndex)?.scrollIntoView({ block: "nearest" });
+      });
+    }
+    cancelPendingSessionSelectionScroll() {
+      if (this.pendingSessionScrollFrame !== void 0) {
+        cancelAnimationFrame(this.pendingSessionScrollFrame);
+      }
+      this.pendingSessionScrollIndex = void 0;
+      this.pendingSessionScrollFrame = void 0;
     }
     selectSessionIndex(index) {
       const state2 = this.options.getState();
@@ -3100,6 +3140,10 @@
     }
     focusSessionSearchInput(options = {}) {
       const input = this.options.sessionsElement.querySelector(".sessions__search-input");
+      if (options.reveal) {
+        this.cancelPendingSessionSelectionScroll();
+        this.options.sessionsElement.scrollTop = 0;
+      }
       input?.focus({ preventScroll: true });
       if (!input) {
         return;

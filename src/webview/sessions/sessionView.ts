@@ -42,6 +42,8 @@ export class SessionViewController {
   private openSessionListMenuCommandIndex = 0;
   private sessionListNameEditPath: string | undefined;
   private sessionListNameEditInitialValue = '';
+  private pendingSessionScrollIndex: number | undefined;
+  private pendingSessionScrollFrame: number | undefined;
   private readonly topControls: TopSessionControls;
   private readonly treeController: SessionTreeController;
 
@@ -427,20 +429,71 @@ export class SessionViewController {
       return;
     }
 
+    const previousIndex = this.sessionListSelectedIndex;
+
+    if (nextIndex === previousIndex) {
+      return;
+    }
+
     this.sessionListSelectedIndex = nextIndex;
-    this.renderSessions();
-    document.getElementById('session-' + this.sessionListSelectedIndex)?.scrollIntoView({ block: 'nearest' });
+    this.updateRenderedSessionSelection(previousIndex);
+    this.scheduleSessionSelectionIntoView(nextIndex);
   }
 
   private moveSessionSelectionUpOrFocusSearch(): void {
     const visibleIndexes = this.getVisibleSessionIndexes();
 
     if (visibleIndexes.length === 0 || this.sessionListSelectedIndex === visibleIndexes[0]) {
-      this.focusSessionSearchInput();
+      this.focusSessionSearchInput({ reveal: true });
       return;
     }
 
     this.moveSessionSelection(-1);
+  }
+
+  private updateRenderedSessionSelection(previousIndex: number): void {
+    this.updateRenderedSessionItemSelection(previousIndex, false);
+    this.updateRenderedSessionItemSelection(this.sessionListSelectedIndex, true);
+  }
+
+  private updateRenderedSessionItemSelection(index: number, selected: boolean): void {
+    const item = document.getElementById('session-' + index);
+
+    if (!item) {
+      return;
+    }
+
+    item.classList.toggle('sessions__item--active', selected);
+    item.setAttribute('aria-selected', selected ? 'true' : 'false');
+  }
+
+  private scheduleSessionSelectionIntoView(index: number): void {
+    this.pendingSessionScrollIndex = index;
+
+    if (this.pendingSessionScrollFrame !== undefined) {
+      return;
+    }
+
+    this.pendingSessionScrollFrame = requestAnimationFrame(() => {
+      const scrollIndex = this.pendingSessionScrollIndex;
+      this.pendingSessionScrollIndex = undefined;
+      this.pendingSessionScrollFrame = undefined;
+
+      if (scrollIndex === undefined) {
+        return;
+      }
+
+      document.getElementById('session-' + scrollIndex)?.scrollIntoView({ block: 'nearest' });
+    });
+  }
+
+  private cancelPendingSessionSelectionScroll(): void {
+    if (this.pendingSessionScrollFrame !== undefined) {
+      cancelAnimationFrame(this.pendingSessionScrollFrame);
+    }
+
+    this.pendingSessionScrollIndex = undefined;
+    this.pendingSessionScrollFrame = undefined;
   }
 
   private selectSessionIndex(index: number): void {
@@ -773,8 +826,14 @@ export class SessionViewController {
     });
   }
 
-  private focusSessionSearchInput(options: { select?: boolean; selectionStart?: number | null; selectionEnd?: number | null } = {}): void {
+  private focusSessionSearchInput(options: { select?: boolean; selectionStart?: number | null; selectionEnd?: number | null; reveal?: boolean } = {}): void {
     const input = this.options.sessionsElement.querySelector<HTMLInputElement>('.sessions__search-input');
+
+    if (options.reveal) {
+      this.cancelPendingSessionSelectionScroll();
+      this.options.sessionsElement.scrollTop = 0;
+    }
+
     input?.focus({ preventScroll: true });
 
     if (!input) {
