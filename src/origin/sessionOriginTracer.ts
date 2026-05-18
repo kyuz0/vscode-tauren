@@ -1,3 +1,4 @@
+import { existsSync } from 'fs';
 import { readFile } from 'fs/promises';
 import * as path from 'path';
 import { listPiSessions } from '../sessions/piSessionList';
@@ -27,6 +28,12 @@ export type TraceOriginOptions = {
 type SessionCandidate = {
   path: string;
   id?: string;
+  cwd?: string;
+};
+
+type SessionCandidates = {
+  project: SessionCandidate[];
+  all: SessionCandidate[];
 };
 
 type ParsedToolCall = {
@@ -50,10 +57,30 @@ export async function traceOrigin(
   }
 
   const sessions = await getSessionCandidates(options);
+  const selectionInputs = normalizedInputs.filter((input) => input.kind === 'selection');
+  const pathScopedMatch = await traceOriginInSessions(sessions.project, normalizedInputs, { allowContentOnly: false });
+  const earliest = pathScopedMatch
+    ?? await traceOriginInSessions(sessions.project, selectionInputs, { allowContentOnly: true })
+    ?? await traceOriginInSessions(sessions.all, normalizedInputs, { allowContentOnly: false })
+    ?? await traceOriginInSessions(sessions.all, selectionInputs, { allowContentOnly: true });
+
+  if (!earliest) {
+    return undefined;
+  }
+
+  const { timestampMs: _timestampMs, ...result } = earliest;
+  return result;
+}
+
+async function traceOriginInSessions(
+  sessions: SessionCandidate[],
+  inputs: TraceOriginInput[],
+  options: { allowContentOnly: boolean }
+): Promise<(TraceOriginMatch & { timestampMs: number }) | undefined> {
   let earliest: (TraceOriginMatch & { timestampMs: number }) | undefined;
 
   for (const session of sessions) {
-    const match = await traceOriginInSession(session, normalizedInputs);
+    const match = await traceOriginInSession(session, inputs, options);
 
     if (!match) {
       continue;
@@ -64,17 +91,13 @@ export async function traceOrigin(
     }
   }
 
-  if (!earliest) {
-    return undefined;
-  }
-
-  const { timestampMs: _timestampMs, ...result } = earliest;
-  return result;
+  return earliest;
 }
 
-async function getSessionCandidates(options: TraceOriginOptions): Promise<SessionCandidate[]> {
+async function getSessionCandidates(options: TraceOriginOptions): Promise<SessionCandidates> {
   if (options.sessionFiles) {
-    return dedupeSessions(options.sessionFiles.map((sessionPath) => ({ path: sessionPath })));
+    const sessions = dedupeSessions(options.sessionFiles.map((sessionPath) => ({ path: sessionPath })));
+    return { project: sessions, all: sessions };
   }
 
   const [projectSessions, allSessions] = await Promise.all([
@@ -82,10 +105,18 @@ async function getSessionCandidates(options: TraceOriginOptions): Promise<Sessio
     listPiSessions({ env: {} })
   ]);
 
-  return dedupeSessions([...projectSessions, ...allSessions].map((session) => ({
+  const project = dedupeSessions(projectSessions.map((session) => ({
     path: session.path,
-    id: session.id
+    id: session.id,
+    cwd: session.cwd
   })));
+  const all = dedupeSessions([...project, ...allSessions.map((session) => ({
+    path: session.path,
+    id: session.id,
+    cwd: session.cwd
+  }))]);
+
+  return { project, all };
 }
 
 function dedupeSessions(sessions: SessionCandidate[]): SessionCandidate[] {
@@ -108,7 +139,8 @@ function dedupeSessions(sessions: SessionCandidate[]): SessionCandidate[] {
 
 async function traceOriginInSession(
   session: SessionCandidate,
-  inputs: TraceOriginInput[]
+  inputs: TraceOriginInput[],
+  options: { allowContentOnly: boolean }
 ): Promise<(TraceOriginMatch & { timestampMs: number }) | undefined> {
   let content: string;
 
@@ -142,8 +174,12 @@ async function traceOriginInSession(
     }
 
     if (record.type === 'session') {
-      sessionCwd = getString(record.cwd) ?? sessionCwd;
+      sessionCwd = getString(record.cwd) ?? session.cwd ?? sessionCwd;
       sessionId = getString(record.id) ?? sessionId;
+
+      if (sessionCwd && !existsSync(sessionCwd)) {
+        return undefined;
+      }
     }
 
     for (const toolCall of getMutationToolCalls(record)) {
@@ -153,7 +189,7 @@ async function traceOriginInSession(
         continue;
       }
 
-      if (!inputs.some((input) => toolCallMatchesInput(toolCall, filePath, input, sessionCwd))) {
+      if (!inputs.some((input) => toolCallMatchesInput(toolCall, filePath, input, sessionCwd, options))) {
         continue;
       }
 
@@ -216,14 +252,17 @@ function toolCallMatchesInput(
   toolCall: ParsedToolCall,
   filePath: string,
   input: TraceOriginInput,
-  sessionCwd: string | undefined
+  sessionCwd: string | undefined,
+  options: { allowContentOnly: boolean }
 ): boolean {
-  if (!pathsMatch(filePath, input.path, input.absolutePath, sessionCwd)) {
+  const pathMatches = pathsMatch(filePath, input.path, input.absolutePath, sessionCwd);
+
+  if (!pathMatches && (!options.allowContentOnly || input.kind !== 'selection')) {
     return false;
   }
 
   if (input.kind === 'file') {
-    return true;
+    return pathMatches;
   }
 
   const needle = normalizeText(input.text ?? '');
