@@ -4,24 +4,41 @@ import { parseSessionBestEffortFileDiffsFromFile } from './sessionDiffTracker';
 import { sessionDiffScheme } from './sessionDiffUri';
 import type { SessionDiffDocument, SessionFileDiff } from './types';
 
+const retainedDiffViewGenerations = 3;
+const maxRetainedDiffDocuments = 400;
+
+type SessionDiffDocumentContent = {
+  content: string;
+  generation: number;
+};
+
 export class SessionDiffViewer implements vscode.TextDocumentContentProvider, vscode.Disposable {
-  private readonly documents = new Map<string, string>();
-  private readonly providerDisposable: vscode.Disposable;
+  private readonly documents = new Map<string, SessionDiffDocumentContent>();
+  private readonly documentOrder: string[] = [];
+  private readonly disposables: vscode.Disposable[];
   private documentSequence = 0;
+  private diffViewGeneration = 0;
 
   public constructor(
     private readonly showNotification: (message: string, notifyType: string) => void
   ) {
-    this.providerDisposable = vscode.workspace.registerTextDocumentContentProvider(sessionDiffScheme, this);
+    this.disposables = [
+      vscode.workspace.registerTextDocumentContentProvider(sessionDiffScheme, this),
+      vscode.workspace.onDidCloseTextDocument((document) => this.deleteDocumentContent(document.uri))
+    ];
   }
 
   public dispose(): void {
-    this.providerDisposable.dispose();
+    for (const disposable of this.disposables) {
+      disposable.dispose();
+    }
+
     this.documents.clear();
+    this.documentOrder.length = 0;
   }
 
   public provideTextDocumentContent(uri: vscode.Uri): string {
-    return this.documents.get(uri.toString()) ?? '';
+    return this.documents.get(uri.toString())?.content ?? '';
   }
 
   public async showSessionChanges(sessionFile: string, displayName: string): Promise<void> {
@@ -46,24 +63,29 @@ export class SessionDiffViewer implements vscode.TextDocumentContentProvider, vs
 
   private async openMultiFileDiff(displayName: string, fileDiffs: SessionFileDiff[], reconstructed: boolean): Promise<void> {
     const title = reconstructed ? `Tau Changes: ${displayName}` : `Tau Changes: ${displayName} (recorded edits)`;
-    const documents = fileDiffs.map((diff) => this.createDiffDocuments(diff));
+    const generation = ++this.diffViewGeneration;
+    const documents = fileDiffs.map((diff) => this.createDiffDocuments(diff, generation));
     const changesResources = documents.map(({ label, original, modified }) => [label, original.uri, modified.uri]);
 
     try {
-      await vscode.commands.executeCommand('vscode.changes', title, changesResources);
-      return;
-    } catch {
-      await vscode.commands.executeCommand('_workbench.openMultiDiffEditor', {
-        title,
-        resources: documents.map(({ original, modified }) => ({
-          originalUri: original.uri,
-          modifiedUri: modified.uri
-        }))
-      });
+      try {
+        await vscode.commands.executeCommand('vscode.changes', title, changesResources);
+        return;
+      } catch {
+        await vscode.commands.executeCommand('_workbench.openMultiDiffEditor', {
+          title,
+          resources: documents.map(({ original, modified }) => ({
+            originalUri: original.uri,
+            modifiedUri: modified.uri
+          }))
+        });
+      }
+    } finally {
+      this.pruneDocumentContent();
     }
   }
 
-  private createDiffDocuments(diff: SessionFileDiff): { label: vscode.Uri; original: SessionDiffDocument; modified: SessionDiffDocument } {
+  private createDiffDocuments(diff: SessionFileDiff, generation: number): { label: vscode.Uri; original: SessionDiffDocument; modified: SessionDiffDocument } {
     const id = String(++this.documentSequence);
     const normalizedPath = normalizeDiffPath(diff.path || diff.absolutePath);
     const originalUri = vscode.Uri.from({
@@ -77,14 +99,76 @@ export class SessionDiffViewer implements vscode.TextDocumentContentProvider, vs
       path: `/${id}/${normalizedPath}`
     });
 
-    this.documents.set(originalUri.toString(), diff.originalContent);
-    this.documents.set(modifiedUri.toString(), diff.modifiedContent);
+    this.rememberDocumentContent(originalUri, diff.originalContent, generation);
+    this.rememberDocumentContent(modifiedUri, diff.modifiedContent, generation);
 
     return {
       label: vscode.Uri.file(diff.absolutePath),
       original: { uri: originalUri, content: diff.originalContent },
       modified: { uri: modifiedUri, content: diff.modifiedContent }
     };
+  }
+
+  private rememberDocumentContent(uri: vscode.Uri, content: string, generation: number): void {
+    const key = uri.toString();
+
+    if (!this.documents.has(key)) {
+      this.documentOrder.push(key);
+    }
+
+    this.documents.set(key, { content, generation });
+  }
+
+  private deleteDocumentContent(uri: vscode.Uri): void {
+    if (uri.scheme !== sessionDiffScheme) {
+      return;
+    }
+
+    this.documents.delete(uri.toString());
+    this.compactDocumentOrder();
+  }
+
+  private pruneDocumentContent(): void {
+    const openDocuments = new Set(vscode.workspace.textDocuments
+      .filter((document) => document.uri.scheme === sessionDiffScheme)
+      .map((document) => document.uri.toString()));
+    const oldestRetainedGeneration = this.diffViewGeneration - retainedDiffViewGenerations + 1;
+
+    for (const key of this.documentOrder) {
+      const document = this.documents.get(key);
+
+      if (!document || document.generation >= oldestRetainedGeneration || openDocuments.has(key)) {
+        continue;
+      }
+
+      this.documents.delete(key);
+    }
+
+    if (this.documents.size > maxRetainedDiffDocuments) {
+      for (const key of this.documentOrder) {
+        if (this.documents.size <= maxRetainedDiffDocuments) {
+          break;
+        }
+
+        const document = this.documents.get(key);
+
+        if (!document || document.generation === this.diffViewGeneration || openDocuments.has(key)) {
+          continue;
+        }
+
+        this.documents.delete(key);
+      }
+    }
+
+    this.compactDocumentOrder();
+  }
+
+  private compactDocumentOrder(): void {
+    for (let index = this.documentOrder.length - 1; index >= 0; index -= 1) {
+      if (!this.documents.has(this.documentOrder[index])) {
+        this.documentOrder.splice(index, 1);
+      }
+    }
   }
 }
 
