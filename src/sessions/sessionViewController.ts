@@ -61,6 +61,7 @@ type SessionViewControllerOptions = Pick<
   setComposerText: (text: string) => void;
   setCurrentSessionName: (name: string, options: { announce: boolean }) => Promise<void>;
   setSessionHistoryLoading: (value: boolean) => void;
+  hasStartedCurrentSession: () => boolean;
   startNewSession: (options?: { viewMode?: 'chat' | 'sessions' }) => void;
 };
 
@@ -74,6 +75,7 @@ export class SessionViewController {
   private treeError = '';
   private sessionsRefreshSequence = 0;
   private treeRefreshSequence = 0;
+  private readonly fallbackSessionPaths = new Set<string>();
   private sessionFile: string | undefined;
   private sessionName = '';
 
@@ -170,6 +172,7 @@ export class SessionViewController {
     this.treeError = '';
     this.sessionFile = undefined;
     this.sessionName = '';
+    this.fallbackSessionPaths.clear();
     this.sessions = this.sessions.map((session) => ({ ...session, current: false }));
     this.options.onSessionFileChange?.(undefined);
   }
@@ -188,9 +191,9 @@ export class SessionViewController {
         return;
       }
 
-      this.sessions = sessions.map((session) => ({ ...session }));
+      this.sessions = this.mergeCurrentSessionFallback(sessions);
       const currentSession = this.sessions.find((session) => this.sessionFile
-        ? session.path === this.sessionFile
+        ? normalizeSessionPath(session.path) === normalizeSessionPath(this.sessionFile)
         : session.current);
       this.applyCurrentSessionName(currentSession?.name);
     } catch (error) {
@@ -322,6 +325,11 @@ export class SessionViewController {
 
     if (session?.liveStatus === 'running' || (isCurrentSession && this.options.isBusy())) {
       this.options.showNotification('Wait for the session to finish before deleting it.', 'warning');
+      return;
+    }
+
+    if (this.fallbackSessionPaths.has(normalizedPath)) {
+      this.removeFallbackSession(normalizedPath, isCurrentSession);
       return;
     }
 
@@ -510,13 +518,76 @@ export class SessionViewController {
     await this.options.showSessionChanges(session.path, getSessionDisplayName(session, session.path));
   }
 
+  private mergeCurrentSessionFallback(sessions: WebviewSessionItem[]): WebviewSessionItem[] {
+    const sessionFile = this.sessionFile;
+
+    if (!sessionFile) {
+      this.fallbackSessionPaths.clear();
+      return sessions.map((session) => ({ ...session }));
+    }
+
+    const currentPath = normalizeSessionPath(sessionFile);
+    let foundCurrent = false;
+    const merged = sessions.map((session) => {
+      const sessionPath = normalizeSessionPath(session.path);
+      const isCurrent = sessionPath === currentPath;
+      this.fallbackSessionPaths.delete(sessionPath);
+
+      if (!isCurrent) {
+        return session.current ? { ...session, current: false } : { ...session };
+      }
+
+      foundCurrent = true;
+      const currentSession = { ...session, current: true };
+      return this.sessionName && !currentSession.name
+        ? { ...currentSession, name: this.sessionName }
+        : currentSession;
+    });
+
+    if (foundCurrent) {
+      this.fallbackSessionPaths.delete(currentPath);
+      return merged;
+    }
+
+    if (!this.shouldShowCurrentSessionFallback()) {
+      this.fallbackSessionPaths.delete(currentPath);
+      return merged;
+    }
+
+    const fallback = createFallbackSessionItem(sessionFile);
+    this.fallbackSessionPaths.add(currentPath);
+    return [{
+      ...fallback,
+      current: true,
+      isLast: merged.length === 0,
+      name: this.sessionName || undefined,
+      firstMessage: this.sessionName || 'New session'
+    }, ...merged];
+  }
+
+  private shouldShowCurrentSessionFallback(): boolean {
+    return Boolean(this.sessionName || this.options.hasStartedCurrentSession());
+  }
+
+  private removeFallbackSession(normalizedPath: string, isCurrentSession: boolean): void {
+    this.fallbackSessionPaths.delete(normalizedPath);
+    this.sessions = this.sessions.filter((entry) => normalizeSessionPath(entry.path) !== normalizedPath);
+
+    if (isCurrentSession) {
+      this.options.startNewSession({ viewMode: 'sessions' });
+      return;
+    }
+
+    this.options.postState();
+  }
+
   private applySessionNameToCurrentSession(name: string): boolean {
     const nextName = name.trim() || undefined;
     let changed = false;
 
     this.sessions = this.sessions.map((session) => {
       const isCurrent = Boolean(this.sessionFile)
-        ? session.path === this.sessionFile
+        ? normalizeSessionPath(session.path) === normalizeSessionPath(this.sessionFile)
         : session.current;
 
       if (!isCurrent || session.name === nextName) {

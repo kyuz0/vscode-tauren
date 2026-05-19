@@ -651,6 +651,128 @@ suite('PiChatController', () => {
     harness.controller.dispose();
   });
 
+  test('metadata refresh lists named current session before it is readable from disk', async () => {
+    const client = new FakePiClient({
+      state: {
+        model: { provider: 'openai', id: 'gpt-test', reasoning: false },
+        thinkingLevel: 'off',
+        sessionFile: '/sessions/new.jsonl',
+        sessionName: 'Named draft'
+      }
+    });
+    const listedSession: WebviewSessionItem = {
+      path: '/sessions/old.jsonl',
+      id: 'old',
+      cwd: '/workspace',
+      created: '2026-01-01T00:00:00.000Z',
+      modified: '2026-01-01T00:01:00.000Z',
+      messageCount: 1,
+      firstMessage: 'Old question',
+      depth: 0,
+      isLast: true,
+      ancestorContinues: [],
+      current: false
+    };
+    const listSessionFiles: Array<string | undefined> = [];
+    const harness = createControllerHarness([client], {
+      listSessions: async (_cwd, currentSessionFile) => {
+        listSessionFiles.push(currentSessionFile);
+        return [listedSession];
+      }
+    });
+
+    await harness.controller.handleWebviewMessage({ type: 'refreshMetadata' });
+    await flushPromises();
+
+    const state = lastState(harness);
+    const sessions = state.sessions ?? [];
+    assert.deepStrictEqual(listSessionFiles, ['/sessions/new.jsonl']);
+    assert.strictEqual(state.currentSessionFile, '/sessions/new.jsonl');
+    assert.deepStrictEqual(sessions.map((session) => session.path), [
+      '/sessions/new.jsonl',
+      '/sessions/old.jsonl'
+    ]);
+    assert.strictEqual(sessions[0]?.current, true);
+    assert.strictEqual(sessions[0]?.name, 'Named draft');
+    assert.strictEqual(sessions[0]?.firstMessage, 'Named draft');
+    assert.strictEqual(sessions[1]?.current, false);
+    harness.controller.dispose();
+  });
+
+  test('metadata refresh hides unnamed empty current session before it is readable from disk', async () => {
+    const client = new FakePiClient({
+      state: {
+        model: { provider: 'openai', id: 'gpt-test', reasoning: false },
+        thinkingLevel: 'off',
+        sessionFile: '/sessions/new.jsonl'
+      }
+    });
+    const listedSession: WebviewSessionItem = {
+      path: '/sessions/old.jsonl',
+      id: 'old',
+      cwd: '/workspace',
+      created: '2026-01-01T00:00:00.000Z',
+      modified: '2026-01-01T00:01:00.000Z',
+      messageCount: 1,
+      firstMessage: 'Old question',
+      depth: 0,
+      isLast: true,
+      ancestorContinues: [],
+      current: false
+    };
+    const harness = createControllerHarness([client], {
+      listSessions: async () => [listedSession]
+    });
+
+    await harness.controller.handleWebviewMessage({ type: 'refreshMetadata' });
+    await flushPromises();
+
+    const state = lastState(harness);
+    const sessions = state.sessions ?? [];
+    assert.strictEqual(state.currentSessionFile, '/sessions/new.jsonl');
+    assert.deepStrictEqual(sessions.map((session) => session.path), ['/sessions/old.jsonl']);
+    assert.strictEqual(sessions[0]?.current, false);
+    harness.controller.dispose();
+  });
+
+  test('delete removes a named fallback current session without trashing a file', async () => {
+    const client = new FakePiClient({
+      state: {
+        model: { provider: 'openai', id: 'gpt-test', reasoning: false },
+        thinkingLevel: 'off',
+        sessionFile: '/sessions/new.jsonl',
+        sessionName: 'Named draft'
+      }
+    });
+    const nextClient = new FakePiClient({
+      stateResult: createDeferred<PiSessionState>().promise,
+      statsResult: createDeferred<PiSessionStats>().promise,
+      modelsResult: createDeferred<PiModel[]>().promise
+    });
+    const deleted: string[] = [];
+    const harness = createControllerHarness([client, nextClient], {
+      listSessions: async () => [],
+      deleteSession: async (sessionPath) => {
+        deleted.push(sessionPath);
+        return true;
+      }
+    });
+
+    await harness.controller.handleWebviewMessage({ type: 'refreshMetadata' });
+    await flushPromises();
+
+    assert.deepStrictEqual((lastState(harness).sessions ?? []).map((session) => session.path), ['/sessions/new.jsonl']);
+
+    await harness.controller.handleWebviewMessage({ type: 'deleteSession', sessionPath: '/sessions/new.jsonl' });
+    await flushPromises();
+
+    assert.deepStrictEqual(deleted, []);
+    assert.strictEqual(lastState(harness).currentSessionFile, '');
+    assert.deepStrictEqual(lastState(harness).sessions ?? [], []);
+    assert.deepStrictEqual(lastState(harness).messages, []);
+    harness.controller.dispose();
+  });
+
   test('submit passes configured Pi path to the client', async () => {
     const client = new FakePiClient();
     const harness = createControllerHarness([client], { cwd: '/workspace', piPath: 'npx pi' });

@@ -92,6 +92,7 @@ export class PiChatController {
       setSessionHistoryLoading: (value) => {
         this.sessionHistory.setLoading(value);
       },
+      hasStartedCurrentSession: () => !this.session.isEmpty,
       startNewSession: (sessionOptions) => this.startNewSession(sessionOptions)
     });
 
