@@ -160,6 +160,10 @@ window.addEventListener('message', (event) => {
   const wasListView = previousViewMode === 'sessions' || previousViewMode === 'tree';
   const isListView = state.viewMode === 'sessions' || state.viewMode === 'tree';
 
+  if (previousViewMode === 'sessions' && state.viewMode !== 'sessions') {
+    sessionsController.rememberSessionListScrollPosition();
+  }
+
   if (!wasListView && isListView) {
     sessionsController.disableSessionPointerHover();
   }
@@ -170,7 +174,11 @@ window.addEventListener('message', (event) => {
       || previousCurrentSessionFile !== state.currentSessionFile
       || previousSessionCount === 0)
   ) {
-    sessionsController.selectFirstVisibleSession();
+    sessionsController.selectCurrentSessionOrFirstVisible();
+
+    if (previousViewMode !== 'sessions') {
+      sessionsController.restoreSessionListScrollAfterNextRender();
+    }
   }
 
   if (state.viewMode === 'tree' && (previousViewMode !== 'tree' || previousTreeCount === 0)) {

@@ -47,6 +47,8 @@ export class SessionViewController {
   private openSessionListMenuCommandIndex = 0;
   private sessionListNameEditPath: string | undefined;
   private sessionListNameEditInitialValue = '';
+  private sessionListScrollTop: number | undefined;
+  private pendingSessionListScrollRestore = false;
   private pendingSessionScrollIndex: number | undefined;
   private pendingSessionScrollFrame: number | undefined;
   private readonly topControls: TopSessionControls;
@@ -87,7 +89,7 @@ export class SessionViewController {
   public attachEventListeners(): void {
     this.topControls.attachEventListeners();
     this.options.sessionsElement.addEventListener('keydown', (event) => this.handleSessionListKeydown(event));
-    this.options.sessionsElement.addEventListener('pointermove', () => this.enableSessionPointerHover());
+    this.options.sessionsElement.addEventListener('pointermove', (event) => this.handleSessionListPointerMove(event));
     this.options.sessionsElement.addEventListener('click', (event) => this.handleSessionsClick(event));
   }
 
@@ -223,6 +225,11 @@ export class SessionViewController {
     } else if (searchInput) {
       this.focusSessionSearchInput({ select: false, selectionStart: searchSelectionStart, selectionEnd: searchSelectionEnd });
     }
+
+    if (this.pendingSessionListScrollRestore) {
+      this.pendingSessionListScrollRestore = false;
+      this.restoreSessionListScrollPositionOrRevealSelection();
+    }
   }
 
   public renderTree(): void {
@@ -233,8 +240,21 @@ export class SessionViewController {
     this.treeController.selectCurrent();
   }
 
-  public selectFirstVisibleSession(): void {
-    this.sessionListSelectedIndex = this.getVisibleSessionIndexes()[0] ?? 0;
+  public selectCurrentSessionOrFirstVisible(): void {
+    const visibleIndexes = this.getVisibleSessionIndexes();
+    const currentIndex = this.getCurrentSessionIndex();
+
+    this.sessionListSelectedIndex = currentIndex !== undefined && visibleIndexes.includes(currentIndex)
+      ? currentIndex
+      : visibleIndexes[0] ?? 0;
+  }
+
+  public rememberSessionListScrollPosition(): void {
+    this.sessionListScrollTop = this.options.sessionsElement.scrollTop;
+  }
+
+  public restoreSessionListScrollAfterNextRender(): void {
+    this.pendingSessionListScrollRestore = true;
   }
 
   public disableSessionPointerHover(): void {
@@ -351,13 +371,24 @@ export class SessionViewController {
 
   private getCurrentSession(): SessionItem | undefined {
     const state = this.options.getState();
+    const currentIndex = this.getCurrentSessionIndex();
+
+    return currentIndex === undefined ? undefined : state.sessions[currentIndex];
+  }
+
+  private getCurrentSessionIndex(): number | undefined {
+    const state = this.options.getState();
 
     if (!Array.isArray(state.sessions) || state.sessions.length === 0) {
       return undefined;
     }
 
-    return (state.currentSessionFile ? state.sessions.find((session) => session.path === state.currentSessionFile) : undefined)
-      ?? state.sessions.find((session) => session.current);
+    const index = state.currentSessionFile
+      ? state.sessions.findIndex((session) => session.path === state.currentSessionFile)
+      : -1;
+    const fallbackIndex = index >= 0 ? index : state.sessions.findIndex((session) => session.current);
+
+    return fallbackIndex >= 0 ? fallbackIndex : undefined;
   }
 
   private handleSessionListKeydown(event: KeyboardEvent): boolean {
@@ -383,6 +414,7 @@ export class SessionViewController {
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       event.stopPropagation();
+      this.disableSessionPointerHover();
       this.closeSessionItemMenus();
       state.viewMode === 'tree' ? this.treeController.moveSelection(1) : this.moveSessionSelection(1);
       return true;
@@ -391,6 +423,7 @@ export class SessionViewController {
     if (event.key === 'ArrowUp') {
       event.preventDefault();
       event.stopPropagation();
+      this.disableSessionPointerHover();
       this.closeSessionItemMenus();
       state.viewMode === 'tree' ? this.treeController.moveSelection(-1) : this.moveSessionSelectionUpOrFocusSearch();
       return true;
@@ -438,6 +471,41 @@ export class SessionViewController {
 
     this.sessionPointerHoverEnabled = true;
     this.options.sessionsElement.classList.add('sessions--pointer-hover');
+  }
+
+  private handleSessionListPointerMove(event: PointerEvent): void {
+    this.enableSessionPointerHover();
+
+    const state = this.options.getState();
+
+    if (state.viewMode !== 'sessions') {
+      return;
+    }
+
+    const item = eventTargetElement(event)?.closest('.sessions__item');
+
+    if (!(item instanceof HTMLElement) || !this.options.sessionsElement.contains(item)) {
+      return;
+    }
+
+    const index = Number(item.getAttribute('data-index'));
+
+    if (!Number.isInteger(index) || !this.isSessionIndexVisible(index)) {
+      return;
+    }
+
+    const previousIndex = this.sessionListSelectedIndex;
+
+    if (index === previousIndex) {
+      return;
+    }
+
+    if (this.openSessionListMenuIndex !== undefined && this.openSessionListMenuIndex !== index) {
+      this.closeSessionItemMenus();
+    }
+
+    this.sessionListSelectedIndex = index;
+    this.updateRenderedSessionSelection(previousIndex);
   }
 
   private moveSessionSelection(delta: number): void {
@@ -518,6 +586,33 @@ export class SessionViewController {
 
     this.pendingSessionScrollIndex = undefined;
     this.pendingSessionScrollFrame = undefined;
+  }
+
+  private restoreSessionListScrollPositionOrRevealSelection(): void {
+    const scrollTop = this.sessionListScrollTop;
+
+    requestAnimationFrame(() => {
+      if (scrollTop !== undefined) {
+        this.options.sessionsElement.scrollTop = scrollTop;
+      }
+
+      this.revealSelectedSessionIfNeeded();
+    });
+  }
+
+  private revealSelectedSessionIfNeeded(): void {
+    const item = document.getElementById('session-' + this.sessionListSelectedIndex);
+
+    if (!item) {
+      return;
+    }
+
+    const containerRect = this.options.sessionsElement.getBoundingClientRect();
+    const itemRect = item.getBoundingClientRect();
+
+    if (itemRect.top < containerRect.top || itemRect.bottom > containerRect.bottom) {
+      item.scrollIntoView({ block: 'nearest' });
+    }
   }
 
   private selectSessionIndex(index: number): void {

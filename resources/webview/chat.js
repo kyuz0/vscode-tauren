@@ -2804,6 +2804,8 @@
     openSessionListMenuCommandIndex = 0;
     sessionListNameEditPath;
     sessionListNameEditInitialValue = "";
+    sessionListScrollTop;
+    pendingSessionListScrollRestore = false;
     pendingSessionScrollIndex;
     pendingSessionScrollFrame;
     topControls;
@@ -2811,7 +2813,7 @@
     attachEventListeners() {
       this.topControls.attachEventListeners();
       this.options.sessionsElement.addEventListener("keydown", (event) => this.handleSessionListKeydown(event));
-      this.options.sessionsElement.addEventListener("pointermove", () => this.enableSessionPointerHover());
+      this.options.sessionsElement.addEventListener("pointermove", (event) => this.handleSessionListPointerMove(event));
       this.options.sessionsElement.addEventListener("click", (event) => this.handleSessionsClick(event));
     }
     handleWindowClick(target, eventTarget) {
@@ -2920,6 +2922,10 @@
       } else if (searchInput) {
         this.focusSessionSearchInput({ select: false, selectionStart: searchSelectionStart, selectionEnd: searchSelectionEnd });
       }
+      if (this.pendingSessionListScrollRestore) {
+        this.pendingSessionListScrollRestore = false;
+        this.restoreSessionListScrollPositionOrRevealSelection();
+      }
     }
     renderTree() {
       this.treeController.render();
@@ -2927,8 +2933,16 @@
     selectCurrentTreeEntry() {
       this.treeController.selectCurrent();
     }
-    selectFirstVisibleSession() {
-      this.sessionListSelectedIndex = this.getVisibleSessionIndexes()[0] ?? 0;
+    selectCurrentSessionOrFirstVisible() {
+      const visibleIndexes = this.getVisibleSessionIndexes();
+      const currentIndex = this.getCurrentSessionIndex();
+      this.sessionListSelectedIndex = currentIndex !== void 0 && visibleIndexes.includes(currentIndex) ? currentIndex : visibleIndexes[0] ?? 0;
+    }
+    rememberSessionListScrollPosition() {
+      this.sessionListScrollTop = this.options.sessionsElement.scrollTop;
+    }
+    restoreSessionListScrollAfterNextRender() {
+      this.pendingSessionListScrollRestore = true;
     }
     disableSessionPointerHover() {
       this.sessionPointerHoverEnabled = false;
@@ -3019,10 +3033,17 @@
     }
     getCurrentSession() {
       const state2 = this.options.getState();
+      const currentIndex = this.getCurrentSessionIndex();
+      return currentIndex === void 0 ? void 0 : state2.sessions[currentIndex];
+    }
+    getCurrentSessionIndex() {
+      const state2 = this.options.getState();
       if (!Array.isArray(state2.sessions) || state2.sessions.length === 0) {
         return void 0;
       }
-      return (state2.currentSessionFile ? state2.sessions.find((session) => session.path === state2.currentSessionFile) : void 0) ?? state2.sessions.find((session) => session.current);
+      const index = state2.currentSessionFile ? state2.sessions.findIndex((session) => session.path === state2.currentSessionFile) : -1;
+      const fallbackIndex = index >= 0 ? index : state2.sessions.findIndex((session) => session.current);
+      return fallbackIndex >= 0 ? fallbackIndex : void 0;
     }
     handleSessionListKeydown(event) {
       const state2 = this.options.getState();
@@ -3042,6 +3063,7 @@
       if (event.key === "ArrowDown") {
         event.preventDefault();
         event.stopPropagation();
+        this.disableSessionPointerHover();
         this.closeSessionItemMenus();
         state2.viewMode === "tree" ? this.treeController.moveSelection(1) : this.moveSessionSelection(1);
         return true;
@@ -3049,6 +3071,7 @@
       if (event.key === "ArrowUp") {
         event.preventDefault();
         event.stopPropagation();
+        this.disableSessionPointerHover();
         this.closeSessionItemMenus();
         state2.viewMode === "tree" ? this.treeController.moveSelection(-1) : this.moveSessionSelectionUpOrFocusSearch();
         return true;
@@ -3088,6 +3111,30 @@
       }
       this.sessionPointerHoverEnabled = true;
       this.options.sessionsElement.classList.add("sessions--pointer-hover");
+    }
+    handleSessionListPointerMove(event) {
+      this.enableSessionPointerHover();
+      const state2 = this.options.getState();
+      if (state2.viewMode !== "sessions") {
+        return;
+      }
+      const item = eventTargetElement3(event)?.closest(".sessions__item");
+      if (!(item instanceof HTMLElement) || !this.options.sessionsElement.contains(item)) {
+        return;
+      }
+      const index = Number(item.getAttribute("data-index"));
+      if (!Number.isInteger(index) || !this.isSessionIndexVisible(index)) {
+        return;
+      }
+      const previousIndex = this.sessionListSelectedIndex;
+      if (index === previousIndex) {
+        return;
+      }
+      if (this.openSessionListMenuIndex !== void 0 && this.openSessionListMenuIndex !== index) {
+        this.closeSessionItemMenus();
+      }
+      this.sessionListSelectedIndex = index;
+      this.updateRenderedSessionSelection(previousIndex);
     }
     moveSessionSelection(delta) {
       const visibleIndexes = this.getVisibleSessionIndexes();
@@ -3147,6 +3194,26 @@
       }
       this.pendingSessionScrollIndex = void 0;
       this.pendingSessionScrollFrame = void 0;
+    }
+    restoreSessionListScrollPositionOrRevealSelection() {
+      const scrollTop = this.sessionListScrollTop;
+      requestAnimationFrame(() => {
+        if (scrollTop !== void 0) {
+          this.options.sessionsElement.scrollTop = scrollTop;
+        }
+        this.revealSelectedSessionIfNeeded();
+      });
+    }
+    revealSelectedSessionIfNeeded() {
+      const item = document.getElementById("session-" + this.sessionListSelectedIndex);
+      if (!item) {
+        return;
+      }
+      const containerRect = this.options.sessionsElement.getBoundingClientRect();
+      const itemRect = item.getBoundingClientRect();
+      if (itemRect.top < containerRect.top || itemRect.bottom > containerRect.bottom) {
+        item.scrollIntoView({ block: "nearest" });
+      }
     }
     selectSessionIndex(index) {
       const state2 = this.options.getState();
@@ -3751,11 +3818,17 @@
     state = parseWebviewStateMessage(event.data);
     const wasListView = previousViewMode === "sessions" || previousViewMode === "tree";
     const isListView = state.viewMode === "sessions" || state.viewMode === "tree";
+    if (previousViewMode === "sessions" && state.viewMode !== "sessions") {
+      sessionsController.rememberSessionListScrollPosition();
+    }
     if (!wasListView && isListView) {
       sessionsController.disableSessionPointerHover();
     }
     if (state.viewMode === "sessions" && (previousViewMode !== "sessions" || previousCurrentSessionFile !== state.currentSessionFile || previousSessionCount === 0)) {
-      sessionsController.selectFirstVisibleSession();
+      sessionsController.selectCurrentSessionOrFirstVisible();
+      if (previousViewMode !== "sessions") {
+        sessionsController.restoreSessionListScrollAfterNextRender();
+      }
     }
     if (state.viewMode === "tree" && (previousViewMode !== "tree" || previousTreeCount === 0)) {
       sessionsController.selectCurrentTreeEntry();
