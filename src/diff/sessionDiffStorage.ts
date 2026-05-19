@@ -2,6 +2,12 @@ import * as vscode from 'vscode';
 import type { SessionDiffSnapshot } from './types';
 
 const sessionDiffSnapshotsStorageKey = 'tau.sessionDiffSnapshots';
+const maxSessionDiffSnapshots = 50;
+
+type StoredSessionDiffSnapshot = {
+  snapshot: SessionDiffSnapshot;
+  updatedAt: number;
+};
 
 export function createSessionDiffStatsFileWatcher(onChange: () => void): vscode.Disposable {
   const watcher = vscode.workspace.createFileSystemWatcher('**/*');
@@ -24,7 +30,7 @@ export function readSessionDiffSnapshot(
   workspaceState: vscode.Memento | undefined,
   sessionFile: string
 ): SessionDiffSnapshot | undefined {
-  return readSessionDiffSnapshots(workspaceState)[sessionFile];
+  return readStoredSessionDiffSnapshots(workspaceState)[sessionFile]?.snapshot;
 }
 
 export function writeSessionDiffSnapshot(
@@ -36,22 +42,29 @@ export function writeSessionDiffSnapshot(
     return;
   }
 
-  const snapshots = readSessionDiffSnapshots(workspaceState);
-  snapshots[sessionFile] = snapshot;
-  void workspaceState.update(sessionDiffSnapshotsStorageKey, snapshots).then(undefined, () => undefined);
+  const snapshots = readStoredSessionDiffSnapshots(workspaceState);
+  snapshots[sessionFile] = {
+    snapshot,
+    updatedAt: getNextSnapshotUpdatedAt(snapshots)
+  };
+
+  void workspaceState.update(
+    sessionDiffSnapshotsStorageKey,
+    formatStoredSessionDiffSnapshots(pruneSessionDiffSnapshots(snapshots))
+  ).then(undefined, () => undefined);
 }
 
-function readSessionDiffSnapshots(workspaceState: vscode.Memento | undefined): Record<string, SessionDiffSnapshot> {
+function readStoredSessionDiffSnapshots(workspaceState: vscode.Memento | undefined): Record<string, StoredSessionDiffSnapshot> {
   const value = workspaceState?.get<unknown>(sessionDiffSnapshotsStorageKey);
 
   if (!isRecord(value)) {
     return {};
   }
 
-  const snapshots: Record<string, SessionDiffSnapshot> = {};
+  const snapshots: Record<string, StoredSessionDiffSnapshot> = {};
 
   for (const [sessionFile, snapshot] of Object.entries(value)) {
-    const parsed = parseSessionDiffSnapshot(snapshot);
+    const parsed = parseStoredSessionDiffSnapshot(snapshot);
 
     if (parsed) {
       snapshots[sessionFile] = parsed;
@@ -59,6 +72,12 @@ function readSessionDiffSnapshots(workspaceState: vscode.Memento | undefined): R
   }
 
   return snapshots;
+}
+
+function parseStoredSessionDiffSnapshot(value: unknown): StoredSessionDiffSnapshot | undefined {
+  const snapshot = parseSessionDiffSnapshot(value);
+
+  return snapshot ? { snapshot, updatedAt: isRecord(value) ? normalizeTimestamp(value.updatedAt) : 0 } : undefined;
 }
 
 function parseSessionDiffSnapshot(value: unknown): SessionDiffSnapshot | undefined {
@@ -70,6 +89,40 @@ function parseSessionDiffSnapshot(value: unknown): SessionDiffSnapshot | undefin
   const removedLines = normalizeLineCount(value.stats.removedLines);
 
   return { stats: { addedLines, removedLines } };
+}
+
+function pruneSessionDiffSnapshots(
+  snapshots: Record<string, StoredSessionDiffSnapshot>
+): Record<string, StoredSessionDiffSnapshot> {
+  const entries = Object.entries(snapshots)
+    .sort(([leftSessionFile, left], [rightSessionFile, right]) => {
+      const timeSort = right.updatedAt - left.updatedAt;
+      return timeSort === 0 ? leftSessionFile.localeCompare(rightSessionFile) : timeSort;
+    })
+    .slice(0, maxSessionDiffSnapshots);
+
+  return Object.fromEntries(entries);
+}
+
+function formatStoredSessionDiffSnapshots(
+  snapshots: Record<string, StoredSessionDiffSnapshot>
+): Record<string, SessionDiffSnapshot & { updatedAt: number }> {
+  const formatted: Record<string, SessionDiffSnapshot & { updatedAt: number }> = {};
+
+  for (const [sessionFile, stored] of Object.entries(snapshots)) {
+    formatted[sessionFile] = { ...stored.snapshot, updatedAt: stored.updatedAt };
+  }
+
+  return formatted;
+}
+
+function getNextSnapshotUpdatedAt(snapshots: Record<string, StoredSessionDiffSnapshot>): number {
+  const latestStoredTimestamp = Math.max(0, ...Object.values(snapshots).map((snapshot) => snapshot.updatedAt));
+  return Math.max(Date.now(), latestStoredTimestamp + 1);
+}
+
+function normalizeTimestamp(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
 }
 
 function normalizeLineCount(value: unknown): number {
