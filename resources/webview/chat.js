@@ -2026,14 +2026,16 @@
     }
     syncBusyStatus() {
       const state2 = this.options.getState();
-      this.options.busyStatusElement.hidden = !state2.busy;
       if (!state2.busy) {
+        this.options.busyStatusElement.hidden = true;
+        this.options.busyStatusTextElement.textContent = "";
         return;
       }
       const nextText = this.getBusyStatusText();
       if (this.options.busyStatusTextElement.textContent !== nextText) {
         this.options.busyStatusTextElement.textContent = nextText;
       }
+      this.options.busyStatusElement.hidden = false;
     }
     handleChatPageScroll(event) {
       const state2 = this.options.getState();
@@ -2117,6 +2119,9 @@
       }
       const empty = document.createElement("p");
       empty.className = "empty-state empty-state--loading";
+      empty.setAttribute("role", "status");
+      empty.setAttribute("aria-live", "polite");
+      empty.setAttribute("aria-atomic", "true");
       const spinner = document.createElement("span");
       spinner.className = "status__spinner";
       spinner.setAttribute("aria-hidden", "true");
@@ -3936,6 +3941,9 @@
   var busyStatusElement = document.createElement("div");
   busyStatusElement.className = "status";
   busyStatusElement.hidden = true;
+  busyStatusElement.setAttribute("role", "status");
+  busyStatusElement.setAttribute("aria-live", "polite");
+  busyStatusElement.setAttribute("aria-atomic", "true");
   var busyStatusSpinnerElement = document.createElement("span");
   busyStatusSpinnerElement.className = "status__spinner";
   busyStatusSpinnerElement.setAttribute("aria-hidden", "true");

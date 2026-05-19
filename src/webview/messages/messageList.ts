@@ -64,9 +64,10 @@ export class MessageListController {
 
   public syncBusyStatus(): void {
     const state = this.options.getState();
-    this.options.busyStatusElement.hidden = !state.busy;
 
     if (!state.busy) {
+      this.options.busyStatusElement.hidden = true;
+      this.options.busyStatusTextElement.textContent = '';
       return;
     }
 
@@ -75,6 +76,8 @@ export class MessageListController {
     if (this.options.busyStatusTextElement.textContent !== nextText) {
       this.options.busyStatusTextElement.textContent = nextText;
     }
+
+    this.options.busyStatusElement.hidden = false;
   }
 
   public handleChatPageScroll(event: KeyboardEvent): boolean {
@@ -187,6 +190,9 @@ export class MessageListController {
 
     const empty = document.createElement('p');
     empty.className = 'empty-state empty-state--loading';
+    empty.setAttribute('role', 'status');
+    empty.setAttribute('aria-live', 'polite');
+    empty.setAttribute('aria-atomic', 'true');
     const spinner = document.createElement('span');
     spinner.className = 'status__spinner';
     spinner.setAttribute('aria-hidden', 'true');
