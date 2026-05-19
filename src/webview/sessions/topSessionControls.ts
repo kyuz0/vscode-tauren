@@ -1,3 +1,4 @@
+import { formatRelativeTime } from './sessionFormat';
 import type { WebviewState } from '../types';
 
 type PostMessage = (message: unknown) => void;
@@ -7,6 +8,7 @@ type TopSessionControlsOptions = {
   postMessage: PostMessage;
   toolbarTitleElement: HTMLElement;
   toolbarTitleTextElement: HTMLElement;
+  toolbarTimestampElement: HTMLElement;
   sessionNameInputElement: HTMLInputElement;
   sessionToggleButton: HTMLButtonElement;
   sessionMenuWrapElement: HTMLElement;
@@ -23,6 +25,7 @@ type TopSessionControlsOptions = {
   getCurrentSessionTitle: () => string;
   getCurrentSessionName: () => string;
   getCurrentSessionPath: () => string;
+  getCurrentSessionTimestamp: () => string;
 };
 
 export class TopSessionControls {
@@ -92,13 +95,17 @@ export class TopSessionControls {
   public syncForRender(isListView: boolean): void {
     const state = this.options.getState();
     const toolbarTitle = state.viewMode === 'sessions' ? 'Sessions' : state.viewMode === 'tree' ? 'Session tree' : this.options.getCurrentSessionTitle();
+    const toolbarTimestamp = isListView ? '' : formatRelativeTime(this.options.getCurrentSessionTimestamp());
+    const toolbarTitleTooltip = [toolbarTitle, toolbarTimestamp].filter(Boolean).join(' · ');
 
     if ((isListView || state.busy) && this.sessionNameEditing) {
       this.cancelSessionNameEdit();
     }
 
     this.options.toolbarTitleTextElement.textContent = toolbarTitle;
-    this.options.toolbarTitleElement.title = toolbarTitle;
+    this.options.toolbarTimestampElement.textContent = toolbarTimestamp;
+    this.options.toolbarTimestampElement.hidden = this.sessionNameEditing || !toolbarTimestamp;
+    this.options.toolbarTitleElement.title = toolbarTitleTooltip;
     this.options.toolbarTitleElement.classList.toggle('pi-toolbar__title--editing', this.sessionNameEditing);
     this.options.toolbarTitleTextElement.hidden = this.sessionNameEditing;
     this.options.sessionNameInputElement.hidden = !this.sessionNameEditing;
@@ -225,6 +232,7 @@ export class TopSessionControls {
     const state = this.options.getState();
     this.options.toolbarTitleElement.classList.toggle('pi-toolbar__title--editing', this.sessionNameEditing);
     this.options.toolbarTitleTextElement.hidden = this.sessionNameEditing;
+    this.options.toolbarTimestampElement.hidden = this.sessionNameEditing || !this.options.toolbarTimestampElement.textContent;
     this.options.sessionNameInputElement.hidden = !this.sessionNameEditing;
     this.options.sessionMenuButton.disabled = state.busy || this.sessionNameEditing;
   }

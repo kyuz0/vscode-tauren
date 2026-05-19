@@ -47,7 +47,7 @@ function sanitizeSessionTitle(value: unknown): string {
     .trim();
 }
 
-function formatRelativeTime(value: string): string {
+export function formatRelativeTime(value: string): string {
   if (typeof value !== 'string' || value.length === 0) {
     return '';
   }

@@ -20,6 +20,7 @@ type OpenSession = {
 
 export class TauSessionManager {
   private readonly sessions: OpenSession[] = [];
+  private sessionCatalog: WebviewSessionItem[] = [];
   private activeSessionId = '';
   private sessionSequence = 0;
 
@@ -181,6 +182,9 @@ export class TauSessionManager {
     const nextSessionFile = getSessionFile(message.currentSessionFile);
     const resetToEmptySession = Boolean(previousSessionFile) && !nextSessionFile && message.messages.length === 0;
     session.state = message;
+    if (message.sessions && message.sessions.length > 0) {
+      this.sessionCatalog = message.sessions;
+    }
     session.sessionFile = nextSessionFile;
     session.status = getStatus(message, session.status);
     session.title = getOpenSessionTitle(message, resetToEmptySession ? 'New session' : session.title);
@@ -224,9 +228,11 @@ export class TauSessionManager {
     const active = this.active();
     const state = active.state ?? createEmptyState();
 
+    const sessions = state.sessions && state.sessions.length > 0 ? state.sessions : this.sessionCatalog;
+
     this.options.postState({
       ...state,
-      sessions: augmentSessions(state.sessions ?? [], this.sessions),
+      sessions: augmentSessions(sessions ?? [], this.sessions),
       currentSessionName: state.currentSessionName || active.title,
       outputColors: this.options.getOutputColors?.() ?? true
     });

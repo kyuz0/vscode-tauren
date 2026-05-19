@@ -57,6 +57,20 @@ suite('TauSessionManager', () => {
     harness.manager.dispose();
   });
 
+  test('keeps session list data after selecting an unopened session', async () => {
+    const harness = createManagerHarness([new FakePiClient({ state: { sessionFile: '/sessions/two.jsonl' } })], {
+      listSessions: async (_cwd, currentSessionFile) => createSessionItems(currentSessionFile)
+    });
+
+    await harness.manager.handleWebviewMessage({ type: 'showSessions' });
+    await harness.manager.handleWebviewMessage({ type: 'selectSession', sessionPath: '/sessions/two.jsonl' });
+    await flushPromises();
+
+    assert.strictEqual(lastState(harness).currentSessionFile, '/sessions/two.jsonl');
+    assert.strictEqual(findSession(lastState(harness), '/sessions/two.jsonl')?.modified, '2026-01-01T00:01:00.000Z');
+    harness.manager.dispose();
+  });
+
   test('shows restored per-session diff stats when selecting a resumed session', async () => {
     const sessionPath = '/sessions/resumed.jsonl';
     const harness = createManagerHarness([new FakePiClient({ state: { sessionFile: sessionPath } })], {

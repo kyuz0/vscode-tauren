@@ -119,7 +119,9 @@ const toolbarStyles = /* css */ `    .pi-toolbar {
 
     .pi-toolbar__title {
       position: relative;
-      display: block;
+      display: flex;
+      align-items: center;
+      gap: 5px;
       flex: 1 1 0;
       width: 0;
       min-width: 0;
@@ -137,18 +139,30 @@ const toolbarStyles = /* css */ `    .pi-toolbar {
       font-weight: 700;
       line-height: 26px;
       text-align: left;
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
 
     .pi-toolbar__title-text {
       display: block;
-      width: 100%;
+      flex: 0 1 auto;
       min-width: 0;
-      max-width: 100%;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    .pi-toolbar__timestamp {
+      display: block;
+      flex: 0 0 auto;
+      color: var(--vscode-descriptionForeground);
+      font-weight: 500;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .pi-toolbar__timestamp[hidden] {
+      display: none;
     }
 
     .pi-toolbar__title-input {

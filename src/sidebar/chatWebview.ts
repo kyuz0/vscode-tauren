@@ -219,7 +219,7 @@ ${chatWebviewStyles}
           <path d="M11.25 4.5L6.75 9L11.25 13.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
-      <div class="pi-toolbar__title"><span class="pi-toolbar__title-text">Pi</span><input class="pi-toolbar__title-input" type="text" aria-label="Session name" spellcheck="false" hidden></div>
+      <div class="pi-toolbar__title"><span class="pi-toolbar__title-text">Pi</span><span class="pi-toolbar__timestamp" hidden></span><input class="pi-toolbar__title-input" type="text" aria-label="Session name" spellcheck="false" hidden></div>
       <div class="pi-toolbar__menu-wrap">
         <button class="pi-toolbar__menu-button" type="button" aria-label="Session commands" title="Session commands" aria-haspopup="menu" aria-expanded="false">
           <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">

@@ -22,6 +22,7 @@ export type SessionViewControllerOptions = {
   sessionsElement: HTMLElement;
   toolbarTitleElement: HTMLElement;
   toolbarTitleTextElement: HTMLElement;
+  toolbarTimestampElement: HTMLElement;
   sessionNameInputElement: HTMLInputElement;
   sessionToggleButton: HTMLButtonElement;
   sessionMenuWrapElement: HTMLElement;
@@ -62,6 +63,7 @@ export class SessionViewController {
       postMessage: options.postMessage,
       toolbarTitleElement: options.toolbarTitleElement,
       toolbarTitleTextElement: options.toolbarTitleTextElement,
+      toolbarTimestampElement: options.toolbarTimestampElement,
       sessionNameInputElement: options.sessionNameInputElement,
       sessionToggleButton: options.sessionToggleButton,
       sessionMenuWrapElement: options.sessionMenuWrapElement,
@@ -77,7 +79,8 @@ export class SessionViewController {
       runSessionSlashCommand: options.runSessionSlashCommand,
       getCurrentSessionTitle: () => this.getCurrentSessionTitle(),
       getCurrentSessionName: () => this.getCurrentSessionName(),
-      getCurrentSessionPath: () => this.getCurrentSessionPath()
+      getCurrentSessionPath: () => this.getCurrentSessionPath(),
+      getCurrentSessionTimestamp: () => this.getCurrentSessionTimestamp()
     });
   }
 
@@ -995,6 +998,10 @@ export class SessionViewController {
   private getCurrentSessionPath(): string {
     const state = this.options.getState();
     return (this.getCurrentSession()?.path ?? state.currentSessionFile ?? '').trim();
+  }
+
+  private getCurrentSessionTimestamp(): string {
+    return this.getCurrentSession()?.modified ?? '';
   }
 
 }

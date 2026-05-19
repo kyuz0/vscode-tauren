@@ -1006,6 +1006,7 @@
       viewElement: queryRequired(".pi-view"),
       toolbarTitleElement: queryRequired(".pi-toolbar__title"),
       toolbarTitleTextElement: queryRequired(".pi-toolbar__title-text"),
+      toolbarTimestampElement: queryRequired(".pi-toolbar__timestamp"),
       sessionNameInputElement: queryRequired(".pi-toolbar__title-input"),
       sessionToggleButton: queryRequired(".pi-toolbar__sessions"),
       sessionMenuWrapElement: queryRequired(".pi-toolbar__menu-wrap"),
@@ -2534,11 +2535,15 @@
     syncForRender(isListView) {
       const state2 = this.options.getState();
       const toolbarTitle = state2.viewMode === "sessions" ? "Sessions" : state2.viewMode === "tree" ? "Session tree" : this.options.getCurrentSessionTitle();
+      const toolbarTimestamp = isListView ? "" : formatRelativeTime(this.options.getCurrentSessionTimestamp());
+      const toolbarTitleTooltip = [toolbarTitle, toolbarTimestamp].filter(Boolean).join(" \xB7 ");
       if ((isListView || state2.busy) && this.sessionNameEditing) {
         this.cancelSessionNameEdit();
       }
       this.options.toolbarTitleTextElement.textContent = toolbarTitle;
-      this.options.toolbarTitleElement.title = toolbarTitle;
+      this.options.toolbarTimestampElement.textContent = toolbarTimestamp;
+      this.options.toolbarTimestampElement.hidden = this.sessionNameEditing || !toolbarTimestamp;
+      this.options.toolbarTitleElement.title = toolbarTitleTooltip;
       this.options.toolbarTitleElement.classList.toggle("pi-toolbar__title--editing", this.sessionNameEditing);
       this.options.toolbarTitleTextElement.hidden = this.sessionNameEditing;
       this.options.sessionNameInputElement.hidden = !this.sessionNameEditing;
@@ -2640,6 +2645,7 @@
       const state2 = this.options.getState();
       this.options.toolbarTitleElement.classList.toggle("pi-toolbar__title--editing", this.sessionNameEditing);
       this.options.toolbarTitleTextElement.hidden = this.sessionNameEditing;
+      this.options.toolbarTimestampElement.hidden = this.sessionNameEditing || !this.options.toolbarTimestampElement.textContent;
       this.options.sessionNameInputElement.hidden = !this.sessionNameEditing;
       this.options.sessionMenuButton.disabled = state2.busy || this.sessionNameEditing;
     }
@@ -2737,6 +2743,7 @@
         postMessage: options.postMessage,
         toolbarTitleElement: options.toolbarTitleElement,
         toolbarTitleTextElement: options.toolbarTitleTextElement,
+        toolbarTimestampElement: options.toolbarTimestampElement,
         sessionNameInputElement: options.sessionNameInputElement,
         sessionToggleButton: options.sessionToggleButton,
         sessionMenuWrapElement: options.sessionMenuWrapElement,
@@ -2752,7 +2759,8 @@
         runSessionSlashCommand: options.runSessionSlashCommand,
         getCurrentSessionTitle: () => this.getCurrentSessionTitle(),
         getCurrentSessionName: () => this.getCurrentSessionName(),
-        getCurrentSessionPath: () => this.getCurrentSessionPath()
+        getCurrentSessionPath: () => this.getCurrentSessionPath(),
+        getCurrentSessionTimestamp: () => this.getCurrentSessionTimestamp()
       });
     }
     options;
@@ -3484,6 +3492,9 @@
       const state2 = this.options.getState();
       return (this.getCurrentSession()?.path ?? state2.currentSessionFile ?? "").trim();
     }
+    getCurrentSessionTimestamp() {
+      return this.getCurrentSession()?.modified ?? "";
+    }
   };
 
   // src/webview/state.ts
@@ -3576,6 +3587,7 @@
     viewElement,
     toolbarTitleElement,
     toolbarTitleTextElement,
+    toolbarTimestampElement,
     sessionNameInputElement,
     sessionToggleButton,
     sessionMenuWrapElement,
@@ -3665,6 +3677,7 @@
     sessionsElement,
     toolbarTitleElement,
     toolbarTitleTextElement,
+    toolbarTimestampElement,
     sessionNameInputElement,
     sessionToggleButton,
     sessionMenuWrapElement,
