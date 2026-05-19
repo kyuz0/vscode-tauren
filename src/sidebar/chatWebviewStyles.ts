@@ -960,7 +960,7 @@ const messageStyles = /* css */ `    .message {
 
     .message__actions {
       display: flex;
-      justify-content: flex-start;
+      justify-content: flex-end;
       margin-top: 6px;
     }
 
