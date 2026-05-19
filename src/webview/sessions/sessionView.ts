@@ -47,6 +47,9 @@ export class SessionViewController {
   private openSessionListMenuCommandIndex = 0;
   private sessionListNameEditPath: string | undefined;
   private sessionListNameEditInitialValue = '';
+  private sessionListNameEditValue = '';
+  private sessionListNameEditShouldSelect = false;
+  private suppressSessionListNameInputBlur = false;
   private sessionListScrollTop: number | undefined;
   private pendingSessionListScrollRestore = false;
   private pendingSessionScrollIndex: number | undefined;
@@ -137,6 +140,10 @@ export class SessionViewController {
         return true;
       }
 
+      if (isTextInputShortcut(event)) {
+        return false;
+      }
+
       event.stopPropagation();
       return true;
     }
@@ -161,14 +168,22 @@ export class SessionViewController {
   public renderSessions(): void {
     const state = this.options.getState();
     const searchInput = this.isSessionSearchFocused() ? document.activeElement as HTMLInputElement : undefined;
+    const nameInput = this.isSessionListNameInputFocused() ? document.activeElement as HTMLInputElement : undefined;
     const selectedIndex = searchInput ? -1 : this.sessionListSelectedIndex;
     const searchSelectionStart = searchInput?.selectionStart ?? null;
     const searchSelectionEnd = searchInput?.selectionEnd ?? null;
+    const nameSelectionStart = nameInput?.selectionStart ?? null;
+    const nameSelectionEnd = nameInput?.selectionEnd ?? null;
+    if (nameInput) {
+      this.sessionListNameEditValue = nameInput.value;
+    }
     const count = Array.isArray(state.sessions) ? state.sessions.length : 0;
     const visibleIndexes = this.getVisibleSessionIndexes();
     const filtersActive = this.hasActiveSessionListFilters();
     this.sessionListSelectedIndex = ensureVisibleSessionSelection(this.sessionListSelectedIndex, visibleIndexes);
+    this.suppressSessionListNameInputBlur = Boolean(this.sessionListNameEditPath);
     this.options.sessionsElement.replaceChildren();
+    this.suppressSessionListNameInputBlur = false;
 
     const search = this.createSessionSearchElement();
     this.options.sessionsElement.append(search);
@@ -207,10 +222,11 @@ export class SessionViewController {
           index,
           selectedIndex,
           nameEditPath: this.sessionListNameEditPath,
-          nameEditInitialValue: this.sessionListNameEditInitialValue,
+          nameEditValue: this.sessionListNameEditValue,
           openMenuIndex: this.openSessionListMenuIndex,
           canRunSessionItemCommand: (session, command) => this.canRunSessionItemCommand(session, command),
-          onNameInputBlur: () => this.cancelSessionListNameEdit(),
+          onNameInputInput: (value) => this.updateSessionListNameEditValue(value),
+          onNameInputBlur: () => this.handleSessionListNameInputBlur(),
           onCommandActivate: (commandIndex, button) => {
             this.openSessionListMenuCommandIndex = commandIndex;
             this.setSessionMenuItemHover(button, true);
@@ -221,7 +237,9 @@ export class SessionViewController {
     }
 
     if (this.sessionListNameEditPath) {
-      requestAnimationFrame(() => this.focusSessionListNameInput());
+      const select = this.sessionListNameEditShouldSelect;
+      this.sessionListNameEditShouldSelect = false;
+      requestAnimationFrame(() => this.focusSessionListNameInput({ select, selectionStart: nameSelectionStart, selectionEnd: nameSelectionEnd }));
     } else if (searchInput) {
       this.focusSessionSearchInput({ select: false, selectionStart: searchSelectionStart, selectionEnd: searchSelectionEnd });
     }
@@ -265,6 +283,8 @@ export class SessionViewController {
   public stopSessionListNameEdit(): void {
     this.sessionListNameEditPath = undefined;
     this.sessionListNameEditInitialValue = '';
+    this.sessionListNameEditValue = '';
+    this.sessionListNameEditShouldSelect = false;
   }
 
   public isSessionListNameEditing(): boolean {
@@ -274,6 +294,11 @@ export class SessionViewController {
   public isSessionSearchFocused(): boolean {
     return document.activeElement instanceof HTMLInputElement
       && document.activeElement.classList.contains('sessions__search-input');
+  }
+
+  public isSessionListNameInputFocused(): boolean {
+    return document.activeElement instanceof HTMLInputElement
+      && document.activeElement.classList.contains('sessions__name-input');
   }
 
   public isSessionListNameEditingMissing(): boolean {
@@ -394,7 +419,9 @@ export class SessionViewController {
   private handleSessionListKeydown(event: KeyboardEvent): boolean {
     const state = this.options.getState();
 
-    if (eventTargetElement(event)?.closest('.sessions__search-input')) {
+    const target = eventTargetElement(event);
+
+    if (target?.closest('.sessions__search-input, .sessions__name-input')) {
       return false;
     }
 
@@ -813,8 +840,14 @@ export class SessionViewController {
     this.sessionListSelectedIndex = this.clampSessionIndex(index);
     this.sessionListNameEditPath = session.path;
     this.sessionListNameEditInitialValue = session.name?.trim() ?? '';
+    this.sessionListNameEditValue = this.sessionListNameEditInitialValue;
+    this.sessionListNameEditShouldSelect = true;
     this.closeSessionItemMenus();
     this.renderSessions();
+  }
+
+  private updateSessionListNameEditValue(value: string): void {
+    this.sessionListNameEditValue = value;
   }
 
   private commitSessionListNameEdit(name: string): void {
@@ -849,10 +882,30 @@ export class SessionViewController {
     }
   }
 
-  private focusSessionListNameInput(): void {
+  private handleSessionListNameInputBlur(): void {
+    if (this.suppressSessionListNameInputBlur) {
+      return;
+    }
+
+    this.cancelSessionListNameEdit();
+  }
+
+  private focusSessionListNameInput(options: { select?: boolean; selectionStart?: number | null; selectionEnd?: number | null } = {}): void {
     const input = this.options.sessionsElement.querySelector<HTMLInputElement>('.sessions__name-input');
     input?.focus({ preventScroll: true });
-    input?.select();
+
+    if (!input) {
+      return;
+    }
+
+    if (options.select) {
+      input.select();
+      return;
+    }
+
+    if (options.selectionStart !== null && options.selectionStart !== undefined) {
+      input.setSelectionRange(options.selectionStart, options.selectionEnd ?? options.selectionStart);
+    }
   }
 
   private createSessionSearchElement(): HTMLElement {
@@ -1107,4 +1160,13 @@ export class SessionViewController {
     return this.getCurrentSession()?.modified ?? '';
   }
 
+}
+
+function isTextInputShortcut(event: KeyboardEvent): boolean {
+  if (event.altKey || (!event.ctrlKey && !event.metaKey)) {
+    return false;
+  }
+
+  const key = event.key.toLowerCase();
+  return key === 'a' || key === 'c' || key === 'v' || key === 'x' || key === 'z' || key === 'y';
 }

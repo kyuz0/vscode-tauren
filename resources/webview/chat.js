@@ -2360,9 +2360,10 @@
     const input = document.createElement("input");
     input.className = "sessions__name-input";
     input.type = "text";
-    input.value = options.nameEditInitialValue;
+    input.value = options.nameEditValue;
     input.placeholder = getSessionDisplayName(options.session);
     input.setAttribute("aria-label", "Session name");
+    input.addEventListener("input", () => options.onNameInputInput(input.value));
     input.addEventListener("click", (event) => event.stopPropagation());
     input.addEventListener("blur", options.onNameInputBlur);
     return input;
@@ -2849,6 +2850,9 @@
     openSessionListMenuCommandIndex = 0;
     sessionListNameEditPath;
     sessionListNameEditInitialValue = "";
+    sessionListNameEditValue = "";
+    sessionListNameEditShouldSelect = false;
+    suppressSessionListNameInputBlur = false;
     sessionListScrollTop;
     pendingSessionListScrollRestore = false;
     pendingSessionScrollIndex;
@@ -2895,6 +2899,9 @@
           this.cancelSessionListNameEdit({ focusList: true });
           return true;
         }
+        if (isTextInputShortcut(event)) {
+          return false;
+        }
         event.stopPropagation();
         return true;
       }
@@ -2914,14 +2921,22 @@
     renderSessions() {
       const state2 = this.options.getState();
       const searchInput = this.isSessionSearchFocused() ? document.activeElement : void 0;
+      const nameInput = this.isSessionListNameInputFocused() ? document.activeElement : void 0;
       const selectedIndex = searchInput ? -1 : this.sessionListSelectedIndex;
       const searchSelectionStart = searchInput?.selectionStart ?? null;
       const searchSelectionEnd = searchInput?.selectionEnd ?? null;
+      const nameSelectionStart = nameInput?.selectionStart ?? null;
+      const nameSelectionEnd = nameInput?.selectionEnd ?? null;
+      if (nameInput) {
+        this.sessionListNameEditValue = nameInput.value;
+      }
       const count = Array.isArray(state2.sessions) ? state2.sessions.length : 0;
       const visibleIndexes = this.getVisibleSessionIndexes();
       const filtersActive = this.hasActiveSessionListFilters();
       this.sessionListSelectedIndex = ensureVisibleSessionSelection(this.sessionListSelectedIndex, visibleIndexes);
+      this.suppressSessionListNameInputBlur = Boolean(this.sessionListNameEditPath);
       this.options.sessionsElement.replaceChildren();
+      this.suppressSessionListNameInputBlur = false;
       const search = this.createSessionSearchElement();
       this.options.sessionsElement.append(search);
       const header = document.createElement("div");
@@ -2950,10 +2965,11 @@
             index,
             selectedIndex,
             nameEditPath: this.sessionListNameEditPath,
-            nameEditInitialValue: this.sessionListNameEditInitialValue,
+            nameEditValue: this.sessionListNameEditValue,
             openMenuIndex: this.openSessionListMenuIndex,
             canRunSessionItemCommand: (session, command) => this.canRunSessionItemCommand(session, command),
-            onNameInputBlur: () => this.cancelSessionListNameEdit(),
+            onNameInputInput: (value) => this.updateSessionListNameEditValue(value),
+            onNameInputBlur: () => this.handleSessionListNameInputBlur(),
             onCommandActivate: (commandIndex, button) => {
               this.openSessionListMenuCommandIndex = commandIndex;
               this.setSessionMenuItemHover(button, true);
@@ -2963,7 +2979,9 @@
         }
       }
       if (this.sessionListNameEditPath) {
-        requestAnimationFrame(() => this.focusSessionListNameInput());
+        const select = this.sessionListNameEditShouldSelect;
+        this.sessionListNameEditShouldSelect = false;
+        requestAnimationFrame(() => this.focusSessionListNameInput({ select, selectionStart: nameSelectionStart, selectionEnd: nameSelectionEnd }));
       } else if (searchInput) {
         this.focusSessionSearchInput({ select: false, selectionStart: searchSelectionStart, selectionEnd: searchSelectionEnd });
       }
@@ -2996,12 +3014,17 @@
     stopSessionListNameEdit() {
       this.sessionListNameEditPath = void 0;
       this.sessionListNameEditInitialValue = "";
+      this.sessionListNameEditValue = "";
+      this.sessionListNameEditShouldSelect = false;
     }
     isSessionListNameEditing() {
       return Boolean(this.sessionListNameEditPath);
     }
     isSessionSearchFocused() {
       return document.activeElement instanceof HTMLInputElement && document.activeElement.classList.contains("sessions__search-input");
+    }
+    isSessionListNameInputFocused() {
+      return document.activeElement instanceof HTMLInputElement && document.activeElement.classList.contains("sessions__name-input");
     }
     isSessionListNameEditingMissing() {
       const state2 = this.options.getState();
@@ -3092,7 +3115,8 @@
     }
     handleSessionListKeydown(event) {
       const state2 = this.options.getState();
-      if (eventTargetElement3(event)?.closest(".sessions__search-input")) {
+      const target = eventTargetElement3(event);
+      if (target?.closest(".sessions__search-input, .sessions__name-input")) {
         return false;
       }
       if (state2.viewMode !== "sessions" && state2.viewMode !== "tree") {
@@ -3413,8 +3437,13 @@
       this.sessionListSelectedIndex = this.clampSessionIndex(index);
       this.sessionListNameEditPath = session.path;
       this.sessionListNameEditInitialValue = session.name?.trim() ?? "";
+      this.sessionListNameEditValue = this.sessionListNameEditInitialValue;
+      this.sessionListNameEditShouldSelect = true;
       this.closeSessionItemMenus();
       this.renderSessions();
+    }
+    updateSessionListNameEditValue(value) {
+      this.sessionListNameEditValue = value;
     }
     commitSessionListNameEdit(name) {
       const sessionPath = this.sessionListNameEditPath;
@@ -3440,10 +3469,25 @@
         requestAnimationFrame(() => this.options.sessionsElement.focus({ preventScroll: true }));
       }
     }
-    focusSessionListNameInput() {
+    handleSessionListNameInputBlur() {
+      if (this.suppressSessionListNameInputBlur) {
+        return;
+      }
+      this.cancelSessionListNameEdit();
+    }
+    focusSessionListNameInput(options = {}) {
       const input = this.options.sessionsElement.querySelector(".sessions__name-input");
       input?.focus({ preventScroll: true });
-      input?.select();
+      if (!input) {
+        return;
+      }
+      if (options.select) {
+        input.select();
+        return;
+      }
+      if (options.selectionStart !== null && options.selectionStart !== void 0) {
+        input.setSelectionRange(options.selectionStart, options.selectionEnd ?? options.selectionStart);
+      }
     }
     createSessionSearchElement() {
       const wrap = document.createElement("div");
@@ -3647,6 +3691,13 @@
       return this.getCurrentSession()?.modified ?? "";
     }
   };
+  function isTextInputShortcut(event) {
+    if (event.altKey || !event.ctrlKey && !event.metaKey) {
+      return false;
+    }
+    const key = event.key.toLowerCase();
+    return key === "a" || key === "c" || key === "v" || key === "x" || key === "z" || key === "y";
+  }
 
   // src/webview/state.ts
   var initialWebviewState = {

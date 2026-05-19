@@ -11,9 +11,10 @@ export type CreateSessionItemElementOptions = {
   index: number;
   selectedIndex: number;
   nameEditPath: string | undefined;
-  nameEditInitialValue: string;
+  nameEditValue: string;
   openMenuIndex: number | undefined;
   canRunSessionItemCommand: (session: SessionItem, command?: SessionItemCommand) => boolean;
+  onNameInputInput: (value: string) => void;
   onNameInputBlur: () => void;
   onCommandActivate: (commandIndex: number, button: HTMLButtonElement) => void;
   onCommandHover: (button: HTMLButtonElement, hovered: boolean) => void;
@@ -96,9 +97,10 @@ function createSessionListNameInput(options: CreateSessionItemElementOptions): H
   const input = document.createElement('input');
   input.className = 'sessions__name-input';
   input.type = 'text';
-  input.value = options.nameEditInitialValue;
+  input.value = options.nameEditValue;
   input.placeholder = getSessionDisplayName(options.session);
   input.setAttribute('aria-label', 'Session name');
+  input.addEventListener('input', () => options.onNameInputInput(input.value));
   input.addEventListener('click', (event) => event.stopPropagation());
   input.addEventListener('blur', options.onNameInputBlur);
   return input;
