@@ -106,7 +106,12 @@ Tau-specific keys inside the sidebar:
 
 `Esc` is intentionally overloaded as Tau's back key. It first closes the most local UI you opened: slash command menu, model picker, top-bar session menu, session command menu, or inline session naming. If there is nothing local to close and the prompt is focused, `Esc` opens the session list. Press `Esc` again from the session list to return to chat, so you can toggle between writing and session navigation with one key.
 
-Tau does not install default global keyboard shortcuts. To scope your own bindings to the sidebar, use VS Code `when` clauses such as `tau.sidebarFocus` or `tau.sidebarFocus && tau.busy`.
+Tau does not install default global keyboard shortcuts. Available Tau context keys for user keybindings:
+
+- `tau.sidebarFocus` — true while focus is inside the Tau sidebar webview.
+- `tau.busy` — true while Pi is currently running/responding.
+
+Use them in VS Code `when` clauses, for example `tau.sidebarFocus` or `tau.sidebarFocus && tau.busy`.
 
 ## Slash commands
 
