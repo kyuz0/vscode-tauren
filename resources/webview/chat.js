@@ -4308,7 +4308,10 @@
       return;
     }
     if (event.data?.type === "toast") {
-      showToast(typeof event.data.message === "string" ? event.data.message : "Done.");
+      showToast(
+        typeof event.data.message === "string" ? event.data.message : "Done.",
+        parseToastKind(event.data.kind)
+      );
       return;
     }
     if (event.data?.type !== "state") {
@@ -4377,11 +4380,12 @@
   function refreshMetadata() {
     vscode.postMessage({ type: "refreshMetadata" });
   }
-  function showToast(message) {
+  function showToast(message, kind = "success") {
     if (toastHideTimeout) {
       clearTimeout(toastHideTimeout);
     }
-    toastElement.textContent = message;
+    toastElement.className = "pi-toast pi-toast--" + kind;
+    toastElement.replaceChildren(createToastIcon(kind), document.createTextNode(message));
     toastElement.hidden = false;
     toastElement.classList.add("pi-toast--visible");
     toastHideTimeout = setTimeout(() => {
@@ -4389,6 +4393,16 @@
       toastElement.hidden = true;
       toastHideTimeout = void 0;
     }, 2500);
+  }
+  function parseToastKind(value) {
+    return value === "warning" || value === "error" ? value : "success";
+  }
+  function createToastIcon(kind) {
+    const icon = document.createElement("span");
+    icon.className = "pi-toast__icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = kind === "warning" ? "\u26A0" : kind === "error" ? "\u2715" : "\u2713";
+    return icon;
   }
   function scheduleRender(options = {}) {
     pendingReturnToChatAfterRender ||= Boolean(options.returnToChat);

@@ -384,6 +384,9 @@ const toastStyles = /* css */ `    .pi-toast {
       top: 42px;
       z-index: 5;
       justify-self: center;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
       width: max-content;
       max-width: calc(100% - 24px);
       padding: 6px 10px;
@@ -399,6 +402,30 @@ const toastStyles = /* css */ `    .pi-toast {
       transform: translateY(-4px);
       transition: opacity 120ms ease, transform 120ms ease;
       pointer-events: none;
+    }
+
+    .pi-toast__icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+      width: 14px;
+      height: 14px;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .pi-toast--success .pi-toast__icon {
+      color: var(--vscode-testing-iconPassed, #3fb950);
+    }
+
+    .pi-toast--warning .pi-toast__icon {
+      color: var(--vscode-testing-iconQueued, #d29922);
+    }
+
+    .pi-toast--error .pi-toast__icon {
+      color: var(--vscode-testing-iconFailed, #f85149);
     }
 
     .pi-toast[hidden] {

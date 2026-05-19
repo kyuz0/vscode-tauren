@@ -162,7 +162,10 @@ window.addEventListener('message', (event) => {
   }
 
   if (event.data?.type === 'toast') {
-    showToast(typeof event.data.message === 'string' ? event.data.message : 'Done.');
+    showToast(
+      typeof event.data.message === 'string' ? event.data.message : 'Done.',
+      parseToastKind(event.data.kind)
+    );
     return;
   }
 
@@ -255,12 +258,13 @@ function refreshMetadata(): void {
   vscode.postMessage({ type: 'refreshMetadata' });
 }
 
-function showToast(message: string): void {
+function showToast(message: string, kind: 'success' | 'warning' | 'error' = 'success'): void {
   if (toastHideTimeout) {
     clearTimeout(toastHideTimeout);
   }
 
-  toastElement.textContent = message;
+  toastElement.className = 'pi-toast pi-toast--' + kind;
+  toastElement.replaceChildren(createToastIcon(kind), document.createTextNode(message));
   toastElement.hidden = false;
   toastElement.classList.add('pi-toast--visible');
   toastHideTimeout = setTimeout(() => {
@@ -268,6 +272,18 @@ function showToast(message: string): void {
     toastElement.hidden = true;
     toastHideTimeout = undefined;
   }, 2500);
+}
+
+function parseToastKind(value: unknown): 'success' | 'warning' | 'error' {
+  return value === 'warning' || value === 'error' ? value : 'success';
+}
+
+function createToastIcon(kind: 'success' | 'warning' | 'error'): HTMLElement {
+  const icon = document.createElement('span');
+  icon.className = 'pi-toast__icon';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.textContent = kind === 'warning' ? '⚠' : kind === 'error' ? '✕' : '✓';
+  return icon;
 }
 
 function scheduleRender(options: { returnToChat?: boolean } = {}): void {

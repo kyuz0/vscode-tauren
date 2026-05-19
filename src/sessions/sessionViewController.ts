@@ -669,7 +669,7 @@ export class SessionViewController {
     return {
       extensionUi: this.options.extensionUi,
       showNotification: (message, notifyType) => this.options.showNotification(message, notifyType),
-      showToast: (message) => this.options.showToast?.(message)
+      showToast: (message, kind) => this.options.showToast?.(message, kind)
     };
   }
 

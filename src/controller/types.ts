@@ -13,7 +13,7 @@ export type PiChatControllerOptions = {
   createClient: PiRpcClientFactory;
   postState: (message: WebviewStateMessage) => void;
   showNotification: (message: string, notifyType: string) => void;
-  showToast?: (message: string) => void;
+  showToast?: (message: string, kind?: 'success' | 'warning' | 'error') => void;
   extensionUi?: ExtensionUiRequestUi;
   getCwd?: () => string | undefined;
   getPiPath?: () => string | undefined;

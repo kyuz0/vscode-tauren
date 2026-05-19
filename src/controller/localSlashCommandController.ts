@@ -22,7 +22,7 @@ export type LocalSlashCommandControllerOptions = {
   sessionView: SessionViewController;
   extensionUi?: ExtensionUiRequestUi;
   showNotification: (message: string, notifyType: string) => void;
-  showToast?: (message: string) => void;
+  showToast?: (message: string, kind?: 'success' | 'warning' | 'error') => void;
   writeClipboard?: (text: string) => PromiseLike<void> | Promise<void> | void;
   getClient: () => PiRpcClientLike;
   postState: () => void;
@@ -350,7 +350,7 @@ export class LocalSlashCommandController {
     await this.options.writeClipboard(text);
 
     if (options.successToast && this.options.showToast) {
-      this.options.showToast(successMessage);
+      this.options.showToast(successMessage, 'success');
       return;
     }
 

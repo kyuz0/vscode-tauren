@@ -69,7 +69,7 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
         void this.webviewView?.webview.postMessage(this.withProviderState(message));
       },
       showNotification: (message, notifyType) => this.showNotification(message, notifyType),
-      showToast: (message) => this.showToast(message),
+      showToast: (message, kind) => this.showToast(message, kind),
       writeClipboard: (text) => vscode.env.clipboard.writeText(text),
       extensionUi: {
         notify: (message, notifyType) => this.showNotification(message, notifyType),
@@ -444,13 +444,13 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
     }
   }
 
-  private showToast(message: string): void {
+  private showToast(message: string, kind: 'success' | 'warning' | 'error' = 'success'): void {
     if (!this.webviewView || !this.webviewReady) {
       this.pendingToastMessages.push(message);
       return;
     }
 
-    void this.webviewView.webview.postMessage({ type: 'toast', message });
+    void this.webviewView.webview.postMessage({ type: 'toast', message, kind });
   }
 
   private showNotification(message: string, notifyType: string): void {
@@ -549,7 +549,7 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
     }
 
     for (const message of this.pendingToastMessages.splice(0)) {
-      void this.webviewView.webview.postMessage({ type: 'toast', message });
+      void this.webviewView.webview.postMessage({ type: 'toast', message, kind: 'success' });
     }
   }
 

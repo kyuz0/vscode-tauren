@@ -10,7 +10,7 @@ import { formatForkMessageLabel, formatForkMessages } from './sessionFormatting'
 export type SessionClientActionUi = {
   extensionUi?: ExtensionUiRequestUi;
   showNotification: (message: string, notifyType: string) => void;
-  showToast?: (message: string) => void;
+  showToast?: (message: string, kind?: 'success' | 'warning' | 'error') => void;
 };
 
 export type BackgroundSessionClientOptions = SessionClientActionUi & {
