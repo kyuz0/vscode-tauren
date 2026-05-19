@@ -2,10 +2,12 @@
 (() => {
   // src/webview/codeHighlighting.ts
   var maxHighlightCodeLength = 2e5;
-  var maxCachedHighlights = 150;
+  var maxCachedHighlightCodeLength = 5e4;
+  var maxHighlightCacheBytes = 4 * 1024 * 1024;
   var highlightedElements = /* @__PURE__ */ new Map();
   var pendingHighlights = /* @__PURE__ */ new Map();
   var highlightHtmlCache = /* @__PURE__ */ new Map();
+  var highlightHtmlCacheSizeBytes = 0;
   var postMessage;
   var nextHighlightRequestId = 1;
   function configureCodeHighlighting(post) {
@@ -21,9 +23,11 @@
     if (!options.force && existing?.code === code && existing.language === normalizedLanguage && existing.themeId === themeId) {
       return true;
     }
-    const cacheKey = getHighlightCacheKey(code, normalizedLanguage, themeId);
-    const cached = highlightHtmlCache.get(cacheKey);
-    if (cached) {
+    const cacheKey = isCacheableHighlightCode(code) ? getHighlightCacheKey(code, normalizedLanguage, themeId) : void 0;
+    const cached = cacheKey ? highlightHtmlCache.get(cacheKey) : void 0;
+    if (cacheKey && cached) {
+      highlightHtmlCache.delete(cacheKey);
+      highlightHtmlCache.set(cacheKey, cached);
       applyCachedHighlight(element, code, normalizedLanguage, themeId, cached);
       return true;
     }
@@ -95,7 +99,7 @@
       return;
     }
     const sanitizedHtml = sanitizeHighlightHtml(message.html);
-    if (sanitizedHtml) {
+    if (sanitizedHtml && isCacheableHighlightCode(info.code)) {
       rememberHighlightHtml(getHighlightCacheKey(info.code, info.language, info.themeId), sanitizedHtml);
     }
     const entry = findHighlightByRequestId(message.id);
@@ -144,17 +148,38 @@
     });
   }
   function rememberHighlightHtml(cacheKey, html) {
-    if (highlightHtmlCache.has(cacheKey)) {
-      highlightHtmlCache.delete(cacheKey);
-    }
-    highlightHtmlCache.set(cacheKey, { html });
-    if (highlightHtmlCache.size <= maxCachedHighlights) {
+    const sizeBytes = estimateCachedHighlightBytes(cacheKey, html);
+    if (sizeBytes > maxHighlightCacheBytes) {
+      deleteHighlightHtmlCacheEntry(cacheKey);
       return;
     }
-    const oldestKey = highlightHtmlCache.keys().next().value;
-    if (typeof oldestKey === "string") {
-      highlightHtmlCache.delete(oldestKey);
+    deleteHighlightHtmlCacheEntry(cacheKey);
+    highlightHtmlCache.set(cacheKey, { html, sizeBytes });
+    highlightHtmlCacheSizeBytes += sizeBytes;
+    while (highlightHtmlCacheSizeBytes > maxHighlightCacheBytes) {
+      const oldestKey = highlightHtmlCache.keys().next().value;
+      if (typeof oldestKey !== "string") {
+        break;
+      }
+      deleteHighlightHtmlCacheEntry(oldestKey);
     }
+  }
+  function deleteHighlightHtmlCacheEntry(cacheKey) {
+    const cached = highlightHtmlCache.get(cacheKey);
+    if (!cached) {
+      return;
+    }
+    highlightHtmlCache.delete(cacheKey);
+    highlightHtmlCacheSizeBytes -= cached.sizeBytes;
+  }
+  function isCacheableHighlightCode(code) {
+    return code.length <= maxCachedHighlightCodeLength;
+  }
+  function estimateCachedHighlightBytes(cacheKey, html) {
+    return estimateStringBytes(cacheKey) + estimateStringBytes(html);
+  }
+  function estimateStringBytes(value) {
+    return value.length * 2;
   }
   function getHighlightCacheKey(code, language, themeId) {
     return `${themeId}\0${language}\0${code}`;

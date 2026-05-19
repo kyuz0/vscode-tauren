@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 
 const maxHighlightedCodeLength = 200_000;
-const maxCachedHighlights = 200;
+const maxCachedHighlightedCodeLength = 50_000;
+const maxHighlightCacheBytes = 4 * 1024 * 1024;
 
 export type ShikiHighlightResult = {
   html: string;
@@ -78,6 +79,11 @@ type RendererState = {
   languages: BridgeLanguagesResult;
 };
 
+type CachedHighlight = {
+  result: ShikiHighlightResult;
+  sizeBytes: number;
+};
+
 const importEsm: DynamicImporter = <T>(specifier: string) => {
   const importer = new Function('specifier', 'return import(specifier);') as DynamicImporter;
   return importer<T>(specifier);
@@ -100,7 +106,8 @@ export class ShikiCodeRenderer implements vscode.Disposable {
   private state: RendererState | undefined;
   private stateGeneration = 0;
   private themeIdHint: string | undefined;
-  private readonly cache = new Map<string, ShikiHighlightResult>();
+  private readonly cache = new Map<string, CachedHighlight>();
+  private cacheSizeBytes = 0;
 
   public warmup(themeIdHint?: string): void {
     try {
@@ -129,18 +136,22 @@ export class ShikiCodeRenderer implements vscode.Disposable {
         return undefined;
       }
 
-      const cacheKey = `${state.themeId}\0${language}\0${code}`;
-      const cached = this.cache.get(cacheKey);
+      const cacheKey = isCacheableHighlightCode(code) ? `${state.themeId}\0${language}\0${code}` : undefined;
+      const cached = cacheKey ? this.cache.get(cacheKey) : undefined;
 
-      if (cached) {
+      if (cacheKey && cached) {
         this.cache.delete(cacheKey);
         this.cache.set(cacheKey, cached);
-        return cached;
+        return cached.result;
       }
 
       const html = this.renderWithState(state, code, language);
       const result = { html, language };
-      this.remember(cacheKey, result);
+
+      if (cacheKey) {
+        this.remember(cacheKey, result);
+      }
+
       return result;
     } catch (error) {
       this.statePromise = undefined;
@@ -152,6 +163,7 @@ export class ShikiCodeRenderer implements vscode.Disposable {
   public reset(): void {
     this.stateGeneration += 1;
     this.cache.clear();
+    this.cacheSizeBytes = 0;
     this.statePromise = undefined;
 
     if (this.state?.highlighter.dispose) {
@@ -278,18 +290,52 @@ export class ShikiCodeRenderer implements vscode.Disposable {
   }
 
   private remember(cacheKey: string, result: ShikiHighlightResult): void {
-    this.cache.set(cacheKey, result);
+    const sizeBytes = estimateCachedHighlightBytes(cacheKey, result);
 
-    if (this.cache.size <= maxCachedHighlights) {
+    if (sizeBytes > maxHighlightCacheBytes) {
+      this.deleteCachedHighlight(cacheKey);
       return;
     }
 
-    const oldestKey = this.cache.keys().next().value;
+    this.deleteCachedHighlight(cacheKey);
+    this.cache.set(cacheKey, { result, sizeBytes });
+    this.cacheSizeBytes += sizeBytes;
 
-    if (typeof oldestKey === 'string') {
-      this.cache.delete(oldestKey);
+    while (this.cacheSizeBytes > maxHighlightCacheBytes) {
+      const oldestKey = this.cache.keys().next().value;
+
+      if (typeof oldestKey !== 'string') {
+        break;
+      }
+
+      this.deleteCachedHighlight(oldestKey);
     }
   }
+
+  private deleteCachedHighlight(cacheKey: string): void {
+    const cached = this.cache.get(cacheKey);
+
+    if (!cached) {
+      return;
+    }
+
+    this.cache.delete(cacheKey);
+    this.cacheSizeBytes -= cached.sizeBytes;
+  }
+}
+
+function isCacheableHighlightCode(code: string): boolean {
+  return code.length <= maxCachedHighlightedCodeLength;
+}
+
+function estimateCachedHighlightBytes(cacheKey: string, result: ShikiHighlightResult): number {
+  return estimateStringBytes(cacheKey)
+    + estimateStringBytes(result.html)
+    + estimateStringBytes(result.language);
+}
+
+function estimateStringBytes(value: string): number {
+  return value.length * 2;
 }
 
 function normalizeInlineShikiLineBreaks(html: string): string {

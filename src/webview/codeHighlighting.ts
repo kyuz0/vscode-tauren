@@ -9,13 +9,16 @@ type HighlightInfo = {
 
 type HighlightCacheEntry = {
   html: string;
+  sizeBytes: number;
 };
 
 const maxHighlightCodeLength = 200_000;
-const maxCachedHighlights = 150;
+const maxCachedHighlightCodeLength = 50_000;
+const maxHighlightCacheBytes = 4 * 1024 * 1024;
 const highlightedElements = new Map<HTMLElement, HighlightInfo>();
 const pendingHighlights = new Map<string, HighlightInfo>();
 const highlightHtmlCache = new Map<string, HighlightCacheEntry>();
+let highlightHtmlCacheSizeBytes = 0;
 let postMessage: PostMessage | undefined;
 let nextHighlightRequestId = 1;
 
@@ -37,10 +40,12 @@ export function requestCodeHighlight(element: HTMLElement, code: string, languag
     return true;
   }
 
-  const cacheKey = getHighlightCacheKey(code, normalizedLanguage, themeId);
-  const cached = highlightHtmlCache.get(cacheKey);
+  const cacheKey = isCacheableHighlightCode(code) ? getHighlightCacheKey(code, normalizedLanguage, themeId) : undefined;
+  const cached = cacheKey ? highlightHtmlCache.get(cacheKey) : undefined;
 
-  if (cached) {
+  if (cacheKey && cached) {
+    highlightHtmlCache.delete(cacheKey);
+    highlightHtmlCache.set(cacheKey, cached);
     applyCachedHighlight(element, code, normalizedLanguage, themeId, cached);
     return true;
   }
@@ -130,7 +135,7 @@ function applyCodeHighlightResult(message: Record<string, unknown>): void {
 
   const sanitizedHtml = sanitizeHighlightHtml(message.html);
 
-  if (sanitizedHtml) {
+  if (sanitizedHtml && isCacheableHighlightCode(info.code)) {
     rememberHighlightHtml(getHighlightCacheKey(info.code, info.language, info.themeId), sanitizedHtml);
   }
 
@@ -192,21 +197,49 @@ function sanitizeHighlightHtml(value: unknown): string | undefined {
 }
 
 function rememberHighlightHtml(cacheKey: string, html: string): void {
-  if (highlightHtmlCache.has(cacheKey)) {
-    highlightHtmlCache.delete(cacheKey);
-  }
+  const sizeBytes = estimateCachedHighlightBytes(cacheKey, html);
 
-  highlightHtmlCache.set(cacheKey, { html });
-
-  if (highlightHtmlCache.size <= maxCachedHighlights) {
+  if (sizeBytes > maxHighlightCacheBytes) {
+    deleteHighlightHtmlCacheEntry(cacheKey);
     return;
   }
 
-  const oldestKey = highlightHtmlCache.keys().next().value;
+  deleteHighlightHtmlCacheEntry(cacheKey);
+  highlightHtmlCache.set(cacheKey, { html, sizeBytes });
+  highlightHtmlCacheSizeBytes += sizeBytes;
 
-  if (typeof oldestKey === 'string') {
-    highlightHtmlCache.delete(oldestKey);
+  while (highlightHtmlCacheSizeBytes > maxHighlightCacheBytes) {
+    const oldestKey = highlightHtmlCache.keys().next().value;
+
+    if (typeof oldestKey !== 'string') {
+      break;
+    }
+
+    deleteHighlightHtmlCacheEntry(oldestKey);
   }
+}
+
+function deleteHighlightHtmlCacheEntry(cacheKey: string): void {
+  const cached = highlightHtmlCache.get(cacheKey);
+
+  if (!cached) {
+    return;
+  }
+
+  highlightHtmlCache.delete(cacheKey);
+  highlightHtmlCacheSizeBytes -= cached.sizeBytes;
+}
+
+function isCacheableHighlightCode(code: string): boolean {
+  return code.length <= maxCachedHighlightCodeLength;
+}
+
+function estimateCachedHighlightBytes(cacheKey: string, html: string): number {
+  return estimateStringBytes(cacheKey) + estimateStringBytes(html);
+}
+
+function estimateStringBytes(value: string): number {
+  return value.length * 2;
 }
 
 function getHighlightCacheKey(code: string, language: string, themeId: string): string {
