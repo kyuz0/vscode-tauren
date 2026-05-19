@@ -17,6 +17,10 @@ export function parseWebviewMessage(value: unknown): WebviewMessage {
   switch (value.type) {
     case 'ready':
       return { type: 'ready' };
+    case 'focusChanged':
+      return typeof value.focused === 'boolean'
+        ? { type: 'focusChanged', focused: value.focused }
+        : { type: 'unknown' };
     case 'newSession':
       return { type: 'newSession' };
     case 'showSessions':

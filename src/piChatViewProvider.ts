@@ -23,6 +23,8 @@ export const chatViewType = 'tau.chatView';
 export type { PiRpcClientLike } from './rpc/clientTypes';
 
 const currentSessionFileStorageKey = 'tau.currentSessionFile';
+const tauSidebarFocusContextKey = 'tau.sidebarFocus';
+const tauBusyContextKey = 'tau.busy';
 const contextUsagePollingIntervalMs = 2000;
 const sessionDiffStatsRefreshDelayMs = 250;
 
@@ -38,6 +40,8 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
   private sessionDiffStatsRefreshTimer: NodeJS.Timeout | undefined;
   private readonly disposables: vscode.Disposable[] = [];
   private readonly webviewDisposables: vscode.Disposable[] = [];
+  private sidebarFocusContext: boolean | undefined;
+  private busyContext: boolean | undefined;
 
   public constructor(
     private readonly extensionUri: vscode.Uri,
@@ -57,6 +61,7 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
         });
       },
       postState: (message) => {
+        this.setBusyContext(message.busy);
         void this.webviewView?.webview.postMessage(message);
       },
       showNotification: (message, notifyType) => this.showNotification(message, notifyType),
@@ -85,6 +90,9 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
       showSessionChanges: (sessionPath, displayName) => this.sessionDiffViewer.showSessionChanges(sessionPath, displayName)
     });
 
+    this.setSidebarFocusContext(false);
+    this.setBusyContext(false);
+
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration('tau.piPath')) {
@@ -106,6 +114,8 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
   }
 
   public dispose(): void {
+    this.setSidebarFocusContext(false);
+    this.setBusyContext(false);
     this.stopContextUsagePolling();
     this.stopSessionDiffStatsRefreshTimer();
     this.disposeWebviewDisposables();
@@ -153,6 +163,7 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
 
         this.webviewView = undefined;
         this.webviewReady = false;
+        this.setSidebarFocusContext(false);
         this.stopContextUsagePolling();
         this.disposeWebviewDisposables();
       }),
@@ -165,6 +176,7 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
           this.controller.refreshSessionDiffStats();
           this.startContextUsagePolling();
         } else {
+          this.setSidebarFocusContext(false);
           this.stopContextUsagePolling();
         }
       })
@@ -209,6 +221,43 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
   public async clone(): Promise<void> {
     await this.controller.runLocalSlashCommand('clone');
     await this.focus();
+  }
+
+  public async showSessionTree(): Promise<void> {
+    await this.controller.runLocalSlashCommand('tree');
+    await this.focus();
+  }
+
+  public async showSessionChanges(): Promise<void> {
+    await this.controller.handleWebviewMessage({ type: 'showCurrentChanges' });
+  }
+
+  public async compactSession(): Promise<void> {
+    await this.controller.runLocalSlashCommand('compact');
+    await this.focus();
+  }
+
+  public async exportSession(): Promise<void> {
+    await this.controller.runLocalSlashCommand('export');
+    await this.focus();
+  }
+
+  public async reloadPi(): Promise<void> {
+    await this.controller.runLocalSlashCommand('reload');
+    await this.focus();
+  }
+
+  public async copyLastResponse(): Promise<void> {
+    await this.controller.runLocalSlashCommand('copy');
+  }
+
+  public async selectModel(): Promise<void> {
+    await this.controller.runLocalSlashCommand('model');
+    await this.focus();
+  }
+
+  public async stop(): Promise<void> {
+    await this.controller.handleWebviewMessage({ type: 'abort' });
   }
 
   public async addContext(): Promise<void> {
@@ -283,6 +332,11 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
   }
 
   private async handleWebviewMessage(message: WebviewMessage): Promise<void> {
+    if (message.type === 'focusChanged') {
+      this.setSidebarFocusContext(Boolean(message.focused && this.webviewView?.visible));
+      return;
+    }
+
     if (message.type === 'openFile') {
       await this.openFileReference(message.path, message.line, message.column);
       return;
@@ -486,6 +540,24 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
     }
 
     void this.workspaceState.update(currentSessionFileStorageKey, sessionFile || undefined).then(undefined, () => undefined);
+  }
+
+  private setSidebarFocusContext(focused: boolean): void {
+    if (this.sidebarFocusContext === focused) {
+      return;
+    }
+
+    this.sidebarFocusContext = focused;
+    void vscode.commands.executeCommand('setContext', tauSidebarFocusContextKey, focused).then(undefined, () => undefined);
+  }
+
+  private setBusyContext(busy: boolean): void {
+    if (this.busyContext === busy) {
+      return;
+    }
+
+    this.busyContext = busy;
+    void vscode.commands.executeCommand('setContext', tauBusyContextKey, busy).then(undefined, () => undefined);
   }
 
 }

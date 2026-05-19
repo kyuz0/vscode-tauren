@@ -60,7 +60,6 @@ busyStatusElement.append(busyStatusSpinnerElement, busyStatusTextElement);
 messagesContentElement.replaceChildren(...Array.from(messagesElement.childNodes));
 messagesElement.append(messagesContentElement, busyStatusElement);
 
-const isMac = navigator.platform.toUpperCase().includes('MAC');
 let state: WebviewState = { ...initialWebviewState };
 let toastHideTimeout: ReturnType<typeof setTimeout> | undefined;
 let pendingRenderFrame: number | undefined;
@@ -218,14 +217,6 @@ window.addEventListener('keydown', (event) => {
   if (messagesController.handleChatPageScroll(event)) {
     return;
   }
-
-  if (!isNewSessionShortcut(event)) {
-    return;
-  }
-
-  event.preventDefault();
-  event.stopPropagation();
-  startNewSession();
 }, true);
 
 window.addEventListener('resize', () => {
@@ -373,18 +364,6 @@ function startNewSession(): void {
   focusPromptInput();
 }
 
-function isNewSessionShortcut(event: KeyboardEvent): boolean {
-  if (event.key.toLowerCase() !== 'n' || event.shiftKey || event.altKey) {
-    return false;
-  }
-
-  if (isMac) {
-    return event.metaKey && !event.ctrlKey;
-  }
-
-  return event.ctrlKey && !event.metaKey;
-}
-
 function focusPromptInput(): void {
   requestAnimationFrame(() => {
     textarea.focus({ preventScroll: true });
@@ -399,5 +378,28 @@ function eventTargetNode(event: Event): Node | null {
   return event.target instanceof Node ? event.target : null;
 }
 
+let webviewFocusState = false;
+
+function postFocusChanged(focused: boolean): void {
+  if (webviewFocusState === focused) {
+    return;
+  }
+
+  webviewFocusState = focused;
+  vscode.postMessage({ type: 'focusChanged', focused });
+}
+
+document.addEventListener('focusin', () => postFocusChanged(true));
+window.addEventListener('focus', () => postFocusChanged(true));
+window.addEventListener('blur', () => postFocusChanged(false));
+document.addEventListener('focusout', () => {
+  setTimeout(() => {
+    if (!document.hasFocus()) {
+      postFocusChanged(false);
+    }
+  }, 0);
+});
+
 vscode.postMessage({ type: 'ready' });
+postFocusChanged(document.hasFocus());
 render();

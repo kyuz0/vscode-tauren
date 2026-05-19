@@ -45,6 +45,46 @@
         "category": "Tau"
       },
       {
+        "command": "tau.showSessionTree",
+        "title": "Show Session Tree",
+        "category": "Tau"
+      },
+      {
+        "command": "tau.showSessionChanges",
+        "title": "Show Session Changes",
+        "category": "Tau"
+      },
+      {
+        "command": "tau.compactSession",
+        "title": "Compact Session",
+        "category": "Tau"
+      },
+      {
+        "command": "tau.exportSession",
+        "title": "Export Session as HTML",
+        "category": "Tau"
+      },
+      {
+        "command": "tau.reloadPi",
+        "title": "Reload Pi",
+        "category": "Tau"
+      },
+      {
+        "command": "tau.copyLastResponse",
+        "title": "Copy Last Response",
+        "category": "Tau"
+      },
+      {
+        "command": "tau.selectModel",
+        "title": "Select Model",
+        "category": "Tau"
+      },
+      {
+        "command": "tau.stop",
+        "title": "Stop Current Response",
+        "category": "Tau"
+      },
+      {
         "command": "tau.addContext",
         "title": "Add Context",
         "category": "Tau"
@@ -85,6 +125,68 @@
           "command": "tau.traceOrigin",
           "when": "editorTextFocus",
           "group": "navigation@91"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "tau.newSession",
+          "when": "view == tau.chatView && !tau.busy",
+          "group": "tau@1"
+        },
+        {
+          "command": "tau.resume",
+          "when": "view == tau.chatView && !tau.busy",
+          "group": "tau@2"
+        },
+        {
+          "command": "tau.showSessionChanges",
+          "when": "view == tau.chatView",
+          "group": "tau@3"
+        },
+        {
+          "command": "tau.showSessionTree",
+          "when": "view == tau.chatView && !tau.busy",
+          "group": "tau@10"
+        },
+        {
+          "command": "tau.selectModel",
+          "when": "view == tau.chatView && !tau.busy",
+          "group": "tau@20"
+        },
+        {
+          "command": "tau.copyLastResponse",
+          "when": "view == tau.chatView",
+          "group": "tau@30"
+        },
+        {
+          "command": "tau.fork",
+          "when": "view == tau.chatView && !tau.busy",
+          "group": "tau@40"
+        },
+        {
+          "command": "tau.clone",
+          "when": "view == tau.chatView && !tau.busy",
+          "group": "tau@50"
+        },
+        {
+          "command": "tau.compactSession",
+          "when": "view == tau.chatView && !tau.busy",
+          "group": "tau@60"
+        },
+        {
+          "command": "tau.exportSession",
+          "when": "view == tau.chatView && !tau.busy",
+          "group": "tau@70"
+        },
+        {
+          "command": "tau.reloadPi",
+          "when": "view == tau.chatView && !tau.busy",
+          "group": "tau@80"
+        },
+        {
+          "command": "tau.stop",
+          "when": "view == tau.chatView && tau.busy",
+          "group": "tau@90"
         }
       ]
     },

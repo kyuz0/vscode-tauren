@@ -3858,7 +3858,6 @@
   busyStatusElement.append(busyStatusSpinnerElement, busyStatusTextElement);
   messagesContentElement.replaceChildren(...Array.from(messagesElement.childNodes));
   messagesElement.append(messagesContentElement, busyStatusElement);
-  var isMac = navigator.platform.toUpperCase().includes("MAC");
   var state = { ...initialWebviewState };
   var toastHideTimeout;
   var pendingRenderFrame;
@@ -3988,12 +3987,6 @@
     if (messagesController.handleChatPageScroll(event)) {
       return;
     }
-    if (!isNewSessionShortcut(event)) {
-      return;
-    }
-    event.preventDefault();
-    event.stopPropagation();
-    startNewSession();
   }, true);
   window.addEventListener("resize", () => {
     render();
@@ -4112,15 +4105,6 @@
     vscode.postMessage({ type: "newSession" });
     focusPromptInput();
   }
-  function isNewSessionShortcut(event) {
-    if (event.key.toLowerCase() !== "n" || event.shiftKey || event.altKey) {
-      return false;
-    }
-    if (isMac) {
-      return event.metaKey && !event.ctrlKey;
-    }
-    return event.ctrlKey && !event.metaKey;
-  }
   function focusPromptInput() {
     requestAnimationFrame(() => {
       textarea.focus({ preventScroll: true });
@@ -4132,6 +4116,25 @@
   function eventTargetNode(event) {
     return event.target instanceof Node ? event.target : null;
   }
+  var webviewFocusState = false;
+  function postFocusChanged(focused) {
+    if (webviewFocusState === focused) {
+      return;
+    }
+    webviewFocusState = focused;
+    vscode.postMessage({ type: "focusChanged", focused });
+  }
+  document.addEventListener("focusin", () => postFocusChanged(true));
+  window.addEventListener("focus", () => postFocusChanged(true));
+  window.addEventListener("blur", () => postFocusChanged(false));
+  document.addEventListener("focusout", () => {
+    setTimeout(() => {
+      if (!document.hasFocus()) {
+        postFocusChanged(false);
+      }
+    }, 0);
+  });
   vscode.postMessage({ type: "ready" });
+  postFocusChanged(document.hasFocus());
   render();
 })();

@@ -99,6 +99,7 @@ suite('Chat webview helpers', () => {
 
   test('parseWebviewMessage narrows valid inbound messages', () => {
     assert.deepStrictEqual(parseWebviewMessage({ type: 'ready' }), { type: 'ready' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'focusChanged', focused: true }), { type: 'focusChanged', focused: true });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'newSession' }), { type: 'newSession' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'showSessions' }), { type: 'showSessions' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'hideSessions' }), { type: 'hideSessions' });
@@ -173,6 +174,7 @@ suite('Chat webview helpers', () => {
   test('parseWebviewMessage maps malformed or unknown inbound messages to unknown', () => {
     assert.deepStrictEqual(parseWebviewMessage(undefined), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({}), { type: 'unknown' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'focusChanged', focused: 'yes' }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'submit', text: 42 }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'selectSession', sessionPath: '' }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'deleteSession', sessionPath: '' }), { type: 'unknown' });

@@ -15,6 +15,7 @@ export type WebviewSessionItemCommand = 'rename' | 'showChanges' | 'fork' | 'clo
 
 export type WebviewMessage =
   | { type: 'ready' }
+  | { type: 'focusChanged'; focused: boolean }
   | { type: 'newSession' }
   | { type: 'showSessions' }
   | { type: 'hideSessions' }

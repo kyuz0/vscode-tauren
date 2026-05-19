@@ -54,7 +54,16 @@ Useful commands are also available from the Command Palette:
 - `Tau: Resume Session`
 - `Tau: Fork Session`
 - `Tau: Clone Session`
+- `Tau: Show Session Tree`
+- `Tau: Show Session Changes`
+- `Tau: Compact Session`
+- `Tau: Export Session as HTML`
+- `Tau: Reload Pi`
+- `Tau: Copy Last Response`
+- `Tau: Select Model`
+- `Tau: Stop Current Response`
 - `Tau: Add Context`
+- `Tau: Trace Origin`
 
 You can also right-click in an editor and choose `Add Context`. If text is selected, Tau attaches the selection. If nothing is selected, it attaches the current file.
 
@@ -68,7 +77,6 @@ Tau-specific keys inside the sidebar:
 | ------------------------------- | ---------------------------- | --------------------------------------------------- |
 | `Enter`                         | Prompt                       | Send the prompt.                                    |
 | `Shift+Enter`                   | Prompt                       | Insert a newline.                                   |
-| `Cmd+N` / `Ctrl+N`              | Anywhere in Tau              | Start a new session.                                |
 | `PageUp` / `PageDown`           | Chat                         | Scroll the transcript by page.                      |
 | `Ctrl+PageUp` / `Ctrl+PageDown` | Chat                         | Scroll the transcript by line.                      |
 | `Esc`                           | Prompt, with no popup open   | Open the session list.                              |
@@ -95,6 +103,8 @@ Tau-specific keys inside the sidebar:
 | `Esc`                           | Inline session naming        | Cancel editing and focus the prompt.                |
 
 `Esc` is intentionally overloaded as Tau's back key. It first closes the most local UI you opened: slash command menu, model picker, top-bar session menu, session command menu, or inline session naming. If there is nothing local to close and the prompt is focused, `Esc` opens the session list. Press `Esc` again from the session list to return to chat, so you can toggle between writing and session navigation with one key.
+
+Tau does not install default global keyboard shortcuts. To scope your own bindings to the sidebar, use VS Code `when` clauses such as `tau.sidebarFocus` or `tau.sidebarFocus && tau.busy`.
 
 ## Slash commands
 
