@@ -76,6 +76,7 @@ export class SessionViewController {
   private sessionsRefreshSequence = 0;
   private treeRefreshSequence = 0;
   private readonly fallbackSessionPaths = new Set<string>();
+  private readonly sessionItemNameRenameSequences = new Map<string, number>();
   private sessionFile: string | undefined;
   private sessionName = '';
 
@@ -371,19 +372,60 @@ export class SessionViewController {
   }
 
   public async setSessionItemName(sessionPath: string, name: string): Promise<void> {
-    await this.runSessionAction(sessionPath, async (session, isCurrentSession) => {
-      const trimmedName = name.trim();
+    const trimmedPath = sessionPath.trim();
 
+    if (!trimmedPath) {
+      return;
+    }
+
+    const normalizedPath = normalizeSessionPath(trimmedPath);
+    const session = this.sessions.find((entry) => normalizeSessionPath(entry.path) === normalizedPath)
+      ?? createFallbackSessionItem(trimmedPath);
+    const isCurrentSession = Boolean(session.current) || normalizeSessionPath(this.sessionFile) === normalizedPath;
+
+    if (session.liveStatus === 'running' || (isCurrentSession && this.options.isBusy())) {
+      this.options.showNotification('Wait for the session to finish before running this command.', 'warning');
+      return;
+    }
+
+    const trimmedName = name.trim();
+    const previousName = typeof session.name === 'string' ? session.name : undefined;
+    const renameSequence = (this.sessionItemNameRenameSequences.get(normalizedPath) ?? 0) + 1;
+    this.sessionItemNameRenameSequences.set(normalizedPath, renameSequence);
+    this.sessionsError = '';
+
+    if (!isCurrentSession) {
+      this.applySessionItemName(trimmedPath, trimmedName || undefined);
+      this.options.postState();
+    }
+
+    try {
       if (isCurrentSession) {
         await this.options.setCurrentSessionName(trimmedName, { announce: false });
-        return;
+      } else {
+        await withSessionClient(session.path, this.getBackgroundSessionClientOptions(), async (client) => {
+          await client.setSessionName(trimmedName);
+        });
+        this.options.showToast?.(trimmedName ? 'Session renamed.' : 'Session name cleared.');
       }
 
-      await withSessionClient(session.path, this.getBackgroundSessionClientOptions(), async (client) => {
-        await client.setSessionName(trimmedName);
-      });
-      this.options.showToast?.(trimmedName ? 'Session renamed.' : 'Session name cleared.');
-    });
+      if (this.sessionItemNameRenameSequences.get(normalizedPath) === renameSequence) {
+        await this.refreshSessions();
+      }
+    } catch (error) {
+      if (this.sessionItemNameRenameSequences.get(normalizedPath) === renameSequence) {
+        if (!isCurrentSession) {
+          this.applySessionItemName(trimmedPath, previousName);
+        }
+
+        this.sessionsError = getErrorMessage(error);
+        this.options.postState();
+      }
+    } finally {
+      if (this.sessionItemNameRenameSequences.get(normalizedPath) === renameSequence) {
+        this.sessionItemNameRenameSequences.delete(normalizedPath);
+      }
+    }
   }
 
   public async runSessionItemCommand(sessionPath: string, command: WebviewSessionItemCommand): Promise<void> {
@@ -579,6 +621,23 @@ export class SessionViewController {
     }
 
     this.options.postState();
+  }
+
+  private applySessionItemName(sessionPath: string, name: string | undefined): boolean {
+    const normalizedPath = normalizeSessionPath(sessionPath);
+    const nextName = typeof name === 'string' && name.trim() ? name.trim() : undefined;
+    let changed = false;
+
+    this.sessions = this.sessions.map((session) => {
+      if (normalizeSessionPath(session.path) !== normalizedPath || session.name === nextName) {
+        return session;
+      }
+
+      changed = true;
+      return { ...session, name: nextName };
+    });
+
+    return changed;
   }
 
   private applySessionNameToCurrentSession(name: string): boolean {

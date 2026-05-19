@@ -516,6 +516,7 @@ suite('PiChatController', () => {
   });
 
   test('session item rename updates a listed session without switching sessions', async () => {
+    let oldSessionName = 'Old work';
     const renameClient = new FakePiClient();
     const harness = createControllerHarness([renameClient], {
       cwd: '/workspace',
@@ -537,6 +538,82 @@ suite('PiChatController', () => {
           path: '/sessions/old.jsonl',
           id: 'old',
           cwd: '/workspace',
+          name: oldSessionName,
+          created: '2026-01-01T00:00:00.000Z',
+          modified: '2026-01-01T00:01:00.000Z',
+          messageCount: 1,
+          firstMessage: 'Old question',
+          depth: 0,
+          isLast: true,
+          ancestorContinues: [],
+          current: false
+        }
+      ]
+    });
+
+    await harness.controller.handleWebviewMessage({ type: 'showSessions' });
+    oldSessionName = 'Renamed old';
+    await harness.controller.handleWebviewMessage({ type: 'setSessionItemName', sessionPath: '/sessions/old.jsonl', name: ' Renamed old ' });
+
+    assert.deepStrictEqual(renameClient.sessionNames, ['Renamed old']);
+    assert.strictEqual(renameClient.disposed, true);
+    assert.deepStrictEqual(harness.clientOptions, [{ cwd: '/workspace', sessionFile: '/sessions/old.jsonl' }]);
+    assert.strictEqual(lastState(harness).viewMode, 'sessions');
+    assert.strictEqual(lastState(harness).sessions?.[1]?.name, 'Renamed old');
+    assert.deepStrictEqual(harness.toasts, ['Session renamed.']);
+    harness.controller.dispose();
+  });
+
+  test('session item rename updates before Pi confirms', async () => {
+    let oldSessionName = 'Old work';
+    const renameDeferred = createDeferred<void>();
+    const renameClient = new FakePiClient({ setSessionNameResult: renameDeferred.promise });
+    const harness = createControllerHarness([renameClient], {
+      cwd: '/workspace',
+      listSessions: async () => [
+        {
+          path: '/sessions/old.jsonl',
+          id: 'old',
+          cwd: '/workspace',
+          name: oldSessionName,
+          created: '2026-01-01T00:00:00.000Z',
+          modified: '2026-01-01T00:01:00.000Z',
+          messageCount: 1,
+          firstMessage: 'Old question',
+          depth: 0,
+          isLast: true,
+          ancestorContinues: [],
+          current: false
+        }
+      ]
+    });
+
+    await harness.controller.handleWebviewMessage({ type: 'showSessions' });
+    const renamePromise = harness.controller.handleWebviewMessage({ type: 'setSessionItemName', sessionPath: '/sessions/old.jsonl', name: ' Renamed old ' });
+    await flushPromises();
+
+    assert.deepStrictEqual(renameClient.sessionNames, ['Renamed old']);
+    assert.strictEqual(lastState(harness).sessions?.[0]?.name, 'Renamed old');
+    assert.strictEqual(renameClient.disposed, false);
+
+    oldSessionName = 'Renamed old';
+    renameDeferred.resolve();
+    await renamePromise;
+
+    assert.strictEqual(renameClient.disposed, true);
+    assert.strictEqual(lastState(harness).sessions?.[0]?.name, 'Renamed old');
+    harness.controller.dispose();
+  });
+
+  test('session item rename rolls back when Pi rejects it', async () => {
+    const renameClient = new FakePiClient({ setSessionNameError: new Error('rename failed') });
+    const harness = createControllerHarness([renameClient], {
+      cwd: '/workspace',
+      listSessions: async () => [
+        {
+          path: '/sessions/old.jsonl',
+          id: 'old',
+          cwd: '/workspace',
           name: 'Old work',
           created: '2026-01-01T00:00:00.000Z',
           modified: '2026-01-01T00:01:00.000Z',
@@ -554,10 +631,8 @@ suite('PiChatController', () => {
     await harness.controller.handleWebviewMessage({ type: 'setSessionItemName', sessionPath: '/sessions/old.jsonl', name: ' Renamed old ' });
 
     assert.deepStrictEqual(renameClient.sessionNames, ['Renamed old']);
-    assert.strictEqual(renameClient.disposed, true);
-    assert.deepStrictEqual(harness.clientOptions, [{ cwd: '/workspace', sessionFile: '/sessions/old.jsonl' }]);
-    assert.strictEqual(lastState(harness).viewMode, 'sessions');
-    assert.deepStrictEqual(harness.toasts, ['Session renamed.']);
+    assert.strictEqual(lastState(harness).sessions?.[0]?.name, 'Old work');
+    assert.strictEqual(lastState(harness).sessionsError, 'rename failed');
     harness.controller.dispose();
   });
 
@@ -1277,6 +1352,94 @@ suite('PiChatController', () => {
     assert.deepStrictEqual(lastState(harness).messages, []);
     assert.strictEqual(lastState(harness).currentSessionName, 'Feature work');
     assert.strictEqual(lastState(harness).sessions?.[0]?.name, 'Feature work');
+    harness.controller.dispose();
+  });
+
+  test('webview session rename updates the current session before Pi confirms', async () => {
+    let sessionName = 'Old name';
+    const renameDeferred = createDeferred<void>();
+    const client = new FakePiClient({
+      state: {
+        model: { provider: 'openai', id: 'gpt-test', reasoning: false },
+        thinkingLevel: 'off',
+        sessionFile: '/sessions/current.jsonl'
+      },
+      setSessionNameResult: renameDeferred.promise
+    });
+    const harness = createControllerHarness([client], {
+      cwd: '/workspace',
+      initialSessionFile: '/sessions/current.jsonl',
+      listSessions: async (_cwd, currentSessionFile) => [{
+        path: '/sessions/current.jsonl',
+        id: 'current',
+        cwd: '/workspace',
+        name: sessionName,
+        created: '2026-01-01T00:00:00.000Z',
+        modified: '2026-01-01T00:01:00.000Z',
+        messageCount: 2,
+        firstMessage: 'First prompt',
+        depth: 0,
+        isLast: true,
+        ancestorContinues: [],
+        current: currentSessionFile === '/sessions/current.jsonl'
+      }]
+    });
+
+    await harness.controller.handleWebviewMessage({ type: 'ready' });
+    await flushPromises();
+
+    const renamePromise = harness.controller.handleWebviewMessage({ type: 'setSessionName', name: ' Feature work ' });
+    await flushPromises();
+
+    assert.deepStrictEqual(client.sessionNames, ['Feature work']);
+    assert.strictEqual(lastState(harness).currentSessionName, 'Feature work');
+    assert.strictEqual(lastState(harness).sessions?.[0]?.name, 'Feature work');
+
+    sessionName = 'Feature work';
+    renameDeferred.resolve();
+    await renamePromise;
+
+    assert.strictEqual(lastState(harness).currentSessionName, 'Feature work');
+    assert.strictEqual(lastState(harness).sessions?.[0]?.name, 'Feature work');
+    harness.controller.dispose();
+  });
+
+  test('webview session rename rolls back the current session when Pi rejects it', async () => {
+    const client = new FakePiClient({
+      state: {
+        model: { provider: 'openai', id: 'gpt-test', reasoning: false },
+        thinkingLevel: 'off',
+        sessionFile: '/sessions/current.jsonl'
+      },
+      setSessionNameError: new Error('rename failed')
+    });
+    const harness = createControllerHarness([client], {
+      cwd: '/workspace',
+      initialSessionFile: '/sessions/current.jsonl',
+      listSessions: async (_cwd, currentSessionFile) => [{
+        path: '/sessions/current.jsonl',
+        id: 'current',
+        cwd: '/workspace',
+        name: 'Old name',
+        created: '2026-01-01T00:00:00.000Z',
+        modified: '2026-01-01T00:01:00.000Z',
+        messageCount: 2,
+        firstMessage: 'First prompt',
+        depth: 0,
+        isLast: true,
+        ancestorContinues: [],
+        current: currentSessionFile === '/sessions/current.jsonl'
+      }]
+    });
+
+    await harness.controller.handleWebviewMessage({ type: 'ready' });
+    await flushPromises();
+    await harness.controller.handleWebviewMessage({ type: 'setSessionName', name: ' Feature work ' });
+
+    assert.deepStrictEqual(client.sessionNames, ['Feature work']);
+    assert.strictEqual(lastState(harness).currentSessionName, 'Old name');
+    assert.strictEqual(lastState(harness).sessions?.[0]?.name, 'Old name');
+    assert.strictEqual(lastState(harness).messages.at(-1)?.text, 'rename failed');
     harness.controller.dispose();
   });
 
@@ -2158,6 +2321,8 @@ type FakePiClientOptions = {
   compactError?: unknown;
   promptResult?: Promise<void>;
   promptError?: unknown;
+  setSessionNameResult?: Promise<void>;
+  setSessionNameError?: unknown;
 };
 
 class FakeStateScheduler implements StatePublisherScheduler {
@@ -2235,6 +2400,8 @@ class FakePiClient implements PiRpcClientLike {
   public compactError: unknown;
   public promptResult: Promise<void> | undefined;
   public promptError: unknown;
+  public setSessionNameResult: Promise<void> | undefined;
+  public setSessionNameError: unknown;
   private readonly eventListeners = new Set<(event: RpcEvent) => void>();
   private readonly errorListeners = new Set<(message: string) => void>();
 
@@ -2264,6 +2431,8 @@ class FakePiClient implements PiRpcClientLike {
     this.compactError = options.compactError;
     this.promptResult = options.promptResult;
     this.promptError = options.promptError;
+    this.setSessionNameResult = options.setSessionNameResult;
+    this.setSessionNameError = options.setSessionNameError;
   }
 
   public isRunning(): boolean {
@@ -2383,6 +2552,14 @@ class FakePiClient implements PiRpcClientLike {
 
   public async setSessionName(name: string): Promise<void> {
     this.sessionNames.push(name);
+
+    if (this.setSessionNameResult) {
+      await this.setSessionNameResult;
+    }
+
+    if (this.setSessionNameError) {
+      throw this.setSessionNameError;
+    }
   }
 
   public async compact(): Promise<{}> {

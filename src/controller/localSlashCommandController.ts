@@ -36,6 +36,7 @@ export type LocalSlashCommandControllerOptions = {
 
 export class LocalSlashCommandController {
   private compacting = false;
+  private sessionNameRenameSequence = 0;
 
   public constructor(private readonly options: LocalSlashCommandControllerOptions) {}
 
@@ -117,8 +118,26 @@ export class LocalSlashCommandController {
 
   public async setCurrentSessionName(name: string, options: { announce: boolean }): Promise<void> {
     const trimmedName = name.trim();
-    await this.options.getClient().setSessionName(trimmedName);
+    const previousName = this.options.sessionView.currentSessionName;
+    const renameSequence = ++this.sessionNameRenameSequence;
+
     this.options.sessionView.applyCurrentSessionName(trimmedName);
+    this.options.postState();
+
+    try {
+      await this.options.getClient().setSessionName(trimmedName);
+    } catch (error) {
+      if (renameSequence === this.sessionNameRenameSequence) {
+        this.options.sessionView.applyCurrentSessionName(previousName);
+        this.options.postState();
+      }
+
+      throw error;
+    }
+
+    if (renameSequence !== this.sessionNameRenameSequence) {
+      return;
+    }
 
     if (options.announce) {
       this.options.session.addSystemMessage(trimmedName ? `Session name set to "${trimmedName}".` : 'Session name cleared.');
