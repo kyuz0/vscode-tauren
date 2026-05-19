@@ -9,6 +9,9 @@ export type WebviewDom = {
   sessionMenuButton: HTMLButtonElement;
   sessionMenuElement: HTMLElement;
   sessionMenuItemElements: HTMLButtonElement[];
+  chatHelpWrapElement: HTMLElement;
+  chatHelpButton: HTMLButtonElement;
+  chatHelpPopoverElement: HTMLElement;
   sessionHelpWrapElement: HTMLElement;
   sessionHelpButton: HTMLButtonElement;
   sessionHelpPopoverElement: HTMLElement;
@@ -47,9 +50,12 @@ export function getWebviewDom(): WebviewDom {
     sessionMenuButton: queryRequired<HTMLButtonElement>('.pi-toolbar__menu-button'),
     sessionMenuElement: queryRequired<HTMLElement>('.pi-toolbar__menu'),
     sessionMenuItemElements: queryAll<HTMLButtonElement>('.pi-toolbar__menu-item'),
-    sessionHelpWrapElement: queryRequired<HTMLElement>('.pi-toolbar__help-wrap'),
-    sessionHelpButton: queryRequired<HTMLButtonElement>('.pi-toolbar__help-button'),
-    sessionHelpPopoverElement: queryRequired<HTMLElement>('.pi-toolbar__help-popover'),
+    chatHelpWrapElement: queryRequired<HTMLElement>('.pi-toolbar__chat-help-wrap'),
+    chatHelpButton: queryRequired<HTMLButtonElement>('.pi-toolbar__chat-help-button'),
+    chatHelpPopoverElement: queryRequired<HTMLElement>('.pi-toolbar__chat-help-popover'),
+    sessionHelpWrapElement: queryRequired<HTMLElement>('.pi-toolbar__session-help-wrap'),
+    sessionHelpButton: queryRequired<HTMLButtonElement>('.pi-toolbar__session-help-button'),
+    sessionHelpPopoverElement: queryRequired<HTMLElement>('.pi-toolbar__session-help-popover'),
     toastElement: queryRequired<HTMLElement>('.pi-toast'),
     messagesElement: queryRequired<HTMLElement>('.messages'),
     sessionsElement: queryRequired<HTMLElement>('.sessions'),

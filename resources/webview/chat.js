@@ -1154,9 +1154,12 @@
       sessionMenuButton: queryRequired(".pi-toolbar__menu-button"),
       sessionMenuElement: queryRequired(".pi-toolbar__menu"),
       sessionMenuItemElements: queryAll(".pi-toolbar__menu-item"),
-      sessionHelpWrapElement: queryRequired(".pi-toolbar__help-wrap"),
-      sessionHelpButton: queryRequired(".pi-toolbar__help-button"),
-      sessionHelpPopoverElement: queryRequired(".pi-toolbar__help-popover"),
+      chatHelpWrapElement: queryRequired(".pi-toolbar__chat-help-wrap"),
+      chatHelpButton: queryRequired(".pi-toolbar__chat-help-button"),
+      chatHelpPopoverElement: queryRequired(".pi-toolbar__chat-help-popover"),
+      sessionHelpWrapElement: queryRequired(".pi-toolbar__session-help-wrap"),
+      sessionHelpButton: queryRequired(".pi-toolbar__session-help-button"),
+      sessionHelpPopoverElement: queryRequired(".pi-toolbar__session-help-popover"),
       toastElement: queryRequired(".pi-toast"),
       messagesElement: queryRequired(".messages"),
       sessionsElement: queryRequired(".sessions"),
@@ -3900,6 +3903,9 @@
     sessionMenuButton,
     sessionMenuElement,
     sessionMenuItemElements,
+    chatHelpWrapElement,
+    chatHelpButton,
+    chatHelpPopoverElement,
     sessionHelpWrapElement,
     sessionHelpButton,
     sessionHelpPopoverElement,
@@ -4001,6 +4007,7 @@
   });
   composerController.attachEventListeners();
   sessionsController.attachEventListeners();
+  chatHelpButton.addEventListener("click", toggleChatHelpPopover);
   newSessionButton.addEventListener("click", startNewSession);
   diffSummaryElement.addEventListener("click", showCurrentChanges);
   messagesElement.addEventListener("click", (event) => messagesController.handleMessageClick(event));
@@ -4063,9 +4070,13 @@
     const target = eventTargetNode(event);
     composerController.handleWindowClick(target);
     sessionsController.handleWindowClick(target, eventTargetElement4(event));
+    handleChatHelpWindowClick(target);
   });
   window.addEventListener("keydown", (event) => {
     if (sessionsController.handleGlobalKeydown(event)) {
+      return;
+    }
+    if (event.key === "Escape" && handleChatHelpEscape(event)) {
       return;
     }
     if (event.key === "Escape" && handleChatEscape(event)) {
@@ -4131,6 +4142,7 @@
     form.setAttribute("aria-hidden", isListView ? "true" : "false");
     form.inert = isListView;
     sessionsController.syncForRender(isListView);
+    syncChatHelpForRender(isListView);
     if (isListView) {
       busyStatusElement.hidden = true;
       state.viewMode === "tree" ? sessionsController.renderTree() : sessionsController.renderSessions();
@@ -4152,6 +4164,55 @@
     if (shouldStickToBottom) {
       messagesController.scrollMessagesToBottom();
     }
+  }
+  function syncChatHelpForRender(isListView) {
+    chatHelpWrapElement.hidden = isListView;
+    if (isListView) {
+      closeChatHelpPopover();
+    }
+  }
+  function toggleChatHelpPopover(event) {
+    event?.preventDefault();
+    event?.stopPropagation();
+    if (state.viewMode !== "chat") {
+      return;
+    }
+    if (hasChatHelpPopoverOpen()) {
+      closeChatHelpPopover();
+      return;
+    }
+    composerController.closeSlashMenu();
+    composerController.closeModelMenu();
+    sessionsController.closeSessionCommandMenu();
+    chatHelpPopoverElement.hidden = false;
+    chatHelpButton.setAttribute("aria-expanded", "true");
+  }
+  function closeChatHelpPopover(options = {}) {
+    if (chatHelpPopoverElement.hidden) {
+      return;
+    }
+    chatHelpPopoverElement.hidden = true;
+    chatHelpButton.setAttribute("aria-expanded", "false");
+    if (options.focusButton && !chatHelpWrapElement.hidden) {
+      chatHelpButton.focus({ preventScroll: true });
+    }
+  }
+  function handleChatHelpWindowClick(target) {
+    if (!target || !chatHelpWrapElement.contains(target)) {
+      closeChatHelpPopover();
+    }
+  }
+  function handleChatHelpEscape(event) {
+    if (!hasChatHelpPopoverOpen()) {
+      return false;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    closeChatHelpPopover({ focusButton: true });
+    return true;
+  }
+  function hasChatHelpPopoverOpen() {
+    return !chatHelpPopoverElement.hidden;
   }
   function handleChatEscape(event) {
     const hadSlashMenu = composerController.hasSlashMenuOpen();

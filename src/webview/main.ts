@@ -21,6 +21,9 @@ const {
   sessionMenuButton,
   sessionMenuElement,
   sessionMenuItemElements,
+  chatHelpWrapElement,
+  chatHelpButton,
+  chatHelpPopoverElement,
   sessionHelpWrapElement,
   sessionHelpButton,
   sessionHelpPopoverElement,
@@ -130,6 +133,7 @@ sessionsController = new SessionViewController({
 composerController.attachEventListeners();
 sessionsController.attachEventListeners();
 
+chatHelpButton.addEventListener('click', toggleChatHelpPopover);
 newSessionButton.addEventListener('click', startNewSession);
 diffSummaryElement.addEventListener('click', showCurrentChanges);
 messagesElement.addEventListener('click', (event) => messagesController.handleMessageClick(event));
@@ -213,10 +217,15 @@ window.addEventListener('click', (event) => {
   const target = eventTargetNode(event);
   composerController.handleWindowClick(target);
   sessionsController.handleWindowClick(target, eventTargetElement(event));
+  handleChatHelpWindowClick(target);
 });
 
 window.addEventListener('keydown', (event) => {
   if (sessionsController.handleGlobalKeydown(event)) {
+    return;
+  }
+
+  if (event.key === 'Escape' && handleChatHelpEscape(event)) {
     return;
   }
 
@@ -297,6 +306,7 @@ function render(): void {
   form.inert = isListView;
 
   sessionsController.syncForRender(isListView);
+  syncChatHelpForRender(isListView);
 
   if (isListView) {
     busyStatusElement.hidden = true;
@@ -323,6 +333,68 @@ function render(): void {
   if (shouldStickToBottom) {
     messagesController.scrollMessagesToBottom();
   }
+}
+
+function syncChatHelpForRender(isListView: boolean): void {
+  chatHelpWrapElement.hidden = isListView;
+
+  if (isListView) {
+    closeChatHelpPopover();
+  }
+}
+
+function toggleChatHelpPopover(event?: MouseEvent): void {
+  event?.preventDefault();
+  event?.stopPropagation();
+
+  if (state.viewMode !== 'chat') {
+    return;
+  }
+
+  if (hasChatHelpPopoverOpen()) {
+    closeChatHelpPopover();
+    return;
+  }
+
+  composerController.closeSlashMenu();
+  composerController.closeModelMenu();
+  sessionsController.closeSessionCommandMenu();
+  chatHelpPopoverElement.hidden = false;
+  chatHelpButton.setAttribute('aria-expanded', 'true');
+}
+
+function closeChatHelpPopover(options: { focusButton?: boolean } = {}): void {
+  if (chatHelpPopoverElement.hidden) {
+    return;
+  }
+
+  chatHelpPopoverElement.hidden = true;
+  chatHelpButton.setAttribute('aria-expanded', 'false');
+
+  if (options.focusButton && !chatHelpWrapElement.hidden) {
+    chatHelpButton.focus({ preventScroll: true });
+  }
+}
+
+function handleChatHelpWindowClick(target: Node | null): void {
+  if (!target || !chatHelpWrapElement.contains(target)) {
+    closeChatHelpPopover();
+  }
+}
+
+function handleChatHelpEscape(event: KeyboardEvent): boolean {
+  if (!hasChatHelpPopoverOpen()) {
+    return false;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  closeChatHelpPopover({ focusButton: true });
+  return true;
+}
+
+function hasChatHelpPopoverOpen(): boolean {
+  return !chatHelpPopoverElement.hidden;
 }
 
 function handleChatEscape(event: KeyboardEvent): boolean {
