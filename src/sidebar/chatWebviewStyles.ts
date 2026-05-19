@@ -1205,9 +1205,9 @@ const composerStyles = /* css */ `    .composer {
       min-width: 0;
       max-width: 100%;
       overflow: hidden;
-      color: var(--vscode-badge-foreground, var(--vscode-foreground));
-      background: var(--vscode-badge-background, color-mix(in srgb, var(--vscode-foreground) 16%, transparent));
-      border: 1px solid color-mix(in srgb, var(--vscode-foreground) 12%, transparent);
+      color: var(--vscode-foreground);
+      background: color-mix(in srgb, #0969da 28%, var(--vscode-input-background) 72%);
+      border: 1px solid color-mix(in srgb, #0969da 62%, transparent);
       border-radius: 999px;
       font-size: 11px;
       line-height: 1.3;
