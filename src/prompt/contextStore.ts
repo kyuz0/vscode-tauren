@@ -72,9 +72,19 @@ export class PromptContextStore {
 
     const note = normalizePromptContextNote(input.note);
     const source = normalizePromptContextSource(input.source);
+    const traceOrigin = normalizeTraceOrigin(input.traceOrigin);
 
     if (kind === 'file') {
-      return [{ id: this.nextId(source), kind, path, label, title, ...(note ? { note } : {}), ...(source ? { source } : {}) }];
+      return [{
+        id: this.nextId(source),
+        kind,
+        path,
+        label,
+        title,
+        ...(note ? { note } : {}),
+        ...(source ? { source } : {}),
+        ...(traceOrigin ? { traceOrigin } : {})
+      }];
     }
 
     const text = typeof input.text === 'string' ? input.text : '';
@@ -94,6 +104,7 @@ export class PromptContextStore {
       endLine: normalizeLineNumber(input.endLine),
       ...(note ? { note } : {}),
       ...(source ? { source } : {}),
+      ...(traceOrigin ? { traceOrigin } : {}),
       text
     }];
   }
@@ -117,6 +128,20 @@ function normalizePromptContextNote(value: string | undefined): string | undefin
 
 function normalizePromptContextSource(value: string | undefined): 'origin' | undefined {
   return value === 'origin' ? value : undefined;
+}
+
+function normalizeTraceOrigin(value: PiPromptContextInput['traceOrigin']): PiPromptContextInput['traceOrigin'] {
+  const historicalPath = value?.historicalPath?.trim();
+  const currentRelativePath = value?.currentRelativePath?.trim();
+
+  if (!historicalPath || !currentRelativePath) {
+    return undefined;
+  }
+
+  return {
+    historicalPath,
+    currentRelativePath
+  };
 }
 
 function createPromptContextLabel(input: PiPromptContextInput, path: string): string {

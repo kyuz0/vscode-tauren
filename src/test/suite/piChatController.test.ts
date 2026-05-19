@@ -803,9 +803,10 @@ suite('PiChatController', () => {
     await harness.controller.handleWebviewMessage({ type: 'submit', text: 'explain this' });
 
     assert.strictEqual(client.prompts.length, 1);
-    assert.ok(client.prompts[0].includes('<!-- tau:ide-context:start -->'));
-    assert.ok(client.prompts[0].includes('<selection path="src/foo.ts" start_line="2" end_line="4" language="typescript">'));
-    assert.ok(client.prompts[0].includes('```typescript\nconst answer = 42;\n```'));
+    assert.ok(client.prompts[0].startsWith('<ide_context source="vscode-tau">\n'));
+    assert.ok(!client.prompts[0].includes('<!-- tau:ide-context'));
+    assert.ok(client.prompts[0].includes('<selection path="src/foo.ts" start_line="2" end_line="4" language="typescript"><![CDATA[\nconst answer = 42;\n]]></selection>'));
+    assert.ok(!client.prompts[0].includes('```typescript'));
     assert.ok(client.prompts[0].endsWith('\n\nexplain this'));
     assert.deepStrictEqual(lastState(harness).messages, [
       { role: 'user', text: 'explain this' },

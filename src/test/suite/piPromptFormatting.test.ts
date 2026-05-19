@@ -25,11 +25,31 @@ suite('Pi prompt formatting helpers', () => {
       }
     ]);
 
-    assert.ok(prompt.includes('<!-- tau:ide-context:start -->'));
+    assert.ok(prompt.startsWith('<ide_context source="vscode-tau">\n'));
+    assert.ok(!prompt.includes('<!-- tau:ide-context'));
     assert.ok(prompt.includes('<file path="src/a&amp;b.ts" />'));
-    assert.ok(prompt.includes('<selection path="src/foo.ts" start_line="2" end_line="4" language="typescript">'));
-    assert.ok(prompt.includes('```typescript\nconst answer = 42;\n```'));
+    assert.ok(prompt.includes('<selection path="src/foo.ts" start_line="2" end_line="4" language="typescript"><![CDATA[\nconst answer = 42;\n]]></selection>'));
+    assert.ok(!prompt.includes('```typescript'));
     assert.ok(prompt.endsWith('\n\nexplain this'));
+  });
+
+  test('includes trace origin instructions and data before standard context attachments', () => {
+    const prompt = formatPromptWithIdeContext('explain origin', [
+      {
+        kind: 'selection',
+        path: 'src/features/NewComponent.ts',
+        source: 'origin',
+        traceOrigin: {
+          historicalPath: 'src/components/OldComponent.ts',
+          currentRelativePath: 'src/features/NewComponent.ts'
+        },
+        text: 'export const NewComponent = () => null;'
+      }
+    ]);
+
+    assert.ok(prompt.includes('<trace_origin_instructions>\nThe attached metadata links historical agent work to the current code location.'));
+    assert.ok(prompt.includes('<trace_origin_data>\n{\n  "historicalPath": "src/components/OldComponent.ts",\n  "currentRelativePath": "src/features/NewComponent.ts"\n}\n</trace_origin_data>'));
+    assert.ok(prompt.indexOf('<trace_origin_data>') < prompt.indexOf('<selection path="src/features/NewComponent.ts">'));
   });
 
   test('includes context notes for diff-view selections', () => {
@@ -46,18 +66,17 @@ suite('Pi prompt formatting helpers', () => {
     assert.ok(prompt.includes('note="Line numbers are diff-view section lines, not current file lines."'));
   });
 
-  test('escapes selection attributes and chooses a safe markdown fence', () => {
+  test('escapes selection attributes and wraps text in CDATA', () => {
     const prompt = formatPromptWithIdeContext('review', [
       {
         kind: 'selection',
         path: 'src/"quoted"<&>.ts',
         languageId: 'bad language',
-        text: 'before\n```\nafter'
+        text: 'before\n  const value = "<&>";\nafter ]]> marker'
       }
     ]);
 
-    assert.ok(prompt.includes('<selection path="src/&quot;quoted&quot;&lt;&amp;&gt;.ts" language="bad language">'));
-    assert.ok(prompt.includes('````\nbefore\n```\nafter\n````'));
+    assert.ok(prompt.includes('<selection path="src/&quot;quoted&quot;&lt;&amp;&gt;.ts" language="bad language"><![CDATA[\nbefore\n  const value = "<&>";\nafter ]]]]><![CDATA[> marker\n]]></selection>'));
   });
 
   test('omits empty selection attachments', () => {

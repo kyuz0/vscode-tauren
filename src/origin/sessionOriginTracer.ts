@@ -13,6 +13,7 @@ export type TraceOriginInput = {
 export type TraceOriginMatch = {
   sessionPath: string;
   sessionId?: string;
+  sessionCwd?: string;
   timestamp?: string;
   recordId?: string;
   toolName: 'edit' | 'write';
@@ -196,6 +197,7 @@ async function traceOriginInSession(
       const match = {
         sessionPath: session.path,
         sessionId,
+        sessionCwd,
         timestamp: toolCall.timestamp,
         recordId: toolCall.recordId,
         timestampMs: toolCall.timestampMs,

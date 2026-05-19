@@ -1,8 +1,5 @@
 import type { PiPromptFormattingContextAttachment } from './types';
 
-const ideContextStartMarker = '<!-- tau:ide-context:start -->';
-const ideContextEndMarker = '<!-- tau:ide-context:end -->';
-
 export function formatPromptForPi(
   userText: string,
   context: PiPromptFormattingContextAttachment[]
@@ -18,26 +15,75 @@ export function formatPromptWithIdeContext(
     return userText;
   }
 
-  const contextBody = context.flatMap((attachment) => {
+  const contextItems = context.flatMap((attachment) => {
     const formatted = formatPromptContextAttachment(attachment);
     return formatted ? [formatted] : [];
-  }).join('\n\n');
+  });
 
-  if (!contextBody) {
+  if (contextItems.length === 0) {
     return userText;
   }
 
+  const traceOriginContext = formatTraceOriginContext(context);
+  const contextBody = [
+    ...(traceOriginContext ? [traceOriginContext] : []),
+    ...contextItems
+  ].join('\n\n');
+
   return [
-    ideContextStartMarker,
     '<ide_context source="vscode-tau">',
-    'The user explicitly attached this IDE context. Use it as relevant. File-only entries identify relevant files; inspect or read them if content is needed.',
+    'User-attached IDE context.',
     '',
     contextBody,
     '</ide_context>',
-    ideContextEndMarker,
     '',
     userText
   ].join('\n');
+}
+
+function formatTraceOriginContext(context: PiPromptFormattingContextAttachment[]): string | undefined {
+  const data = dedupeTraceOriginData(context
+    .filter((attachment) => attachment.source === 'origin' && attachment.traceOrigin)
+    .map((attachment) => attachment.traceOrigin!));
+
+  if (data.length === 0) {
+    return undefined;
+  }
+
+  const payload = data.length === 1 ? data[0] : data;
+
+  return [
+    '<trace_origin_instructions>',
+    'The attached metadata links historical agent work to the current code location.',
+    'Use currentRelativePath for current file reads.',
+    'Use historicalPath only to understand the original session context.',
+    'Avoid repository search unless direct file reads fail.',
+    '</trace_origin_instructions>',
+    '',
+    '<trace_origin_data>',
+    JSON.stringify(payload, null, 2),
+    '</trace_origin_data>'
+  ].join('\n');
+}
+
+function dedupeTraceOriginData(
+  data: NonNullable<PiPromptFormattingContextAttachment['traceOrigin']>[]
+): Array<NonNullable<PiPromptFormattingContextAttachment['traceOrigin']>> {
+  const result: Array<NonNullable<PiPromptFormattingContextAttachment['traceOrigin']>> = [];
+  const seen = new Set<string>();
+
+  for (const item of data) {
+    const key = JSON.stringify(item);
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    result.push(item);
+  }
+
+  return result;
 }
 
 function formatPromptContextAttachment(attachment: PiPromptFormattingContextAttachment): string | undefined {
@@ -62,15 +108,10 @@ function formatPromptContextAttachment(attachment: PiPromptFormattingContextAtta
     ...(attachment.languageId ? [`language="${escapeXmlAttribute(attachment.languageId)}"`] : []),
     ...(attachment.note ? [`note="${escapeXmlAttribute(attachment.note)}"`] : [])
   ];
-  const fence = getMarkdownFence(text);
-  const language = sanitizeFenceLanguage(attachment.languageId);
-
   return [
-    `<selection ${attributes.join(' ')}>`,
-    `${fence}${language}`,
-    text,
-    fence,
-    '</selection>'
+    `<selection ${attributes.join(' ')}><![CDATA[`,
+    escapeCdata(text),
+    ']]></selection>'
   ].join('\n');
 }
 
@@ -82,24 +123,6 @@ function escapeXmlAttribute(value: string): string {
     .replace(/>/g, '&gt;');
 }
 
-function getMarkdownFence(text: string): string {
-  return '`'.repeat(Math.max(3, getLongestBacktickRun(text) + 1));
-}
-
-function getLongestBacktickRun(text: string): number {
-  let longest = 0;
-
-  for (const match of text.matchAll(/`+/g)) {
-    longest = Math.max(longest, match[0].length);
-  }
-
-  return longest;
-}
-
-function sanitizeFenceLanguage(languageId: string | undefined): string {
-  if (!languageId || !/^[A-Za-z0-9_#+.-]+$/.test(languageId)) {
-    return '';
-  }
-
-  return languageId;
+function escapeCdata(value: string): string {
+  return value.replace(/\]\]>/g, ']]]]><![CDATA[>');
 }

@@ -465,12 +465,11 @@ function createOriginPromptContext(context: PiPromptContextInput[], match: Trace
     source: 'origin',
     label: `Origin: ${entry.label ?? getPathBasename(entry.path)}`,
     title: `${entry.title ?? entry.path}\nTraced to Pi session: ${match.sessionPath}`,
-    note: appendContextNote(entry.note, `Trace Origin matched ${match.toolName} of ${match.filePath} in Pi session ${match.sessionPath}.`)
+    traceOrigin: {
+      historicalPath: match.filePath,
+      currentRelativePath: entry.path
+    }
   }));
-}
-
-function appendContextNote(existing: string | undefined, note: string): string {
-  return existing?.trim() ? `${existing.trim()} ${note}` : note;
 }
 
 function getPathBasename(filePath: string): string {

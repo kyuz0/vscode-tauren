@@ -2,6 +2,11 @@ export type PiPromptContextKind = 'file' | 'selection';
 
 export type PiPromptContextSource = 'origin';
 
+export type PiPromptTraceOriginData = {
+  historicalPath: string;
+  currentRelativePath: string;
+};
+
 export type PiPromptContextInput = {
   kind: PiPromptContextKind;
   path: string;
@@ -13,6 +18,7 @@ export type PiPromptContextInput = {
   note?: string;
   text?: string;
   source?: PiPromptContextSource;
+  traceOrigin?: PiPromptTraceOriginData;
 };
 
 export type PiPromptContextAttachment = PiPromptContextInput & {
@@ -23,5 +29,5 @@ export type PiPromptContextAttachment = PiPromptContextInput & {
 
 export type PiPromptFormattingContextAttachment = Pick<
   PiPromptContextInput,
-  'kind' | 'path' | 'languageId' | 'startLine' | 'endLine' | 'note' | 'text'
+  'kind' | 'path' | 'languageId' | 'startLine' | 'endLine' | 'note' | 'text' | 'source' | 'traceOrigin'
 >;
