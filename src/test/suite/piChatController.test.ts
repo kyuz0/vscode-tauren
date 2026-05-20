@@ -1626,8 +1626,7 @@ suite('PiChatController', () => {
     assert.strictEqual(newClient.commandsCalls, 1);
     assert.deepStrictEqual(lastState(harness).messages, [
       { role: 'system', text: 'Reloading Pi resources...' },
-      { role: 'system', text: 'Pi RPC reload is not supported by this Pi version; restarted Pi and reconnected to the current session.' },
-      { role: 'system', text: 'Reloaded skills, prompts, extensions, metadata, and restored LLM session context.' }
+      { role: 'system', text: 'Reloaded Tau by restarting Pi RPC. Skills, prompts, extensions, and metadata were rediscovered. Current persisted session was reconnected.' }
     ]);
     assert.deepStrictEqual(lastState(harness).slashCommands, [
       { name: 'skill:new-skill', description: 'Newly added skill', source: 'skill', location: 'project', path: undefined }

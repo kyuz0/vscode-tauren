@@ -383,10 +383,6 @@ export class LocalSlashCommandController {
       restartedClient = true;
       restoredSession = Boolean(sessionFile);
       this.options.restartClientForReload(sessionFile);
-      this.options.session.addSystemMessage(sessionFile
-        ? 'Pi RPC reload is not supported by this Pi version; restarted Pi and reconnected to the current session.'
-        : 'Pi RPC reload is not supported by this Pi version; restarted Pi without a persisted session to reconnect.');
-      this.options.postState();
     }
 
     await Promise.all([
@@ -396,8 +392,8 @@ export class LocalSlashCommandController {
 
     this.options.session.addSystemMessage(restartedClient
       ? restoredSession
-        ? 'Reloaded skills, prompts, extensions, metadata, and restored LLM session context.'
-        : 'Reloaded skills, prompts, extensions, and metadata by restarting Pi.'
+        ? 'Reloaded Tau by restarting Pi RPC. Skills, prompts, extensions, and metadata were rediscovered. Current persisted session was reconnected.'
+        : 'Reloaded Tau by restarting Pi RPC. Skills, prompts, extensions, and metadata were rediscovered. No persisted session was available to reconnect.'
       : 'Reloaded keybindings, extensions, skills, prompts, and themes.');
     this.options.postState();
   }
