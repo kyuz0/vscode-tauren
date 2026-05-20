@@ -49,6 +49,12 @@ export class LocalSlashCommandController {
   }
 
   public async handle(command: LocalSlashCommand): Promise<void> {
+    if (command.name === 'tree') {
+      this.options.session.addSystemMessage('/tree is temporarily disabled in Tau. The session tree implementation is preserved for a later Pi navigation integration.');
+      this.options.postState();
+      return;
+    }
+
     if (!isSupportedBuiltinSlashCommand(command.name)) {
       this.options.session.addSystemMessage(`/${command.name} is a Pi terminal command that is not supported in the VS Code sidebar yet.`);
       this.options.postState();

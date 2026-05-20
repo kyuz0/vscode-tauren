@@ -127,6 +127,12 @@
           "group": "navigation@91"
         }
       ],
+      "commandPalette": [
+        {
+          "command": "tau.showSessionTree",
+          "when": "false"
+        }
+      ],
       "view/title": [
         {
           "command": "tau.newSession",
@@ -145,7 +151,7 @@
         },
         {
           "command": "tau.showSessionTree",
-          "when": "view == tau.chatView && !tau.busy",
+          "when": "false",
           "group": "tau@10"
         },
         {

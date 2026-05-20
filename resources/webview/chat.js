@@ -359,7 +359,7 @@
     { name: "hotkeys", description: "Terminal-only: use VS Code keybindings instead", source: "unsupported", supported: false },
     { name: "fork", description: "Fork from a previous user message", source: "builtin", supported: true },
     { name: "clone", description: "Duplicate the current session", source: "builtin", supported: true },
-    { name: "tree", description: "Navigate session tree", source: "builtin", supported: true },
+    { name: "tree", description: "Navigate session tree", source: "builtin", supported: false, hidden: true },
     { name: "login", description: "Terminal-only: run pi in a terminal to authenticate", source: "unsupported", supported: false },
     { name: "logout", description: "Terminal-only: run pi in a terminal to manage auth", source: "unsupported", supported: false },
     { name: "resume", description: "Resume a different session", source: "builtin", supported: true },
@@ -370,10 +370,13 @@
   var supportedBuiltinSlashCommandNames = new Set(
     localSlashCommandDefinitions.filter((command) => command.supported).map((command) => command.name)
   );
-  var localSlashCommands = localSlashCommandDefinitions.map(({ supported: _supported, ...command }) => command);
-  var localSlashMenuCommands = localSlashCommandDefinitions.filter((command) => command.supported).map(({ supported: _supported, ...command }) => command);
+  var localSlashCommandNames = localSlashCommandDefinitions.map((command) => command.name);
+  var hiddenLocalSlashCommandNames = localSlashCommandDefinitions.filter((command) => command.hidden).map((command) => command.name);
+  var localSlashCommands = localSlashCommandDefinitions.map(({ supported: _supported, hidden: _hidden, ...command }) => command);
+  var localSlashMenuCommands = localSlashCommandDefinitions.filter((command) => command.supported && !command.hidden).map(({ supported: _supported, hidden: _hidden, ...command }) => command);
 
   // src/webview/constants.ts
+  var hiddenLocalSlashCommandNames2 = hiddenLocalSlashCommandNames;
   var localSlashCommands2 = localSlashMenuCommands.map((command) => ({ ...command }));
   var messagesBottomThreshold = 4;
   var maxTextareaHeight = 180;
@@ -954,7 +957,10 @@
     getAllSlashCommands() {
       const state2 = this.options.getState();
       const commands = [...localSlashCommands2];
-      const names = new Set(commands.map((command) => command.name));
+      const names = /* @__PURE__ */ new Set([
+        ...commands.map((command) => command.name),
+        ...hiddenLocalSlashCommandNames2
+      ]);
       if (Array.isArray(state2.slashCommands)) {
         for (const command of state2.slashCommands) {
           if (!command || typeof command.name !== "string" || names.has(command.name)) {

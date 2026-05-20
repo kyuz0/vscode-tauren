@@ -1,6 +1,7 @@
 import { requestCodeHighlight } from '../codeHighlighting';
 import { createDiffCounter, formatDiffLineCount, normalizeDiffLineCount, updateDiffCounter } from './diffCounter';
 import {
+  hiddenLocalSlashCommandNames,
   localSlashCommands,
   maxTextareaHeight,
   minTextareaHeight
@@ -780,7 +781,10 @@ export class ComposerController {
   private getAllSlashCommands(): SlashCommand[] {
     const state = this.options.getState();
     const commands = [...localSlashCommands];
-    const names = new Set(commands.map((command) => command.name));
+    const names = new Set([
+      ...commands.map((command) => command.name),
+      ...hiddenLocalSlashCommandNames
+    ]);
 
     if (Array.isArray(state.slashCommands)) {
       for (const command of state.slashCommands) {

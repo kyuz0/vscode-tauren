@@ -1444,7 +1444,7 @@ suite('PiChatController', () => {
     harness.controller.dispose();
   });
 
-  test('tree slash command opens the session tree', async () => {
+  test('tree slash command reports that the session tree is temporarily disabled', async () => {
     const client = new FakePiClient();
     const harness = createControllerHarness([client]);
 
@@ -1452,38 +1452,27 @@ suite('PiChatController', () => {
 
     assert.strictEqual(harness.createCalls, 0);
     assert.deepStrictEqual(client.prompts, []);
-    assert.strictEqual(lastState(harness).viewMode, 'tree');
+    assert.strictEqual(lastState(harness).viewMode, undefined);
+    assert.match(lastState(harness).messages.at(-1)?.text ?? '', /temporarily disabled/);
     harness.controller.dispose();
   });
 
-  test('stale session tree refresh results are ignored after starting a new session', async () => {
-    const treeRefresh = createDeferred<WebviewTreeItem[]>();
+  test('disabled tree slash command does not refresh the session tree', async () => {
     const treeRefreshCalls: Array<string | undefined> = [];
     const harness = createControllerHarness([new FakePiClient()], {
       initialSessionFile: '/sessions/current.jsonl',
       listSessionTree: async (sessionFile) => {
         treeRefreshCalls.push(sessionFile);
-        return treeRefresh.promise;
+        return [];
       }
     });
 
     await harness.controller.handleWebviewMessage({ type: 'submit', text: '/tree' });
     await flushPromises();
 
-    assert.deepStrictEqual(treeRefreshCalls, ['/sessions/current.jsonl']);
-    assert.strictEqual(lastState(harness).treeRefreshing, true);
-
-    harness.controller.startNewSession();
-    treeRefresh.resolve([{
-      entryId: 'old-entry',
-      role: 'user',
-      text: 'Old prompt',
-      current: true
-    }]);
-    await flushPromises();
-
-    assert.strictEqual(lastState(harness).treeItems, undefined);
-    assert.strictEqual(lastState(harness).treeRefreshing, undefined);
+    assert.deepStrictEqual(treeRefreshCalls, []);
+    assert.deepStrictEqual(lastState(harness).treeItems, []);
+    assert.strictEqual(lastState(harness).treeRefreshing, false);
     harness.controller.dispose();
   });
 

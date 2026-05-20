@@ -96,7 +96,7 @@ Do not add transient notes, guesses, one-off debugging observations, or broad ge
 - Keep Shiki highlighting failure-tolerant: code must remain readable as plain text if theme/language resolution or highlighting fails.
 - Preserve the bundled Shiki fallback path in `src/highlighting/shikiCodeRenderer.ts`; it prevents read boxes from silently losing highlighting when VS Code theme/grammar resolution is unreliable.
 - Keep transcript state in memory until persistence is explicitly requested.
-- The sidebar `/resume` command opens the session switcher for switching session files. `/tree` opens a first-version in-session session tree view backed by the persisted JSONL session file and attempts navigation through Pi RPC `navigate_tree`; keep a graceful unsupported-RPC error until Pi exposes that command in released RPC builds.
+- The sidebar `/resume` command opens the session switcher for switching session files. `/tree` is intentionally hidden/disabled for now; do not remove the existing session-tree implementation, because it is expected to resume later when Pi-side tree navigation support is available.
 - Disable submit while Pi is streaming; do not invent steering or follow-up queue behavior without a specific iteration goal.
 - Avoid broad frontend rewrites. Preserve the existing webview structure unless the task requires changing it.
 

@@ -5,7 +5,11 @@ export type LocalSlashCommand = {
   supported: boolean;
 };
 
-const localSlashCommandDefinitions: LocalSlashCommand[] = [
+type LocalSlashCommandDefinition = LocalSlashCommand & {
+  hidden?: boolean;
+};
+
+const localSlashCommandDefinitions: LocalSlashCommandDefinition[] = [
   { name: 'model', description: 'Select model', source: 'builtin', supported: true },
   { name: 'name', description: 'Set or clear session name', source: 'builtin', supported: true },
   { name: 'session', description: 'Show session info and stats', source: 'builtin', supported: true },
@@ -21,7 +25,7 @@ const localSlashCommandDefinitions: LocalSlashCommand[] = [
   { name: 'hotkeys', description: 'Terminal-only: use VS Code keybindings instead', source: 'unsupported', supported: false },
   { name: 'fork', description: 'Fork from a previous user message', source: 'builtin', supported: true },
   { name: 'clone', description: 'Duplicate the current session', source: 'builtin', supported: true },
-  { name: 'tree', description: 'Navigate session tree', source: 'builtin', supported: true },
+  { name: 'tree', description: 'Navigate session tree', source: 'builtin', supported: false, hidden: true },
   { name: 'login', description: 'Terminal-only: run pi in a terminal to authenticate', source: 'unsupported', supported: false },
   { name: 'logout', description: 'Terminal-only: run pi in a terminal to manage auth', source: 'unsupported', supported: false },
   { name: 'resume', description: 'Resume a different session', source: 'builtin', supported: true },
@@ -36,10 +40,14 @@ const supportedBuiltinSlashCommandNames = new Set(
     .map((command) => command.name)
 );
 
-export const localSlashCommands = localSlashCommandDefinitions.map(({ supported: _supported, ...command }) => command);
+export const localSlashCommandNames = localSlashCommandDefinitions.map((command) => command.name);
+export const hiddenLocalSlashCommandNames = localSlashCommandDefinitions
+  .filter((command) => command.hidden)
+  .map((command) => command.name);
+export const localSlashCommands = localSlashCommandDefinitions.map(({ supported: _supported, hidden: _hidden, ...command }) => command);
 export const localSlashMenuCommands = localSlashCommandDefinitions
-  .filter((command) => command.supported)
-  .map(({ supported: _supported, ...command }) => command);
+  .filter((command) => command.supported && !command.hidden)
+  .map(({ supported: _supported, hidden: _hidden, ...command }) => command);
 
 export function isBuiltinSlashCommand(name: string): boolean {
   return builtinSlashCommandNames.has(name);
