@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import { EventEmitter } from 'events';
 import { PassThrough, Writable } from 'stream';
-import { PiRpcClient } from '../../rpc/client';
+import { getRpcCommandTimeoutMs, PiRpcClient } from '../../rpc/client';
 import type { RpcEvent } from '../../rpc/types';
 
 suite('PiRpcClient', () => {
@@ -601,6 +601,21 @@ suite('PiRpcClient', () => {
 
     await assert.rejects(statePromise, /Pi RPC client disposed/);
     assert.strictEqual(fakeProcess.killedSignal, 'SIGTERM');
+  });
+
+  test('uses open-ended defaults for long-running user/session commands', () => {
+    assert.strictEqual(getRpcCommandTimeoutMs('get_state'), 30_000);
+    assert.strictEqual(getRpcCommandTimeoutMs('get_messages'), 120_000);
+    assert.strictEqual(getRpcCommandTimeoutMs('get_session_stats'), 120_000);
+    assert.strictEqual(getRpcCommandTimeoutMs('get_last_assistant_text'), 120_000);
+    assert.strictEqual(getRpcCommandTimeoutMs('reload'), 300_000);
+    assert.strictEqual(getRpcCommandTimeoutMs('export_html'), 600_000);
+    assert.strictEqual(getRpcCommandTimeoutMs('compact'), undefined);
+    assert.strictEqual(getRpcCommandTimeoutMs('switch_session'), undefined);
+    assert.strictEqual(getRpcCommandTimeoutMs('fork'), undefined);
+    assert.strictEqual(getRpcCommandTimeoutMs('clone'), undefined);
+    assert.strictEqual(getRpcCommandTimeoutMs('navigate_tree'), undefined);
+    assert.strictEqual(getRpcCommandTimeoutMs('compact', 5), 5);
   });
 
   test('includes stderr in command timeout errors', async () => {

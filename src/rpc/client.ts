@@ -35,13 +35,50 @@ export type * from './types';
 
 type PendingRequest = {
   commandType: string;
-  timeout: NodeJS.Timeout;
+  timeout: NodeJS.Timeout | undefined;
   resolve: (response: RpcResponse) => void;
   reject: (error: Error) => void;
 };
 
 const defaultSpawnFactory: PiRpcSpawnFactory = (command, args, options) => spawn(command, args, options);
 const defaultCommandTimeoutMs = 30000;
+const historyReadCommandTimeoutMs = 2 * 60 * 1000;
+const reloadCommandTimeoutMs = 5 * 60 * 1000;
+const exportCommandTimeoutMs = 10 * 60 * 1000;
+// These commands may perform LLM work, run extension hooks, or wait for user UI.
+// Let Pi's own provider/process lifecycle decide when they fail instead of
+// racing them with a short client-side timeout.
+const openEndedCommandTimeouts = new Set([
+  'compact',
+  'switch_session',
+  'fork',
+  'clone',
+  'navigate_tree'
+]);
+
+export function getRpcCommandTimeoutMs(commandType: string, overrideTimeoutMs?: number): number | undefined {
+  if (overrideTimeoutMs !== undefined) {
+    return overrideTimeoutMs;
+  }
+
+  if (openEndedCommandTimeouts.has(commandType)) {
+    return undefined;
+  }
+
+  switch (commandType) {
+    case 'get_messages':
+    case 'get_fork_messages':
+    case 'get_last_assistant_text':
+    case 'get_session_stats':
+      return historyReadCommandTimeoutMs;
+    case 'reload':
+      return reloadCommandTimeoutMs;
+    case 'export_html':
+      return exportCommandTimeoutMs;
+    default:
+      return defaultCommandTimeoutMs;
+  }
+}
 
 export class PiRpcClient {
   private process: PiRpcProcess | undefined;
@@ -207,12 +244,17 @@ export class PiRpcClient {
     const fullCommand = { ...command, id };
 
     return new Promise<RpcResponse>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.pendingRequests.delete(id);
-        reject(
-          new Error(`Timed out waiting for Pi response to ${command.type}.${this.formatStderr()}`)
-        );
-      }, this.options.commandTimeoutMs ?? defaultCommandTimeoutMs);
+      const timeoutMs = getRpcCommandTimeoutMs(command.type, this.options.commandTimeoutMs);
+      let timeout: NodeJS.Timeout | undefined;
+
+      if (timeoutMs !== undefined) {
+        timeout = setTimeout(() => {
+          this.pendingRequests.delete(id);
+          reject(
+            new Error(`Timed out waiting for Pi response to ${command.type}.${this.formatStderr()}`)
+          );
+        }, timeoutMs);
+      }
 
       this.pendingRequests.set(id, { commandType: command.type, timeout, resolve, reject });
 
@@ -221,7 +263,9 @@ export class PiRpcClient {
           return;
         }
 
-        clearTimeout(timeout);
+        if (timeout) {
+          clearTimeout(timeout);
+        }
         this.pendingRequests.delete(id);
         reject(new Error(`Failed to write Pi RPC command: ${error.message}`));
       });
@@ -372,7 +416,9 @@ export class PiRpcClient {
         }
 
         this.pendingRequests.delete(id);
-        clearTimeout(pending.timeout);
+        if (pending.timeout) {
+          clearTimeout(pending.timeout);
+        }
 
         if (response.success === false) {
           pending.reject(new Error(response.error ?? `Pi command ${response.command ?? 'unknown'} failed.`));
@@ -388,7 +434,9 @@ export class PiRpcClient {
 
         if (pending) {
           this.pendingRequests.delete(pending.id);
-          clearTimeout(pending.request.timeout);
+          if (pending.request.timeout) {
+            clearTimeout(pending.request.timeout);
+          }
           pending.request.reject(new Error(response.error ?? `Pi command ${response.command} failed.`));
           return;
         }
@@ -432,7 +480,9 @@ export class PiRpcClient {
 
   private rejectPending(error: Error): void {
     for (const pending of this.pendingRequests.values()) {
-      clearTimeout(pending.timeout);
+      if (pending.timeout) {
+        clearTimeout(pending.timeout);
+      }
       pending.reject(error);
     }
 
