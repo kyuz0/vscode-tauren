@@ -1,7 +1,7 @@
 {
   "name": "tau",
   "displayName": "Tau",
-  "description": "A VS Code sidebar UI for the Pi agent.",
+  "description": "Transparent AI coding assistant with code traceability",
   "version": "0.0.1",
   "publisher": "kaiwood",
   "repository": {
