@@ -102,6 +102,7 @@ Do not add transient notes, guesses, one-off debugging observations, or broad ge
 
 ## Development Workflow
 
+- For user-facing changes, add a concise entry to the `Unreleased` section in `CHANGELOG.md` so release notes stay current.
 - Tests live in `src/test/suite` as TypeScript Mocha tests and run through `vscode-test`.
 - Keep automated tests independent from the real `pi` CLI; test RPC framing and event mapping with local helpers or fixtures.
 - Run `npm run compile` after TypeScript changes.
