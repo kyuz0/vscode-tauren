@@ -1,158 +1,80 @@
 # Tau
 
-Tau is a VS Code frontend extension for the [Pi coding agent](https://pi.dev).
+Tau is a transparent AI coding assistant for VS Code focused on session-based workflows and code traceability.
 
-It gives Pi a native-feeling UI inside VS Code: open the Tau icon in the Activity Bar, type a prompt, and work with the same Pi sessions, models, tools, and project context without switching back to a terminal.
+## Philosophy
 
-Tau is not a separate agent. It starts Pi in RPC mode and talks to the Pi CLI running on your machine.
+Tau follows the same direction as [Pi](https://pi.dev), the backend agent engine it builds on:
 
-## What it does
+- full insight into every tool call
+- no hidden prompts
+- no black magic
 
-- Adds a Tau panel to the VS Code Activity Bar.
-- Streams Pi responses in the Tau chat view.
-- Shows tool activity, progress, errors, and assistant output.
-- Uses your first workspace folder as Pi's working directory.
-- Lets you switch models and thinking level from the Tau view.
-- Shows live context usage when Pi reports it.
-- Supports Pi sessions: new, resume, fork, clone, compact, export, and session info.
-- Lets you add the active file or selected code as prompt context from VS Code.
-- Uses VS Code UI for Pi prompts such as selects, confirms, inputs, and notifications.
+If your clanker followed Order 66 again, Tau will at least show you exactly what happened.
 
-## Requirements
+## Features
 
-Tau needs the Pi CLI installed separately.
+### Trace Origin
+
+Jump from code back to the historical agent session that created it.
+
+Tau can reconnect:
+
+- current code
+- historical agent context
+- related Git commits
+- reasoning history
+
+Even across refactors and file moves.
+
+[Gif of Trace origin]
+
+### Session Diffs
+
+Create scrollable diffs showing all changes made during a session.
+
+[Gif of session diff]
+
+### What else?
+
+Tau builds on top of Pi's existing capabilities:
+
+- tree-based session management
+- plugin ecosystem
+- resumable sessions
+- transparent tool execution
+
+It also adds parallel session workflows, allowing you to switch between multiple active sessions without losing context.
+
+The focus is not to hide complexity, but to make agentic coding workflows easier to navigate.
+
+## Requirements / Setup
+
+Install Pi if you haven't already:
 
 ```sh
 npm install -g @earendil-works/pi-coding-agent
 ```
 
-Then set up Pi the same way you would for terminal use:
+Then set it up the same way you would for terminal use:
 
 ```sh
 pi
 /login
 ```
 
-Or configure provider API keys in your shell environment. See [pi.dev](https://pi.dev) for Pi's setup instructions and supported providers.
-
-By default Tau runs `pi`. If Pi is not on VS Code's PATH, set `tau.piPath` in VS Code settings, for example:
-
-```json
-{
-  "tau.piPath": "/opt/homebrew/bin/pi"
-}
-```
+For more information, read the [documentation here](https://pi.dev/docs/latest).
 
 ## Using Tau
 
-Open the Tau icon in the Activity Bar, then type normally.
+Tau is heavily keyboard-oriented.
 
-Useful commands are also available from the Command Palette:
+The most important key is probably `Esc`:
 
-- `Tau: New Session`
-- `Tau: Resume Session`
-- `Tau: Fork Session`
-- `Tau: Clone Session`
-- `Tau: Show Session Tree`
-- `Tau: Open Session Diff`
-- `Tau: Compact Session`
-- `Tau: Export Session as HTML`
-- `Tau: Reload Pi`
-- `Tau: Copy Last Response`
-- `Tau: Open Model Picker`
-- `Tau: Stop Current Response`
-- `Tau: Toggle Steer / Follow-up`
-- `Tau: Add Context`
-- `Tau: Trace Origin`
+- from the prompt → opens the session list
+- from the session list → returns to the current session
 
-You can also right-click in an editor and choose `Add Context`. If text is selected, Tau attaches the selection. If nothing is selected, it attaches the current file.
-
-Double-click the session title in Tau's toolbar to rename the current session inline. In the session list, open a row's command menu and choose Rename session to edit that session name without switching to it.
-
-## Keyboard navigation
-
-Tau-specific keys inside the sidebar:
-
-| Key                             | Where                        | Action                                              |
-| ------------------------------- | ---------------------------- | --------------------------------------------------- |
-| `Enter`                         | Prompt                       | Send the prompt.                                    |
-| `Shift+Enter`                   | Prompt                       | Insert a newline.                                   |
-| `Cmd+N` / `Ctrl+N`              | Anywhere in Tau              | Start a new session.                                |
-| `PageUp` / `PageDown`           | Chat                         | Scroll the transcript by page.                      |
-| `Ctrl+PageUp` / `Ctrl+PageDown` | Chat                         | Scroll the transcript by line.                      |
-| `Esc`                           | Prompt, with no popup open   | Open the session list.                              |
-| `Esc`                           | Session list or session tree | Return to the current session and focus the prompt. |
-| `ArrowUp` / `ArrowDown`         | Session list or session tree | Move the selected row.                              |
-| `ArrowRight`                    | Session list                 | Open the selected session's command menu.           |
-| `Enter`                         | Session list or session tree | Open the selected session or tree entry.            |
-| `Delete` / `Backspace`          | Session list                 | Delete the selected session if it is deletable.     |
-| `r`                             | Session list                 | Rename the selected session inline.                 |
-| `f`                             | Session list                 | Fork the selected session.                          |
-| `c`                             | Session list                 | Clone the selected session.                         |
-| `z`                             | Session list                 | Compact the selected session.                       |
-| `e`                             | Session list                 | Export the selected session as HTML.                |
-| `ArrowUp` / `ArrowDown`         | Session command menu         | Move the selected menu entry.                       |
-| `Enter`                         | Session command menu         | Run the selected menu entry without switching rows. |
-| `Esc`                           | Session command menu         | Close the menu.                                     |
-| `Enter`                         | Session-list rename editor   | Save the session name.                              |
-| `Esc`                           | Session-list rename editor   | Cancel editing and keep focus in the list.          |
-| `ArrowUp` / `ArrowDown`         | Slash command menu           | Move the selected command.                          |
-| `Tab`                           | Slash command menu           | Insert the selected command.                        |
-| `Enter`                         | Slash command menu           | Insert the selected command.                        |
-| `Esc`                           | Slash command menu           | Close the menu.                                     |
-| `ArrowUp` / `ArrowDown`         | Model picker                 | Move between Thinking and Model.                    |
-| `Home` / `End`                  | Model picker                 | Move to the first or last picker field.             |
-| `Enter`                         | Inline session naming        | Save the session name.                              |
-| `Esc`                           | Inline session naming        | Cancel editing and focus the prompt.                |
-
-`Esc` is intentionally overloaded as Tau's back key. It first closes the most local UI you opened: slash command menu, model picker, top-bar session menu, session command menu, or inline session naming. If there is nothing local to close and the prompt is focused, `Esc` opens the session list. Press `Esc` again from the session list to return to chat, so you can toggle between writing and session navigation with one key.
-
-Tau does not install default global keyboard shortcuts. Available Tau context keys for user keybindings:
-
-- `tau.sidebarFocus` — true while focus is inside the Tau sidebar webview.
-- `tau.busy` — true while Pi is currently running/responding.
-
-Use them in VS Code `when` clauses, for example `tau.sidebarFocus` or `tau.sidebarFocus && tau.busy`.
-
-## Slash commands
-
-Tau supports the Pi slash commands that make sense in the VS Code UI today:
-
-```text
-/new
-/resume
-/model
-/name
-/session
-/tree
-/fork
-/clone
-/copy
-/compact
-/reload
-/export
-```
-
-Some Pi terminal commands are not wired into Tau yet. When that happens, Tau will tell you rather than trying to fake it.
-
-## Settings
-
-### `tau.piPath`
-
-Command used to launch Pi. This can be an executable name or a full command, such as:
-
-- `pi`
-- `/opt/homebrew/bin/pi`
-- `npx pi`
-- `"/path with spaces/pi"`
-
-### `tau.readyScript`
-
-Optional path to an executable script to run when Pi becomes ready: after starting a new Pi process without resuming a session, and after each agent run completes. Relative paths resolve from the workspace folder.
-
-### `tau.readyScriptEnabled`
-
-Boolean toggle for `tau.readyScript`. Turn it off to temporarily disable the script without clearing the path.
+Everything else is mostly discoverable. You'll figure out the rest anyway.
 
 ## Development
 
