@@ -35,7 +35,7 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
   private pendingModelPickerOpen = false;
   private pendingStreamingBehaviorToggle = false;
   private webviewReady = false;
-  private readonly pendingToastMessages: string[] = [];
+  private readonly pendingToastMessages: Array<{ message: string; kind: 'success' | 'warning' | 'error' }> = [];
   private readonly controller: TauSessionManager;
   private readonly codeRenderer = new ShikiCodeRenderer();
   private readonly sessionDiffViewer = new SessionDiffViewer((message, notifyType) => this.showNotification(message, notifyType));
@@ -330,7 +330,7 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
       this.controller.newSession();
       this.controller.addPromptContext(createGitOriginPromptContext(context, traceLinkedCommit));
       await this.focus();
-      this.showToast('No agent session found. Opened a new session with Git context.');
+      this.showToast('No agent session found. Opened a new session with Git context.', 'warning');
       return;
     }
 
@@ -447,7 +447,7 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
 
   private showToast(message: string, kind: 'success' | 'warning' | 'error' = 'success'): void {
     if (!this.webviewView || !this.webviewReady) {
-      this.pendingToastMessages.push(message);
+      this.pendingToastMessages.push({ message, kind });
       return;
     }
 
@@ -549,8 +549,8 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
       return;
     }
 
-    for (const message of this.pendingToastMessages.splice(0)) {
-      void this.webviewView.webview.postMessage({ type: 'toast', message, kind: 'success' });
+    for (const { message, kind } of this.pendingToastMessages.splice(0)) {
+      void this.webviewView.webview.postMessage({ type: 'toast', message, kind });
     }
   }
 
