@@ -224,12 +224,14 @@
           "default": "default",
           "enum": [
             "default",
+            "modern",
             "crt",
             "amber",
             "matrix"
           ],
           "enumDescriptions": [
             "Use Tau's default custom UI styling.",
+            "Use Tau's default custom UI styling inside a modern black monitor frame.",
             "Use a green phosphor CRT-style custom UI terminal.",
             "Use an amber monochrome custom UI terminal.",
             "Use a high-contrast green matrix-style custom UI terminal."

@@ -314,7 +314,7 @@ function parseToastKind(value: unknown): 'success' | 'warning' | 'error' {
 }
 
 function applyCustomUiTheme(theme: WebviewState['customUiTheme']): void {
-  for (const name of ['default', 'crt', 'amber', 'matrix']) {
+  for (const name of ['default', 'modern', 'crt', 'amber', 'matrix']) {
     document.body.classList.toggle(`tau-custom-ui-theme-${name}`, name === theme);
   }
 }

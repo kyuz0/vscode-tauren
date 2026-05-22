@@ -5399,7 +5399,7 @@ ${after}`;
     };
   }
   function parseCustomUiTheme(value) {
-    return value === "crt" || value === "amber" || value === "matrix" ? value : "default";
+    return value === "modern" || value === "crt" || value === "amber" || value === "matrix" ? value : "default";
   }
   function parseWorkspaceDiffStats(value) {
     if (!isRecord2(value)) {
@@ -5679,7 +5679,7 @@ ${after}`;
     return value === "warning" || value === "error" ? value : "success";
   }
   function applyCustomUiTheme(theme) {
-    for (const name of ["default", "crt", "amber", "matrix"]) {
+    for (const name of ["default", "modern", "crt", "amber", "matrix"]) {
       document.body.classList.toggle(`tau-custom-ui-theme-${name}`, name === theme);
     }
   }

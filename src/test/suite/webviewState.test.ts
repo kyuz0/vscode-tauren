@@ -29,7 +29,7 @@ suite('Webview state helpers', () => {
       workspaceDiffStats: { addedLines: 300, removedLines: 200 },
       slashCommands: [{ name: 'test', description: '', source: 'prompt' }],
       slashCommandsRefreshing: true,
-      customUiTheme: 'amber',
+      customUiTheme: 'modern',
       welcomeDismissed: true,
       promptContext: [{ id: 'context-1', kind: 'file', label: 'file.ts', title: 'src/file.ts' }],
       composerText: 'draft',
@@ -50,7 +50,7 @@ suite('Webview state helpers', () => {
     assert.strictEqual(parsed.modelLabel, 'gpt-test');
     assert.deepStrictEqual(parsed.workspaceDiffStats, { addedLines: 300, removedLines: 200 });
     assert.strictEqual(parsed.viewMode, 'sessions');
-    assert.strictEqual(parsed.customUiTheme, 'amber');
+    assert.strictEqual(parsed.customUiTheme, 'modern');
     assert.strictEqual(parsed.welcomeDismissed, true);
     assert.strictEqual(parsed.sessions[0]?.path, '/session.jsonl');
     assert.strictEqual(parsed.treeItems[0]?.entryId, 'entry-1');

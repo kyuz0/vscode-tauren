@@ -1,7 +1,7 @@
 import type { ChatState } from '../chat/chatSession';
 
 export type WebviewStreamingBehavior = 'steer' | 'followUp';
-export type WebviewCustomUiTheme = 'default' | 'crt' | 'amber' | 'matrix';
+export type WebviewCustomUiTheme = 'default' | 'modern' | 'crt' | 'amber' | 'matrix';
 
 export type WebviewPromptContextAttachment = {
   id: string;

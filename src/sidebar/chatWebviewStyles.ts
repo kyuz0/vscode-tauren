@@ -2366,6 +2366,42 @@ const customUiStyles = /* css */ `    .custom-ui {
       z-index: 1;
     }
 
+    body.tau-custom-ui-theme-modern .custom-ui {
+      color: var(--vscode-foreground);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent 28%) padding-box,
+        linear-gradient(180deg, #2a2d2f, #070809 64%, #000000) border-box;
+      border: 4px solid transparent;
+      border-radius: 18px;
+      box-shadow:
+        0 16px 32px rgba(0, 0, 0, 0.38),
+        inset 0 1px 0 rgba(255, 255, 255, 0.18),
+        inset 0 -14px 24px rgba(0, 0, 0, 0.32);
+    }
+
+    body.tau-custom-ui-theme-modern .custom-ui::before {
+      content: "";
+      position: absolute;
+      inset: 7px;
+      z-index: 0;
+      pointer-events: none;
+      background: var(--vscode-input-background);
+      border: 1px solid color-mix(in srgb, var(--vscode-foreground) 10%, transparent);
+      border-radius: 12px;
+      box-shadow:
+        inset 0 0 18px rgba(0, 0, 0, 0.36),
+        0 0 0 1px rgba(255, 255, 255, 0.04);
+    }
+
+    body.tau-custom-ui-theme-modern .custom-ui__header {
+      padding: 0 4px;
+    }
+
+    body.tau-custom-ui-theme-modern .custom-ui__output {
+      margin: 0 2px 2px;
+      padding: 8px 10px;
+    }
+
     body.tau-custom-ui-theme-crt .custom-ui,
     body.tau-custom-ui-theme-amber .custom-ui,
     body.tau-custom-ui-theme-matrix .custom-ui {

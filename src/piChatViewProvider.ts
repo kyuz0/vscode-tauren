@@ -763,7 +763,7 @@ function getAnimationsEnabledSetting(): boolean {
 
 function getCustomUiThemeSetting(): WebviewCustomUiTheme {
   const value = vscode.workspace.getConfiguration('tau').get<string>('customUiTheme', 'default');
-  return value === 'crt' || value === 'amber' || value === 'matrix' ? value : 'default';
+  return value === 'modern' || value === 'crt' || value === 'amber' || value === 'matrix' ? value : 'default';
 }
 
 function getReadyScriptSetting(): string | undefined {

@@ -75,7 +75,7 @@ export function parseWebviewStateMessage(data: unknown): WebviewState {
 }
 
 function parseCustomUiTheme(value: unknown) {
-  return value === 'crt' || value === 'amber' || value === 'matrix' ? value : 'default';
+  return value === 'modern' || value === 'crt' || value === 'amber' || value === 'matrix' ? value : 'default';
 }
 
 function parseWorkspaceDiffStats(value: unknown): { addedLines: number; removedLines: number } {
