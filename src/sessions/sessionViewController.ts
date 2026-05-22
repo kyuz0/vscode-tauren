@@ -244,6 +244,35 @@ export class SessionViewController {
     }
   }
 
+  public async setTreeEntryLabel(entryId: string, label: string): Promise<void> {
+    if (this.options.isBusy()) {
+      this.options.showNotification('Wait for Pi to finish before editing session tree labels.', 'warning');
+      return;
+    }
+
+    const setTreeEntryLabel = this.options.getClient().setTreeEntryLabel;
+
+    if (typeof setTreeEntryLabel !== 'function') {
+      this.options.showNotification('Editing session tree labels requires Tau SDK mode.', 'warning');
+      return;
+    }
+
+    try {
+      const trimmedLabel = label.trim();
+      await setTreeEntryLabel(entryId, trimmedLabel || undefined);
+      this.treeItems = this.treeItems.map((item) => item.entryId === entryId
+        ? trimmedLabel
+          ? { ...item, label: trimmedLabel }
+          : omitTreeItemLabel(item)
+        : item);
+      this.options.postState();
+      void this.refreshTree();
+    } catch (error) {
+      this.treeError = getErrorMessage(error);
+      this.options.postState();
+    }
+  }
+
   public async navigateTree(
     entryId: string,
     options: { summarize?: boolean; customInstructions?: string } = {}
@@ -698,6 +727,11 @@ export class SessionViewController {
       }
     };
   }
+}
+
+function omitTreeItemLabel(item: WebviewTreeItem): WebviewTreeItem {
+  const { label: _label, ...rest } = item;
+  return rest;
 }
 
 async function defaultListSessions(): Promise<WebviewSessionItem[]> {

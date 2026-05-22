@@ -53,6 +53,7 @@ export type RawEntry = Record<string, unknown> & {
   id?: string;
   parentId?: string | null;
   type?: string;
+  resolvedLabel?: string;
 };
 
 export type TreeNode = {

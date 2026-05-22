@@ -138,6 +138,10 @@ suite('Chat webview helpers', () => {
       { type: 'selectTreeEntry', entryId: 'entry-1', summarize: true, customInstructions: 'Focus on tests' }
     );
     assert.deepStrictEqual(
+      parseWebviewMessage({ type: 'setTreeEntryLabel', entryId: 'entry-1', label: 'checkpoint' }),
+      { type: 'setTreeEntryLabel', entryId: 'entry-1', label: 'checkpoint' }
+    );
+    assert.deepStrictEqual(
       parseWebviewMessage({ type: 'setSessionName', name: 'Feature work' }),
       { type: 'setSessionName', name: 'Feature work' }
     );
@@ -194,6 +198,8 @@ suite('Chat webview helpers', () => {
     assert.deepStrictEqual(parseWebviewMessage({ type: 'sessionItemCommand', sessionPath: '/sessions/old.jsonl', command: 'bogus' }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'setSessionItemName', sessionPath: '', name: 'Old work' }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'setSessionItemName', sessionPath: '/sessions/old.jsonl', name: 42 }), { type: 'unknown' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'setTreeEntryLabel', entryId: '', label: 'checkpoint' }), { type: 'unknown' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'setTreeEntryLabel', entryId: 'entry-1', label: 42 }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'setSessionName', name: 42 }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'removePromptContext', id: '' }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'copyText', text: '' }), { type: 'unknown' });

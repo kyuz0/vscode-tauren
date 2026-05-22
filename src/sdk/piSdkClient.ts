@@ -244,6 +244,11 @@ export class PiSdkClient implements PiRpcClientLike {
     );
   }
 
+  public async setTreeEntryLabel(entryId: string, label: string | undefined): Promise<void> {
+    const { session } = await this.ensureRuntime();
+    session.sessionManager.appendLabelChange(entryId, label);
+  }
+
   public async navigateTree(
     entryId: string,
     options: { summarize?: boolean; customInstructions?: string } = {}

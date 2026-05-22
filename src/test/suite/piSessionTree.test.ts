@@ -1,5 +1,8 @@
 import * as assert from 'assert';
-import { flattenPiSessionTree } from '../../sessions/piSessionTree';
+import { mkdtemp, rm, writeFile } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { flattenPiSessionTree, listPiSessionTree } from '../../sessions/piSessionTree';
 
 suite('Pi session tree', () => {
   test('keeps single-child chains visually flat', () => {
@@ -79,6 +82,56 @@ suite('Pi session tree', () => {
       { entryId: 'u1', role: 'user', text: 'Run tests' },
       { entryId: 't1', role: 'tool', text: '[bash: npm test -- --grep "Chat webview"]' }
     ]);
+  });
+
+  test('displays labels resolved by the SDK tree', () => {
+    const items = flattenPiSessionTree([
+      {
+        entry: { id: 'u1', parentId: null, type: 'message', message: { role: 'user', content: 'Checkpoint prompt' } },
+        label: 'checkpoint',
+        children: []
+      }
+    ], 'u1');
+
+    assert.strictEqual(items[0].label, 'checkpoint');
+  });
+
+  test('marks the visible parent current when the current leaf is a hidden label entry', () => {
+    const items = flattenPiSessionTree([
+      {
+        entry: { id: 'u1', parentId: null, type: 'message', message: { role: 'user', content: 'Checkpoint prompt' } },
+        label: 'checkpoint',
+        children: [{
+          entry: { id: 'l1', parentId: 'u1', type: 'label', targetId: 'u1', label: 'checkpoint' },
+          children: []
+        }]
+      }
+    ], 'l1');
+
+    assert.deepStrictEqual(items.map((item) => ({ entryId: item.entryId, current: item.current, activePath: item.activePath, label: item.label })), [
+      { entryId: 'u1', current: true, activePath: true, label: 'checkpoint' }
+    ]);
+  });
+
+  test('reads labels from session JSONL without showing label entries', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tau-session-tree-'));
+    const sessionFile = join(dir, 'session.jsonl');
+
+    try {
+      await writeFile(sessionFile, [
+        JSON.stringify({ type: 'session', id: 'session-1', version: 1 }),
+        JSON.stringify({ id: 'u1', parentId: null, type: 'message', timestamp: '2026-01-01T00:00:00.000Z', message: { role: 'user', content: 'First prompt' } }),
+        JSON.stringify({ id: 'l1', parentId: 'u1', type: 'label', timestamp: '2026-01-01T00:00:01.000Z', targetId: 'u1', label: 'checkpoint' })
+      ].join('\n') + '\n');
+
+      const items = await listPiSessionTree(sessionFile);
+
+      assert.deepStrictEqual(items.map((item) => ({ entryId: item.entryId, text: item.text, label: item.label })), [
+        { entryId: 'u1', text: 'First prompt', label: 'checkpoint' }
+      ]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   test('indents only at branch points', () => {

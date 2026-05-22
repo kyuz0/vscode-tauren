@@ -135,8 +135,12 @@ suite('PiSdkClient', () => {
       depth: 0,
       isLast: true,
       ancestorContinues: [],
-      activePath: true
+      activePath: true,
+      prefix: ''
     }]);
+
+    await harness.client.setTreeEntryLabel('leaf-1', 'checkpoint');
+    assert.deepStrictEqual(harness.session.labelChanges, [{ entryId: 'leaf-1', label: 'checkpoint' }]);
 
     const selectedModel = await harness.client.setModel('openai', 'gpt-test');
     assert.strictEqual(selectedModel, harness.session.availableModels[0]);
@@ -218,6 +222,7 @@ class FakeSession {
   public autoCompactionEnabled = true;
   public pendingMessageCount = 0;
   public bindCount = 0;
+  public readonly labelChanges: Array<{ entryId: string; label: string | undefined }> = [];
   public readonly messages = [{ role: 'assistant', content: 'last answer' }];
   public readonly availableModels = [this.model];
   public readonly promptCalls: Array<{ message: string; streamingBehavior?: string }> = [];
@@ -249,6 +254,10 @@ class FakeSession {
     })
   };
   public readonly sessionManager = {
+    appendLabelChange: (entryId: string, label: string | undefined) => {
+      this.labelChanges.push({ entryId, label });
+      return 'label-1';
+    },
     getLeafId: () => 'leaf-1',
     getTree: () => [{
       entry: {

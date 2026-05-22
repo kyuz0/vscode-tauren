@@ -30,6 +30,7 @@ export type PiRpcClientLike = Pick<
   | 'dispose'
 > & {
   getSessionTree?: () => Promise<WebviewTreeItem[]>;
+  setTreeEntryLabel?: (entryId: string, label: string | undefined) => Promise<void>;
 };
 
 export type PiRpcClientFactory = (options: PiRpcClientOptions) => PiRpcClientLike;

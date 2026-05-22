@@ -250,6 +250,9 @@ export class PiChatController {
           customInstructions: message.customInstructions
         });
         return;
+      case 'setTreeEntryLabel':
+        await this.sessionView.setTreeEntryLabel(message.entryId, message.label);
+        return;
       case 'setSessionName':
         await this.slashCommandController.setSessionNameFromWebview(message.name);
         return;

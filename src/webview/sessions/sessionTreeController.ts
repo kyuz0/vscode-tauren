@@ -15,6 +15,8 @@ export type SessionTreeControllerOptions = {
 export class SessionTreeController {
   private selectedIndex = 0;
   private pendingSummaryEntryId: string | undefined;
+  private pendingLabelEntryId: string | undefined;
+  private labelEditValue = '';
   private summaryChoiceIndex = 0;
   private customSummaryMode = false;
   private customInstructions = '';
@@ -53,6 +55,11 @@ export class SessionTreeController {
 
     for (let index = 0; index < state.treeItems.length; index += 1) {
       const item = state.treeItems[index];
+
+      if (item.entryId === this.pendingLabelEntryId) {
+        this.options.sessionsElement.append(this.createLabelDialog());
+      }
+
       this.options.sessionsElement.append(createTreeItemElement(item, index, {
         selectedIndex: this.selectedIndex,
         disabled: state.busy || state.treeRefreshing
@@ -92,17 +99,17 @@ export class SessionTreeController {
     }
 
     const previousIndex = this.selectedIndex;
-    const hadSummaryDialog = Boolean(this.pendingSummaryEntryId);
+    const hadDialog = this.hasOpenDialog();
     const nextIndex = this.wrapIndex(this.selectedIndex + delta, state.treeItems.length);
 
-    if (nextIndex === previousIndex && !hadSummaryDialog) {
+    if (nextIndex === previousIndex && !hadDialog) {
       return;
     }
 
-    this.closeSummaryDialog();
+    this.closeDialogs();
     this.selectedIndex = nextIndex;
 
-    if (hadSummaryDialog) {
+    if (hadDialog) {
       this.render();
       return;
     }
@@ -137,12 +144,21 @@ export class SessionTreeController {
       return true;
     }
 
+    const labelAction = target?.closest<HTMLElement>('[data-tree-label-action]');
+
+    if (labelAction) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.runLabelAction(labelAction.getAttribute('data-tree-label-action'));
+      return true;
+    }
+
     const cancel = target?.closest<HTMLElement>('.sessions__tree-summary-cancel');
 
     if (cancel) {
       event.preventDefault();
       event.stopPropagation();
-      this.closeSummaryDialog();
+      this.closeDialogs();
       this.render();
       this.options.sessionsElement.focus({ preventScroll: true });
       return true;
@@ -152,11 +168,44 @@ export class SessionTreeController {
   }
 
   public handleKeydown(event: KeyboardEvent): boolean {
+    const target = eventTargetElement(event);
+    const labelInput = target?.closest('.sessions__tree-label-input');
+
+    if (this.pendingLabelEntryId) {
+      if (labelInput instanceof HTMLInputElement) {
+        this.labelEditValue = labelInput.value;
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        this.closeLabelDialog();
+        this.render();
+        this.options.sessionsElement.focus({ preventScroll: true });
+        return true;
+      }
+
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        event.stopPropagation();
+        this.savePendingLabel();
+        return true;
+      }
+
+      return labelInput instanceof HTMLInputElement;
+    }
+
     if (!this.pendingSummaryEntryId) {
+      if (event.key === 'L') {
+        event.preventDefault();
+        event.stopPropagation();
+        this.openLabelDialogForSelected();
+        return true;
+      }
+
       return false;
     }
 
-    const target = eventTargetElement(event);
     const customInput = target?.closest('.sessions__tree-summary-input');
 
     if (event.key === 'Escape') {
@@ -262,6 +311,50 @@ export class SessionTreeController {
     return dialog;
   }
 
+  private createLabelDialog(): HTMLElement {
+    const dialog = document.createElement('div');
+    dialog.className = 'sessions__tree-summary sessions__tree-label-dialog';
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-label', 'Edit label');
+
+    const title = document.createElement('div');
+    title.className = 'sessions__tree-summary-title';
+    title.textContent = 'Edit label';
+
+    const input = document.createElement('input');
+    input.className = 'sessions__tree-summary-input sessions__tree-label-input';
+    input.type = 'text';
+    input.value = this.labelEditValue;
+    input.placeholder = 'Label';
+    input.addEventListener('input', () => {
+      this.labelEditValue = input.value;
+    });
+
+    const actions = document.createElement('div');
+    actions.className = 'sessions__tree-summary-actions';
+    actions.append(
+      this.createLabelButton('save', 'Save'),
+      this.createCancelLink()
+    );
+
+    dialog.append(title, input, actions);
+    requestAnimationFrame(() => {
+      dialog.scrollIntoView({ block: 'nearest' });
+      input.focus({ preventScroll: true });
+      input.select();
+    });
+    return dialog;
+  }
+
+  private createLabelButton(action: string, label: string): HTMLButtonElement {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'sessions__tree-summary-choice sessions__tree-summary-choice--active';
+    button.setAttribute('data-tree-label-action', action);
+    button.textContent = label;
+    return button;
+  }
+
   private createSummaryButton(action: SummaryChoice, label: string, active: boolean): HTMLButtonElement {
     const button = document.createElement('button');
     button.type = 'button';
@@ -280,10 +373,25 @@ export class SessionTreeController {
   }
 
   private openSummaryDialog(entryId: string): void {
+    this.closeLabelDialog();
     this.pendingSummaryEntryId = entryId;
     this.summaryChoiceIndex = 0;
     this.customSummaryMode = false;
     this.customInstructions = '';
+    this.render();
+  }
+
+  private openLabelDialogForSelected(): void {
+    const state = this.options.getState();
+    const treeItem = Array.isArray(state.treeItems) ? state.treeItems[this.selectedIndex] : undefined;
+
+    if (!treeItem?.entryId || state.busy || state.treeRefreshing) {
+      return;
+    }
+
+    this.closeSummaryDialog();
+    this.pendingLabelEntryId = treeItem.entryId;
+    this.labelEditValue = treeItem.label ?? '';
     this.render();
   }
 
@@ -292,6 +400,20 @@ export class SessionTreeController {
     this.summaryChoiceIndex = 0;
     this.customSummaryMode = false;
     this.customInstructions = '';
+  }
+
+  private closeLabelDialog(): void {
+    this.pendingLabelEntryId = undefined;
+    this.labelEditValue = '';
+  }
+
+  private closeDialogs(): void {
+    this.closeSummaryDialog();
+    this.closeLabelDialog();
+  }
+
+  private hasOpenDialog(): boolean {
+    return Boolean(this.pendingSummaryEntryId || this.pendingLabelEntryId);
   }
 
   private runSummaryAction(action: string | null): void {
@@ -332,6 +454,26 @@ export class SessionTreeController {
       summarize: choice !== 'none',
       ...(choice === 'custom' && customInstructions ? { customInstructions } : {})
     });
+  }
+
+  private runLabelAction(action: string | null): void {
+    if (action === 'save') {
+      this.savePendingLabel();
+    }
+  }
+
+  private savePendingLabel(): void {
+    const entryId = this.pendingLabelEntryId;
+
+    if (!entryId) {
+      return;
+    }
+
+    const label = this.labelEditValue.trim();
+    this.closeLabelDialog();
+    this.options.postMessage({ type: 'setTreeEntryLabel', entryId, label });
+    this.render();
+    this.options.sessionsElement.focus({ preventScroll: true });
   }
 
   private getSummaryChoice(index: number): SummaryChoice {

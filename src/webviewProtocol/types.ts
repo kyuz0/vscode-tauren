@@ -28,6 +28,7 @@ export type WebviewMessage =
   | { type: 'sessionItemCommand'; sessionPath: string; command: WebviewSessionItemCommand }
   | { type: 'setSessionItemName'; sessionPath: string; name: string }
   | { type: 'selectTreeEntry'; entryId: string; summarize?: boolean; customInstructions?: string }
+  | { type: 'setTreeEntryLabel'; entryId: string; label: string }
   | { type: 'setSessionName'; name: string }
   | { type: 'refreshMetadata' }
   | { type: 'refreshSlashCommands' }

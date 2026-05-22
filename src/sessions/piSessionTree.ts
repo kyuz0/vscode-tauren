@@ -7,6 +7,7 @@ export type FlattenableSessionTreeNode = {
   entry: RawEntry;
   children?: FlattenableSessionTreeNode[];
   label?: string;
+  labelTimestamp?: string;
 };
 
 export async function listPiSessionTree(sessionFile: string | undefined): Promise<PiSessionTreeItem[]> {
@@ -94,6 +95,7 @@ export function flattenPiSessionTree(
 ): PiSessionTreeItem[] {
   const activePathIds = buildActivePathIds(roots, currentEntryId);
   const toolCallsById = buildToolCallMap(roots);
+  const visibleCurrentEntryId = resolveVisibleCurrentEntryId(roots, currentEntryId);
   const visibleRoots = roots.flatMap((root) => buildVisibleTree(root, currentEntryId));
   const multipleRoots = visibleRoots.length > 1;
   const result: PiSessionTreeItem[] = [];
@@ -120,7 +122,7 @@ export function flattenPiSessionTree(
       entryId,
       role: formatted.role,
       text: formatted.text,
-      current: Boolean(currentEntryId && entryId === currentEntryId),
+      current: Boolean(visibleCurrentEntryId && entryId === visibleCurrentEntryId),
       depth: displayIndent,
       isLast,
       ancestorContinues: gutters.map((gutter) => gutter.show),
@@ -234,6 +236,29 @@ function buildTreePrefix(options: {
   return prefix;
 }
 
+function resolveVisibleCurrentEntryId(
+  roots: FlattenableSessionTreeNode[],
+  currentEntryId: string | null | undefined
+): string | undefined {
+  if (!currentEntryId) {
+    return undefined;
+  }
+
+  const entriesById = buildEntriesById(roots);
+  let entry: RawEntry | undefined = entriesById.get(currentEntryId);
+
+  while (entry?.id) {
+    if (!isHiddenSettingsEntry(entry) && !isHiddenAssistantToolCallEntry(entry, currentEntryId)) {
+      return entry.id;
+    }
+
+    const parentId = typeof entry.parentId === 'string' ? entry.parentId : undefined;
+    entry = parentId ? entriesById.get(parentId) : undefined;
+  }
+
+  return undefined;
+}
+
 function buildActivePathIds(
   roots: FlattenableSessionTreeNode[],
   currentEntryId: string | null | undefined
@@ -244,6 +269,19 @@ function buildActivePathIds(
     return activePathIds;
   }
 
+  const entriesById = buildEntriesById(roots);
+  let entry: RawEntry | undefined = entriesById.get(currentEntryId);
+
+  while (entry?.id) {
+    activePathIds.add(entry.id);
+    const parentId = typeof entry.parentId === 'string' ? entry.parentId : undefined;
+    entry = parentId ? entriesById.get(parentId) : undefined;
+  }
+
+  return activePathIds;
+}
+
+function buildEntriesById(roots: FlattenableSessionTreeNode[]): Map<string, RawEntry> {
   const entriesById = new Map<string, RawEntry>();
   const stack = [...roots];
 
@@ -257,15 +295,7 @@ function buildActivePathIds(
     }
   }
 
-  let entry: RawEntry | undefined = entriesById.get(currentEntryId);
-
-  while (entry?.id) {
-    activePathIds.add(entry.id);
-    const parentId = typeof entry.parentId === 'string' ? entry.parentId : undefined;
-    entry = parentId ? entriesById.get(parentId) : undefined;
-  }
-
-  return activePathIds;
+  return entriesById;
 }
 
 function getResolvedLabel(entry: RawEntry): string | undefined {

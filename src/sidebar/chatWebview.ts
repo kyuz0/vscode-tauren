@@ -61,6 +61,10 @@ export function parseWebviewMessage(value: unknown): WebviewMessage {
           ...(typeof value.customInstructions === 'string' ? { customInstructions: value.customInstructions } : {})
         }
         : { type: 'unknown' };
+    case 'setTreeEntryLabel':
+      return typeof value.entryId === 'string' && value.entryId && typeof value.label === 'string'
+        ? { type: 'setTreeEntryLabel', entryId: value.entryId, label: value.label }
+        : { type: 'unknown' };
     case 'setSessionName':
       return typeof value.name === 'string'
         ? { type: 'setSessionName', name: value.name }

@@ -4,6 +4,9 @@ All notable changes to Tau will be documented in this file.
 
 ## Unreleased
 
+- Added session tree label display for Pi-labeled entries.
+- Added session tree label editing with `Shift+L`.
+
 ## 1.1.0
 
 - Added experimental SDK mode to make more features available
