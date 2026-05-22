@@ -4,6 +4,7 @@ All notable changes to Tau will be documented in this file.
 
 ## Unreleased
 
+- Added a visible block cursor for Pi custom UI components that emit `CURSOR_MARKER`.
 - Fixed compaction summary output so it starts collapsed, can be expanded, and scrolls when long.
 - Removed the duplicate busy message below the running compaction activity box.
 - Matched compaction output box background to other output boxes.

@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { CustomUiController, isTextInputKeyboardEvent, terminalDataForKeyboardEvent } from '../../webview/customUI/customUi';
+import { CustomUiController, isTextInputKeyboardEvent, prepareCustomUiLines, terminalDataForKeyboardEvent } from '../../webview/customUI/customUi';
 
 suite('Webview custom UI keyboard helpers', () => {
   test('keeps legacy terminal data for key press compatibility', () => {
@@ -23,6 +23,20 @@ suite('Webview custom UI keyboard helpers', () => {
     assert.strictEqual(isTextInputKeyboardEvent(keyEvent({ key: 'a', ctrlKey: true })), false);
     assert.strictEqual(isTextInputKeyboardEvent(keyEvent({ key: 'a', altKey: true })), false);
     assert.strictEqual(isTextInputKeyboardEvent(keyEvent({ key: 'Enter' })), false);
+  });
+
+  test('extracts CURSOR_MARKER position from rendered custom UI lines', () => {
+    const prepared = prepareCustomUiLines(['\x1b[36mab\x1b[0mc\x1b_pi:c\x07d']);
+
+    assert.deepStrictEqual(prepared.lines, ['\x1b[36mab\x1b[0mcd']);
+    assert.deepStrictEqual(prepared.cursor, { row: 0, column: 3 });
+  });
+
+  test('does not synthesize a fallback cursor for markerless custom UI lines', () => {
+    const prepared = prepareCustomUiLines(['first', '', '\x1b[90mlast\x1b[0m']);
+
+    assert.deepStrictEqual(prepared.lines, ['first', '', '\x1b[90mlast\x1b[0m']);
+    assert.strictEqual(prepared.cursor, undefined);
   });
 
   test('notifies when active custom UI hides', () => {

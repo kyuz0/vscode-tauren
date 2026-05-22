@@ -2302,6 +2302,7 @@ const customUiStyles = /* css */ `    .custom-ui {
     }
 
     .custom-ui__output {
+      position: relative;
       min-width: 0;
       min-height: 0;
       overflow-y: auto;
@@ -2312,6 +2313,25 @@ const customUiStyles = /* css */ `    .custom-ui {
       line-height: 1.35;
       white-space: pre;
       tab-size: 2;
+    }
+
+    .custom-ui__cursor {
+      position: absolute;
+      width: 1ch;
+      min-width: 1ch;
+      background: var(--vscode-editorCursor-foreground, var(--vscode-foreground));
+      pointer-events: none;
+      z-index: 1;
+      animation: tau-custom-ui-cursor-blink 1s steps(1, end) infinite;
+    }
+
+    .custom-ui__cursor[hidden] {
+      display: none;
+    }
+
+    @keyframes tau-custom-ui-cursor-blink {
+      0%, 49% { opacity: 1; }
+      50%, 100% { opacity: 0; }
     }
 
     .custom-ui__input-capture {
@@ -2332,6 +2352,7 @@ const customUiStyles = /* css */ `    .custom-ui {
       border: 0;
       outline: 0;
       pointer-events: none;
+      transform: translateZ(0);
     }
 
     .custom-ui__line {

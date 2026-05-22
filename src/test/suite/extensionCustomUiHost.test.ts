@@ -82,6 +82,42 @@ suite('ExtensionCustomUiHost', () => {
     assert.strictEqual(await resultPromise, undefined);
   });
 
+  test('sets focusable custom UI components focused while active', async () => {
+    const messages: CustomUiHostMessage[] = [];
+    let componentFocused = false;
+    const component = {
+      focused: false,
+      render: () => {
+        componentFocused = component.focused;
+        return ['ready'];
+      },
+      invalidate: () => undefined
+    };
+    const host = new ExtensionCustomUiHost({
+      isAvailable: () => true,
+      postMessage: (message) => {
+        messages.push(message);
+        return true;
+      },
+      getOutputColors: () => true,
+      notify: () => undefined
+    });
+
+    const resultPromise = host.custom<string>(() => component);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const show = messages.find((message): message is { type: 'customUiShow'; id: string } => message.type === 'customUiShow');
+    assert.ok(show);
+    assert.strictEqual(componentFocused, true);
+    assert.strictEqual(component.focused, true);
+
+    host.cancel(show.id);
+
+    assert.strictEqual(await resultPromise, undefined);
+    assert.strictEqual(component.focused, false);
+  });
+
   test('forwards key releases to components that opt in', async () => {
     const messages: CustomUiHostMessage[] = [];
     const inputs: string[] = [];

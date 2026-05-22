@@ -4,6 +4,7 @@ type CustomUiComponent = {
   render(width: number): string[];
   handleInput?(data: string): void;
   wantsKeyRelease?: boolean;
+  focused?: boolean;
   invalidate(): void;
   dispose?(): void;
 };
@@ -89,6 +90,7 @@ export class ExtensionCustomUiHost {
             finished: false
           };
           this.active = active as ActiveCustomUi;
+          setComponentFocused(active.component, true);
           customOptions?.onHandle?.(createOverlayHandle(() => this.cancel(id)) as never);
           this.options.postMessage({ type: 'customUiShow', id });
           this.render(id);
@@ -200,6 +202,8 @@ export class ExtensionCustomUiHost {
       clearTimeout(active.renderTimer);
     }
 
+    setComponentFocused(active.component, false);
+
     try {
       active.component.dispose?.();
     } catch {
@@ -251,6 +255,12 @@ function createOverlayHandle(cancel: () => void) {
       return focused;
     }
   };
+}
+
+function setComponentFocused(component: CustomUiComponent, focused: boolean): void {
+  if ('focused' in component) {
+    component.focused = focused;
+  }
 }
 
 function clampInteger(value: number, min: number, max: number, fallback: number): number {

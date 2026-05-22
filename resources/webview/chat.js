@@ -1533,7 +1533,9 @@
   }
 
   // src/webview/customUI/customUi.ts
+  var cursorMarker = "\x1B_pi:c\x07";
   var cursorMarkerPattern = /\x1b_pi:c\x07/g;
+  var csiEscapePattern = /\x1b\[[0-?]*(?:[ -/][0-?]*)?[@-~]/g;
   var nonCsiEscapePattern = /\x1b(?:\][^\x07]*(?:\x07|\x1b\\)|_[^\x07]*(?:\x07|\x1b\\)|\^[^\x07]*(?:\x07|\x1b\\)|P[^\x1b]*(?:\x1b\\)?)/g;
   var CustomUiController = class {
     constructor(options) {
@@ -1544,6 +1546,7 @@
     lastDimensionSignature = "";
     resizeFrame;
     inputCaptureElement;
+    cursorElement;
     isComposing = false;
     lastTextInputValue = "";
     lastTextInputTime = 0;
@@ -1641,14 +1644,16 @@
       if (this.activeId !== id) {
         return;
       }
+      const prepared = prepareCustomUiLines(lines);
       const fragment = document.createDocumentFragment();
-      for (const line of lines) {
+      for (const line of prepared.lines) {
         const lineElement = document.createElement("div");
         lineElement.className = "custom-ui__line";
-        renderAnsiTextInto(lineElement, sanitizeTuiLine(line), outputColors);
+        renderAnsiTextInto(lineElement, line, outputColors);
         fragment.append(lineElement);
       }
       this.options.customUiOutputElement.replaceChildren(fragment);
+      this.updateCursor(prepared.cursor);
       this.scheduleDimensionsPost();
     }
     hide(id) {
@@ -1662,6 +1667,7 @@
       this.clearInputCaptureValue();
       this.options.customUiElement.hidden = true;
       this.options.customUiElement.inert = true;
+      this.updateCursor(void 0);
       this.options.customUiOutputElement.replaceChildren();
       this.options.form.classList.remove("composer--custom-hidden");
       this.options.form.removeAttribute("aria-hidden");
@@ -1783,6 +1789,51 @@
       element.value = "";
       element.focus({ preventScroll: true });
     }
+    ensureCursorElement() {
+      if (this.cursorElement) {
+        return this.cursorElement;
+      }
+      const element = document.createElement("span");
+      element.className = "custom-ui__cursor";
+      element.setAttribute("aria-hidden", "true");
+      this.cursorElement = element;
+      return element;
+    }
+    updateCursor(cursor) {
+      if (!cursor) {
+        if (this.cursorElement) {
+          this.cursorElement.hidden = true;
+        }
+        this.positionInputCapture(void 0);
+        return;
+      }
+      const element = this.ensureCursorElement();
+      const metrics = measureTerminalMetrics(this.options.customUiOutputElement);
+      element.hidden = false;
+      element.style.left = `${metrics.paddingLeft + cursor.column * metrics.charWidth}px`;
+      element.style.top = `${metrics.paddingTop + cursor.row * metrics.lineHeight}px`;
+      element.style.width = `${metrics.charWidth}px`;
+      element.style.height = `${metrics.lineHeight}px`;
+      this.options.customUiOutputElement.append(element);
+      this.positionInputCapture(element);
+    }
+    positionInputCapture(cursorElement) {
+      if (!cursorElement && !this.inputCaptureElement) {
+        return;
+      }
+      const input = this.ensureInputCaptureElement();
+      if (!cursorElement || cursorElement.hidden) {
+        input.style.left = "0px";
+        input.style.top = "0px";
+        input.style.height = "1px";
+        return;
+      }
+      const cursorRect = cursorElement.getBoundingClientRect();
+      const containerRect = this.options.customUiElement.getBoundingClientRect();
+      input.style.left = `${Math.max(0, cursorRect.left - containerRect.left)}px`;
+      input.style.top = `${Math.max(0, cursorRect.top - containerRect.top)}px`;
+      input.style.height = `${Math.max(1, cursorRect.height)}px`;
+    }
     clearInputCaptureValue() {
       if (this.inputCaptureElement) {
         this.inputCaptureElement.value = "";
@@ -1837,11 +1888,56 @@
       });
     }
   };
+  function prepareCustomUiLines(lines) {
+    let cursor;
+    const preparedLines = lines.map((line, row) => {
+      const markerIndex = cursor ? -1 : line.indexOf(cursorMarker);
+      if (markerIndex !== -1) {
+        cursor = {
+          row,
+          column: visibleColumn(line.slice(0, markerIndex))
+        };
+      }
+      return sanitizeTuiLine(line);
+    });
+    return {
+      lines: preparedLines,
+      cursor
+    };
+  }
   function sanitizeTuiLine(value) {
     return value.replace(cursorMarkerPattern, "").replace(nonCsiEscapePattern, "");
   }
+  function visibleColumn(value) {
+    const text = value.replace(cursorMarkerPattern, "").replace(nonCsiEscapePattern, "").replace(csiEscapePattern, "");
+    let column = 0;
+    for (const character of Array.from(text)) {
+      if (character === "	") {
+        column += Math.max(1, 2 - column % 2);
+        continue;
+      }
+      column += characterCellWidth(character);
+    }
+    return column;
+  }
+  function characterCellWidth(character) {
+    const codePoint = character.codePointAt(0);
+    if (codePoint === void 0 || codePoint === 0 || codePoint < 32 || codePoint >= 127 && codePoint < 160) {
+      return 0;
+    }
+    if (isCombiningCodePoint(codePoint)) {
+      return 0;
+    }
+    return isWideCodePoint(codePoint) ? 2 : 1;
+  }
+  function isCombiningCodePoint(codePoint) {
+    return codePoint >= 768 && codePoint <= 879 || codePoint >= 6832 && codePoint <= 6911 || codePoint >= 7616 && codePoint <= 7679 || codePoint >= 8400 && codePoint <= 8447 || codePoint >= 65056 && codePoint <= 65071;
+  }
+  function isWideCodePoint(codePoint) {
+    return codePoint >= 4352 && (codePoint <= 4447 || codePoint === 9001 || codePoint === 9002 || codePoint >= 11904 && codePoint <= 42191 && codePoint !== 12351 || codePoint >= 44032 && codePoint <= 55203 || codePoint >= 63744 && codePoint <= 64255 || codePoint >= 65040 && codePoint <= 65049 || codePoint >= 65072 && codePoint <= 65135 || codePoint >= 65280 && codePoint <= 65376 || codePoint >= 65504 && codePoint <= 65510 || codePoint >= 127744 && codePoint <= 128591 || codePoint >= 129280 && codePoint <= 129535);
+  }
   var measurementCanvas;
-  function measureTerminalDimensions(element) {
+  function measureTerminalMetrics(element) {
     const style = window.getComputedStyle(element);
     const font = `${style.fontStyle} ${style.fontVariant} ${style.fontWeight} ${style.fontSize} / ${style.lineHeight} ${style.fontFamily}`;
     const canvas = measurementCanvas ?? document.createElement("canvas");
@@ -1852,11 +1948,21 @@
       context.font = font;
       charWidth = Math.max(1, context.measureText("M").width);
     }
-    const lineHeight = Number.parseFloat(style.lineHeight) || Number.parseFloat(style.fontSize) * 1.35 || 18;
+    const fontSize = Number.parseFloat(style.fontSize) || 12;
+    const lineHeight = Number.parseFloat(style.lineHeight) || fontSize * 1.35 || 18;
+    return {
+      charWidth,
+      lineHeight,
+      paddingLeft: Number.parseFloat(style.paddingLeft) || 0,
+      paddingTop: Number.parseFloat(style.paddingTop) || 0
+    };
+  }
+  function measureTerminalDimensions(element) {
+    const metrics = measureTerminalMetrics(element);
     const rect = element.getBoundingClientRect();
-    const columns = Math.max(20, Math.floor(rect.width / charWidth));
+    const columns = Math.max(20, Math.floor(rect.width / metrics.charWidth));
     const targetHeight = Math.max(rect.height, Math.min(window.innerHeight * 0.7, window.innerHeight - 140));
-    const rows = Math.max(4, Math.min(80, Math.floor(Math.max(120, targetHeight) / lineHeight)));
+    const rows = Math.max(4, Math.min(80, Math.floor(Math.max(120, targetHeight) / metrics.lineHeight)));
     return { columns, rows };
   }
   function isTextInputKeyboardEvent(event) {

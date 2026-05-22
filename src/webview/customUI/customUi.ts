@@ -15,7 +15,19 @@ type CustomUiControllerOptions = {
   onClose?: () => void;
 };
 
+export type CustomUiCursorPosition = {
+  row: number;
+  column: number;
+};
+
+export type PreparedCustomUiLines = {
+  lines: string[];
+  cursor: CustomUiCursorPosition | undefined;
+};
+
+const cursorMarker = '\x1b_pi:c\x07';
 const cursorMarkerPattern = /\x1b_pi:c\x07/g;
+const csiEscapePattern = /\x1b\[[0-?]*(?:[ -/][0-?]*)?[@-~]/g;
 const nonCsiEscapePattern = /\x1b(?:\][^\x07]*(?:\x07|\x1b\\)|_[^\x07]*(?:\x07|\x1b\\)|\^[^\x07]*(?:\x07|\x1b\\)|P[^\x1b]*(?:\x1b\\)?)/g;
 
 export class CustomUiController {
@@ -23,6 +35,7 @@ export class CustomUiController {
   private lastDimensionSignature = '';
   private resizeFrame: number | undefined;
   private inputCaptureElement: HTMLTextAreaElement | undefined;
+  private cursorElement: HTMLElement | undefined;
   private isComposing = false;
   private lastTextInputValue = '';
   private lastTextInputTime = 0;
@@ -142,15 +155,17 @@ export class CustomUiController {
       return;
     }
 
+    const prepared = prepareCustomUiLines(lines);
     const fragment = document.createDocumentFragment();
-    for (const line of lines) {
+    for (const line of prepared.lines) {
       const lineElement = document.createElement('div');
       lineElement.className = 'custom-ui__line';
-      renderAnsiTextInto(lineElement, sanitizeTuiLine(line), outputColors);
+      renderAnsiTextInto(lineElement, line, outputColors);
       fragment.append(lineElement);
     }
 
     this.options.customUiOutputElement.replaceChildren(fragment);
+    this.updateCursor(prepared.cursor);
     this.scheduleDimensionsPost();
   }
 
@@ -166,6 +181,7 @@ export class CustomUiController {
     this.clearInputCaptureValue();
     this.options.customUiElement.hidden = true;
     this.options.customUiElement.inert = true;
+    this.updateCursor(undefined);
     this.options.customUiOutputElement.replaceChildren();
     this.options.form.classList.remove('composer--custom-hidden');
     this.options.form.removeAttribute('aria-hidden');
@@ -317,6 +333,59 @@ export class CustomUiController {
     element.focus({ preventScroll: true });
   }
 
+  private ensureCursorElement(): HTMLElement {
+    if (this.cursorElement) {
+      return this.cursorElement;
+    }
+
+    const element = document.createElement('span');
+    element.className = 'custom-ui__cursor';
+    element.setAttribute('aria-hidden', 'true');
+    this.cursorElement = element;
+    return element;
+  }
+
+  private updateCursor(cursor: CustomUiCursorPosition | undefined): void {
+    if (!cursor) {
+      if (this.cursorElement) {
+        this.cursorElement.hidden = true;
+      }
+      this.positionInputCapture(undefined);
+      return;
+    }
+
+    const element = this.ensureCursorElement();
+    const metrics = measureTerminalMetrics(this.options.customUiOutputElement);
+    element.hidden = false;
+    element.style.left = `${metrics.paddingLeft + cursor.column * metrics.charWidth}px`;
+    element.style.top = `${metrics.paddingTop + cursor.row * metrics.lineHeight}px`;
+    element.style.width = `${metrics.charWidth}px`;
+    element.style.height = `${metrics.lineHeight}px`;
+    this.options.customUiOutputElement.append(element);
+    this.positionInputCapture(element);
+  }
+
+  private positionInputCapture(cursorElement: HTMLElement | undefined): void {
+    if (!cursorElement && !this.inputCaptureElement) {
+      return;
+    }
+
+    const input = this.ensureInputCaptureElement();
+
+    if (!cursorElement || cursorElement.hidden) {
+      input.style.left = '0px';
+      input.style.top = '0px';
+      input.style.height = '1px';
+      return;
+    }
+
+    const cursorRect = cursorElement.getBoundingClientRect();
+    const containerRect = this.options.customUiElement.getBoundingClientRect();
+    input.style.left = `${Math.max(0, cursorRect.left - containerRect.left)}px`;
+    input.style.top = `${Math.max(0, cursorRect.top - containerRect.top)}px`;
+    input.style.height = `${Math.max(1, cursorRect.height)}px`;
+  }
+
   private clearInputCaptureValue(): void {
     if (this.inputCaptureElement) {
       this.inputCaptureElement.value = '';
@@ -382,13 +451,99 @@ export class CustomUiController {
   }
 }
 
+export function prepareCustomUiLines(lines: string[]): PreparedCustomUiLines {
+  let cursor: CustomUiCursorPosition | undefined;
+  const preparedLines = lines.map((line, row) => {
+    const markerIndex = cursor ? -1 : line.indexOf(cursorMarker);
+
+    if (markerIndex !== -1) {
+      cursor = {
+        row,
+        column: visibleColumn(line.slice(0, markerIndex))
+      };
+    }
+
+    return sanitizeTuiLine(line);
+  });
+
+  return {
+    lines: preparedLines,
+    cursor
+  };
+}
+
 function sanitizeTuiLine(value: string): string {
   return value.replace(cursorMarkerPattern, '').replace(nonCsiEscapePattern, '');
 }
 
+function visibleColumn(value: string): number {
+  const text = value
+    .replace(cursorMarkerPattern, '')
+    .replace(nonCsiEscapePattern, '')
+    .replace(csiEscapePattern, '');
+  let column = 0;
+
+  for (const character of Array.from(text)) {
+    if (character === '\t') {
+      column += Math.max(1, 2 - (column % 2));
+      continue;
+    }
+
+    column += characterCellWidth(character);
+  }
+
+  return column;
+}
+
+function characterCellWidth(character: string): number {
+  const codePoint = character.codePointAt(0);
+
+  if (codePoint === undefined || codePoint === 0 || codePoint < 32 || (codePoint >= 0x7f && codePoint < 0xa0)) {
+    return 0;
+  }
+
+  if (isCombiningCodePoint(codePoint)) {
+    return 0;
+  }
+
+  return isWideCodePoint(codePoint) ? 2 : 1;
+}
+
+function isCombiningCodePoint(codePoint: number): boolean {
+  return (codePoint >= 0x0300 && codePoint <= 0x036f)
+    || (codePoint >= 0x1ab0 && codePoint <= 0x1aff)
+    || (codePoint >= 0x1dc0 && codePoint <= 0x1dff)
+    || (codePoint >= 0x20d0 && codePoint <= 0x20ff)
+    || (codePoint >= 0xfe20 && codePoint <= 0xfe2f);
+}
+
+function isWideCodePoint(codePoint: number): boolean {
+  return codePoint >= 0x1100 && (
+    codePoint <= 0x115f
+    || codePoint === 0x2329
+    || codePoint === 0x232a
+    || (codePoint >= 0x2e80 && codePoint <= 0xa4cf && codePoint !== 0x303f)
+    || (codePoint >= 0xac00 && codePoint <= 0xd7a3)
+    || (codePoint >= 0xf900 && codePoint <= 0xfaff)
+    || (codePoint >= 0xfe10 && codePoint <= 0xfe19)
+    || (codePoint >= 0xfe30 && codePoint <= 0xfe6f)
+    || (codePoint >= 0xff00 && codePoint <= 0xff60)
+    || (codePoint >= 0xffe0 && codePoint <= 0xffe6)
+    || (codePoint >= 0x1f300 && codePoint <= 0x1f64f)
+    || (codePoint >= 0x1f900 && codePoint <= 0x1f9ff)
+  );
+}
+
 let measurementCanvas: HTMLCanvasElement | undefined;
 
-function measureTerminalDimensions(element: HTMLElement): { columns: number; rows: number } {
+type TerminalMetrics = {
+  charWidth: number;
+  lineHeight: number;
+  paddingLeft: number;
+  paddingTop: number;
+};
+
+function measureTerminalMetrics(element: HTMLElement): TerminalMetrics {
   const style = window.getComputedStyle(element);
   const font = `${style.fontStyle} ${style.fontVariant} ${style.fontWeight} ${style.fontSize} / ${style.lineHeight} ${style.fontFamily}`;
   const canvas = measurementCanvas ?? document.createElement('canvas');
@@ -401,11 +556,23 @@ function measureTerminalDimensions(element: HTMLElement): { columns: number; row
     charWidth = Math.max(1, context.measureText('M').width);
   }
 
-  const lineHeight = Number.parseFloat(style.lineHeight) || Number.parseFloat(style.fontSize) * 1.35 || 18;
+  const fontSize = Number.parseFloat(style.fontSize) || 12;
+  const lineHeight = Number.parseFloat(style.lineHeight) || fontSize * 1.35 || 18;
+
+  return {
+    charWidth,
+    lineHeight,
+    paddingLeft: Number.parseFloat(style.paddingLeft) || 0,
+    paddingTop: Number.parseFloat(style.paddingTop) || 0
+  };
+}
+
+function measureTerminalDimensions(element: HTMLElement): { columns: number; rows: number } {
+  const metrics = measureTerminalMetrics(element);
   const rect = element.getBoundingClientRect();
-  const columns = Math.max(20, Math.floor(rect.width / charWidth));
+  const columns = Math.max(20, Math.floor(rect.width / metrics.charWidth));
   const targetHeight = Math.max(rect.height, Math.min(window.innerHeight * 0.7, window.innerHeight - 140));
-  const rows = Math.max(4, Math.min(80, Math.floor(Math.max(120, targetHeight) / lineHeight)));
+  const rows = Math.max(4, Math.min(80, Math.floor(Math.max(120, targetHeight) / metrics.lineHeight)));
 
   return { columns, rows };
 }
