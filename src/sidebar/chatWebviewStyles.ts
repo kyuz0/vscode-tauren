@@ -2290,7 +2290,8 @@ const customUiStyles = /* css */ `    .custom-ui {
     .custom-ui__output {
       min-width: 0;
       min-height: 0;
-      overflow: auto;
+      overflow-y: auto;
+      overflow-x: hidden;
       padding: 2px 0;
       font-family: var(--vscode-editor-font-family, monospace);
       font-size: var(--vscode-editor-font-size, 12px);
