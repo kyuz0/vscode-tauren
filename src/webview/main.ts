@@ -1,5 +1,6 @@
 import { configureCodeHighlighting, handleCodeHighlightMessage, watchCodeHighlightThemeChanges } from './codeHighlighting';
 import { ComposerController } from './composer/composer';
+import { CustomUiController } from './custom/customUi';
 import { getWebviewDom } from './dom';
 import { MessageListController } from './messages/messageList';
 import { SessionViewController } from './sessions/sessionView';
@@ -31,6 +32,9 @@ const {
   toastElement,
   messagesElement,
   sessionsElement,
+  customUiElement,
+  customUiOutputElement,
+  customUiCloseButton,
   form,
   textarea,
   slashMenuElement,
@@ -75,6 +79,14 @@ let pendingReturnToChatAfterRender = false;
 let sessionLane: 'sessions' | 'tree' = 'sessions';
 
 let sessionsController: SessionViewController;
+
+const customUiController = new CustomUiController({
+  vscode,
+  customUiElement,
+  customUiOutputElement,
+  customUiCloseButton,
+  form
+});
 
 const messagesController = new MessageListController({
   getState: () => state,
@@ -139,6 +151,7 @@ sessionsController = new SessionViewController({
 
 composerController.attachEventListeners();
 sessionsController.attachEventListeners();
+customUiController.attachEventListeners();
 
 chatHelpButton.addEventListener('click', toggleChatHelpPopover);
 newSessionButton.addEventListener('click', startNewSession);
@@ -146,6 +159,10 @@ diffSummaryElement.addEventListener('click', showCurrentChanges);
 messagesElement.addEventListener('click', (event) => messagesController.handleMessageClick(event));
 
 window.addEventListener('message', (event) => {
+  if (customUiController.handleHostMessage(event.data)) {
+    return;
+  }
+
   if (handleCodeHighlightMessage(event.data)) {
     return;
   }
@@ -234,6 +251,10 @@ window.addEventListener('click', (event) => {
 });
 
 window.addEventListener('keydown', (event) => {
+  if (customUiController.handleGlobalKeydown(event)) {
+    return;
+  }
+
   if (sessionsController.handleGlobalKeydown(event)) {
     return;
   }
@@ -254,6 +275,7 @@ window.addEventListener('keydown', (event) => {
 window.addEventListener('resize', () => {
   render();
   composerController.syncComposer({ preserveBottom: true });
+  customUiController.handleResize();
 });
 
 function showCurrentChanges(): void {
@@ -393,6 +415,7 @@ function render(): void {
   renderedViewMode = state.viewMode;
 
   sessionsController.syncForRender(isListView);
+  customUiController.syncForRender(isListView);
   syncChatHelpForRender(isListView);
 
   if (isListView) {
@@ -415,7 +438,9 @@ function render(): void {
   messagesController.syncBusyStatus();
   composerController.syncModelLabel();
   composerController.syncPromptContextBadges();
-  composerController.syncComposer();
+  if (!customUiController.isActive()) {
+    composerController.syncComposer();
+  }
   composerController.syncSlashMenu();
   if (shouldStickToBottom) {
     messagesController.scrollMessagesToBottom();

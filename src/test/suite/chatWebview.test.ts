@@ -166,6 +166,18 @@ suite('Chat webview helpers', () => {
       { type: 'highlightCode', id: 'highlight-2', code: 'const x = 1;', language: 'typescript', themeId: 'Default Dark Modern' }
     );
     assert.deepStrictEqual(
+      parseWebviewMessage({ type: 'customUiInput', id: 'custom-ui-1', data: '\\r' }),
+      { type: 'customUiInput', id: 'custom-ui-1', data: '\\r' }
+    );
+    assert.deepStrictEqual(
+      parseWebviewMessage({ type: 'customUiCancel', id: 'custom-ui-1' }),
+      { type: 'customUiCancel', id: 'custom-ui-1' }
+    );
+    assert.deepStrictEqual(
+      parseWebviewMessage({ type: 'customUiDimensions', id: 'custom-ui-1', columns: 80, rows: 12 }),
+      { type: 'customUiDimensions', id: 'custom-ui-1', columns: 80, rows: 12 }
+    );
+    assert.deepStrictEqual(
       parseWebviewMessage({ type: 'submit', text: 'hello' }),
       { type: 'submit', text: 'hello' }
     );
@@ -209,6 +221,11 @@ suite('Chat webview helpers', () => {
     assert.deepStrictEqual(parseWebviewMessage({ type: 'highlightCode', id: 'highlight-1', code: '', language: 'typescript' }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'highlightCode', id: 'highlight-1', code: 'const x = 1;', language: '' }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'highlightCode', id: 'highlight-1', code: 'const x = 1;', language: 'typescript', themeId: 42 }), { type: 'unknown' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'customUiInput', id: '', data: '\\r' }), { type: 'unknown' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'customUiInput', id: 'custom-ui-1', data: 42 }), { type: 'unknown' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'customUiCancel', id: '' }), { type: 'unknown' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'customUiDimensions', id: 'custom-ui-1', columns: 0, rows: 12 }), { type: 'unknown' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'customUiDimensions', id: 'custom-ui-1', columns: 80, rows: '12' }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'submit', text: 'hello', streamingBehavior: 'later' }), { type: 'unknown' });
     assert.deepStrictEqual(
       parseWebviewMessage({ type: 'setModel', provider: 'openai' }),

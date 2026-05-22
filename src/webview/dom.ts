@@ -19,6 +19,9 @@ export type WebviewDom = {
   toastElement: HTMLElement;
   messagesElement: HTMLElement;
   sessionsElement: HTMLElement;
+  customUiElement: HTMLElement;
+  customUiOutputElement: HTMLElement;
+  customUiCloseButton: HTMLButtonElement;
   form: HTMLFormElement;
   textarea: HTMLTextAreaElement;
   slashMenuElement: HTMLElement;
@@ -61,6 +64,9 @@ export function getWebviewDom(): WebviewDom {
     toastElement: queryRequired<HTMLElement>('.pi-toast'),
     messagesElement: queryRequired<HTMLElement>('.messages'),
     sessionsElement: queryRequired<HTMLElement>('.sessions'),
+    customUiElement: queryRequired<HTMLElement>('.custom-ui'),
+    customUiOutputElement: queryRequired<HTMLElement>('.custom-ui__output'),
+    customUiCloseButton: queryRequired<HTMLButtonElement>('.custom-ui__close'),
     form: queryRequired<HTMLFormElement>('.composer'),
     textarea: queryRequired<HTMLTextAreaElement>('textarea'),
     slashMenuElement: queryRequired<HTMLElement>('.composer__slash-menu'),

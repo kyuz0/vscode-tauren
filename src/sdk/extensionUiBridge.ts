@@ -1,6 +1,6 @@
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import type { ExtensionUIContext, ExtensionUIDialogOptions } from '@earendil-works/pi-coding-agent';
-import { createCancellingExtensionUi, type ExtensionUi } from '../extensionUi/types';
+import { createCancellingExtensionUi, type ExtensionCustomUiFactory, type ExtensionCustomUiOptions, type ExtensionUi } from '../extensionUi/types';
 
 const emptyTheme = {} as Theme;
 
@@ -29,8 +29,8 @@ export function createSdkExtensionUiContext(ui?: ExtensionUi): ExtensionUIContex
     setFooter() {},
     setHeader() {},
     setTitle() {},
-    async custom<T>() {
-      return undefined as T;
+    async custom<T>(factory: ExtensionCustomUiFactory<T>, opts?: ExtensionCustomUiOptions) {
+      return await resolvedUi.custom?.(factory, opts) as T;
     },
     pasteToEditor(text) {
       this.setEditorText(text);

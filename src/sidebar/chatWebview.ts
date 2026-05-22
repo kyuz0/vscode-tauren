@@ -124,6 +124,22 @@ export function parseWebviewMessage(value: unknown): WebviewMessage {
         ...(themeId ? { themeId } : {})
       };
     }
+    case 'customUiInput':
+      return typeof value.id === 'string' && value.id && typeof value.data === 'string'
+        ? { type: 'customUiInput', id: value.id, data: value.data }
+        : { type: 'unknown' };
+    case 'customUiCancel':
+      return typeof value.id === 'string' && value.id
+        ? { type: 'customUiCancel', id: value.id }
+        : { type: 'unknown' };
+    case 'customUiDimensions': {
+      const columns = parsePositiveInteger(value.columns);
+      const rows = parsePositiveInteger(value.rows);
+
+      return typeof value.id === 'string' && value.id && columns !== undefined && rows !== undefined
+        ? { type: 'customUiDimensions', id: value.id, columns, rows }
+        : { type: 'unknown' };
+    }
     case 'submit': {
       if (typeof value.text !== 'string') {
         return { type: 'unknown' };
@@ -377,6 +393,13 @@ ${chatWebviewStyles}
 ${createInitialEmptyStateHtml(Boolean(options.welcomeDismissed))}
     </section>
     <section class="sessions" aria-label="Pi sessions and tree" role="listbox" tabindex="0" hidden></section>
+    <section class="custom-ui" aria-label="Pi extension UI" role="dialog" tabindex="0" hidden>
+      <div class="custom-ui__header">
+        <span class="custom-ui__title">Extension UI</span>
+        <button class="custom-ui__close" type="button" aria-label="Close extension UI">×</button>
+      </div>
+      <div class="custom-ui__output" aria-live="polite"></div>
+    </section>
     <form class="composer" aria-label="Pi message input">
       <div id="slash-command-list" class="composer__slash-menu" role="listbox" aria-label="Slash commands"></div>
       <div class="composer__context-badges" aria-label="Attached context" hidden></div>

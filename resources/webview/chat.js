@@ -1231,60 +1231,6 @@
     return event.target instanceof Element ? event.target : null;
   }
 
-  // src/webview/dom.ts
-  function getWebviewDom() {
-    return {
-      viewElement: queryRequired(".pi-view"),
-      toolbarTitleElement: queryRequired(".pi-toolbar__title"),
-      toolbarTitleTextElement: queryRequired(".pi-toolbar__title-text"),
-      toolbarTimestampElement: queryRequired(".pi-toolbar__timestamp"),
-      sessionNameInputElement: queryRequired(".pi-toolbar__title-input"),
-      sessionToggleButton: queryRequired(".pi-toolbar__sessions"),
-      treeToggleButton: queryRequired(".pi-toolbar__tree"),
-      sessionMenuWrapElement: queryRequired(".pi-toolbar__menu-wrap"),
-      sessionMenuButton: queryRequired(".pi-toolbar__menu-button"),
-      sessionMenuElement: queryRequired(".pi-toolbar__menu"),
-      sessionMenuItemElements: queryAll(".pi-toolbar__menu-item"),
-      chatHelpWrapElement: queryRequired(".pi-toolbar__chat-help-wrap"),
-      chatHelpButton: queryRequired(".pi-toolbar__chat-help-button"),
-      chatHelpPopoverElement: queryRequired(".pi-toolbar__chat-help-popover"),
-      sessionHelpWrapElement: queryRequired(".pi-toolbar__session-help-wrap"),
-      sessionHelpButton: queryRequired(".pi-toolbar__session-help-button"),
-      sessionHelpPopoverElement: queryRequired(".pi-toolbar__session-help-popover"),
-      toastElement: queryRequired(".pi-toast"),
-      messagesElement: queryRequired(".messages"),
-      sessionsElement: queryRequired(".sessions"),
-      form: queryRequired(".composer"),
-      textarea: queryRequired("textarea"),
-      slashMenuElement: queryRequired(".composer__slash-menu"),
-      contextBadgesElement: queryRequired(".composer__context-badges"),
-      busySubmitElement: queryRequired(".composer__busy-submit"),
-      diffSummaryElement: queryRequired(".composer__diff-summary"),
-      diffAddedElement: queryRequired(".composer__diff-added"),
-      diffRemovedElement: queryRequired(".composer__diff-removed"),
-      streamingBehaviorButtonElements: queryAll(".composer__mode-button"),
-      newSessionButton: queryRequired(".composer__add"),
-      contextElement: queryRequired(".composer__context"),
-      contextValueElement: queryRequired(".composer__context-value"),
-      contextTooltipElement: queryRequired(".composer__context-tooltip"),
-      modelElement: queryRequired(".composer__model"),
-      modelMenuElement: queryRequired(".composer__model-menu"),
-      modelSelectElement: queryRequired(".composer__model-select"),
-      thinkingSelectElement: queryRequired(".composer__thinking-select"),
-      submitButton: queryRequired(".composer__submit")
-    };
-  }
-  function queryRequired(selector) {
-    const element = document.querySelector(selector);
-    if (!element) {
-      throw new Error(`Missing required webview element: ${selector}`);
-    }
-    return element;
-  }
-  function queryAll(selector) {
-    return Array.from(document.querySelectorAll(selector));
-  }
-
   // src/webview/messages/ansi.ts
   function containsAnsiEscape(value) {
     return /\x1b\[[0-?]*(?:[ -/][0-?]*)?[@-~]/.test(value);
@@ -1584,6 +1530,301 @@
   }
   function clampColor(value) {
     return Math.max(0, Math.min(255, value));
+  }
+
+  // src/webview/custom/customUi.ts
+  var cursorMarkerPattern = /\x1b_pi:c\x07/g;
+  var nonCsiEscapePattern = /\x1b(?:\][^\x07]*(?:\x07|\x1b\\)|_[^\x07]*(?:\x07|\x1b\\)|\^[^\x07]*(?:\x07|\x1b\\)|P[^\x1b]*(?:\x1b\\)?)/g;
+  var CustomUiController = class {
+    constructor(options) {
+      this.options = options;
+    }
+    options;
+    activeId;
+    lastDimensionSignature = "";
+    resizeFrame;
+    attachEventListeners() {
+      this.options.customUiCloseButton.addEventListener("click", () => this.cancel());
+      this.options.customUiElement.addEventListener("keydown", (event) => {
+        this.handleKeydown(event);
+      });
+      this.options.customUiElement.addEventListener("paste", (event) => {
+        this.handlePaste(event);
+      });
+    }
+    handleHostMessage(message) {
+      if (!isCustomUiHostMessage(message)) {
+        return false;
+      }
+      if (message.type === "customUiShow") {
+        this.show(message.id);
+        return true;
+      }
+      if (message.type === "customUiRender") {
+        this.render(message.id, message.lines, message.outputColors !== false);
+        return true;
+      }
+      this.hide(message.id);
+      return true;
+    }
+    handleGlobalKeydown(event) {
+      if (!this.activeId) {
+        return false;
+      }
+      if (event.target === this.options.customUiCloseButton) {
+        return false;
+      }
+      this.handleKeydown(event);
+      return true;
+    }
+    syncForRender(isListView) {
+      const active = Boolean(this.activeId) && !isListView;
+      this.options.customUiElement.hidden = !active;
+      this.options.customUiElement.inert = !active;
+      this.options.form.classList.toggle("composer--custom-hidden", Boolean(this.activeId));
+      if (this.activeId) {
+        this.options.form.setAttribute("aria-hidden", "true");
+        this.options.form.inert = true;
+        this.scheduleDimensionsPost();
+      }
+    }
+    handleResize() {
+      if (!this.activeId) {
+        return;
+      }
+      this.scheduleDimensionsPost();
+    }
+    isActive() {
+      return Boolean(this.activeId);
+    }
+    show(id) {
+      this.activeId = id;
+      this.lastDimensionSignature = "";
+      this.options.customUiOutputElement.replaceChildren();
+      this.options.customUiElement.hidden = false;
+      this.options.customUiElement.inert = false;
+      this.options.form.classList.add("composer--custom-hidden");
+      this.options.form.setAttribute("aria-hidden", "true");
+      this.options.form.inert = true;
+      this.options.customUiElement.focus({ preventScroll: true });
+      this.scheduleDimensionsPost();
+    }
+    render(id, lines, outputColors) {
+      if (this.activeId !== id) {
+        return;
+      }
+      const fragment = document.createDocumentFragment();
+      for (const line of lines) {
+        const lineElement = document.createElement("div");
+        lineElement.className = "custom-ui__line";
+        renderAnsiTextInto(lineElement, sanitizeTuiLine(line), outputColors);
+        fragment.append(lineElement);
+      }
+      this.options.customUiOutputElement.replaceChildren(fragment);
+      this.scheduleDimensionsPost();
+    }
+    hide(id) {
+      if (this.activeId !== id) {
+        return;
+      }
+      this.activeId = void 0;
+      this.lastDimensionSignature = "";
+      this.options.customUiElement.hidden = true;
+      this.options.customUiElement.inert = true;
+      this.options.customUiOutputElement.replaceChildren();
+      this.options.form.classList.remove("composer--custom-hidden");
+      this.options.form.removeAttribute("aria-hidden");
+      this.options.form.inert = false;
+    }
+    cancel() {
+      if (!this.activeId) {
+        return;
+      }
+      this.options.vscode.postMessage({ type: "customUiCancel", id: this.activeId });
+    }
+    handlePaste(event) {
+      if (!this.activeId) {
+        return;
+      }
+      const text = event.clipboardData?.getData("text/plain") ?? "";
+      if (!text) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      this.postInput(text);
+    }
+    handleKeydown(event) {
+      if (!this.activeId) {
+        return;
+      }
+      if (event.target === this.options.customUiCloseButton) {
+        return;
+      }
+      const data = terminalDataForKeyboardEvent(event);
+      if (data === void 0) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      this.postInput(data);
+    }
+    postInput(data) {
+      if (!this.activeId) {
+        return;
+      }
+      this.options.vscode.postMessage({ type: "customUiInput", id: this.activeId, data });
+    }
+    scheduleDimensionsPost() {
+      if (this.resizeFrame !== void 0) {
+        return;
+      }
+      this.resizeFrame = requestAnimationFrame(() => {
+        this.resizeFrame = void 0;
+        this.postDimensions();
+      });
+    }
+    postDimensions() {
+      if (!this.activeId || this.options.customUiElement.hidden) {
+        return;
+      }
+      const dimensions = measureTerminalDimensions(this.options.customUiOutputElement);
+      const signature = `${dimensions.columns}x${dimensions.rows}`;
+      if (signature === this.lastDimensionSignature) {
+        return;
+      }
+      this.lastDimensionSignature = signature;
+      this.options.vscode.postMessage({
+        type: "customUiDimensions",
+        id: this.activeId,
+        columns: dimensions.columns,
+        rows: dimensions.rows
+      });
+    }
+  };
+  function sanitizeTuiLine(value) {
+    return value.replace(cursorMarkerPattern, "").replace(nonCsiEscapePattern, "");
+  }
+  var measurementCanvas;
+  function measureTerminalDimensions(element) {
+    const style = window.getComputedStyle(element);
+    const font = `${style.fontStyle} ${style.fontVariant} ${style.fontWeight} ${style.fontSize} / ${style.lineHeight} ${style.fontFamily}`;
+    const canvas = measurementCanvas ?? document.createElement("canvas");
+    measurementCanvas = canvas;
+    const context = canvas.getContext("2d");
+    let charWidth = 8;
+    if (context) {
+      context.font = font;
+      charWidth = Math.max(1, context.measureText("M").width);
+    }
+    const lineHeight = Number.parseFloat(style.lineHeight) || Number.parseFloat(style.fontSize) * 1.35 || 18;
+    const rect = element.getBoundingClientRect();
+    const columns = Math.max(20, Math.floor(rect.width / charWidth));
+    const maxRowsFromViewport = Math.floor(Math.max(120, window.innerHeight * 0.45) / lineHeight);
+    const rows = Math.max(4, Math.min(80, maxRowsFromViewport));
+    return { columns, rows };
+  }
+  function terminalDataForKeyboardEvent(event) {
+    if (event.metaKey) {
+      return void 0;
+    }
+    if (event.ctrlKey && !event.altKey && event.key.length === 1) {
+      const lower = event.key.toLowerCase();
+      if (lower >= "a" && lower <= "z") {
+        return String.fromCharCode(lower.charCodeAt(0) - 96);
+      }
+    }
+    const special = specialKeyData(event);
+    if (special !== void 0) {
+      return event.altKey && special.length > 0 && !special.startsWith("\x1B") ? `\x1B${special}` : special;
+    }
+    if (event.key.length === 1 && !event.ctrlKey) {
+      return event.altKey ? `\x1B${event.key}` : event.key;
+    }
+    return void 0;
+  }
+  function specialKeyData(event) {
+    if (event.key === "Escape") return "\x1B";
+    if (event.key === "Enter") return event.shiftKey ? "\x1B\r" : "\r";
+    if (event.key === "Tab") return event.shiftKey ? "\x1B[Z" : "	";
+    if (event.key === "Backspace") return event.altKey ? "\x1B\x7F" : "\x7F";
+    if (event.key === "Delete") return "\x1B[3~";
+    if (event.key === "Home") return "\x1B[H";
+    if (event.key === "End") return "\x1B[F";
+    if (event.key === "PageUp") return "\x1B[5~";
+    if (event.key === "PageDown") return "\x1B[6~";
+    if (event.key === "ArrowUp") return event.shiftKey ? "\x1B[a" : event.ctrlKey ? "\x1BOa" : "\x1B[A";
+    if (event.key === "ArrowDown") return event.shiftKey ? "\x1B[b" : event.ctrlKey ? "\x1BOb" : "\x1B[B";
+    if (event.key === "ArrowRight") return event.shiftKey ? "\x1B[c" : event.ctrlKey ? "\x1BOc" : "\x1B[C";
+    if (event.key === "ArrowLeft") return event.shiftKey ? "\x1B[d" : event.ctrlKey ? "\x1BOd" : "\x1B[D";
+    return void 0;
+  }
+  function isCustomUiHostMessage(value) {
+    if (!value || typeof value !== "object" || !("type" in value)) {
+      return false;
+    }
+    const message = value;
+    if (message.type === "customUiShow" || message.type === "customUiHide") {
+      return typeof message.id === "string" && message.id.length > 0;
+    }
+    return message.type === "customUiRender" && typeof message.id === "string" && message.id.length > 0 && Array.isArray(message.lines) && message.lines.every((line) => typeof line === "string");
+  }
+
+  // src/webview/dom.ts
+  function getWebviewDom() {
+    return {
+      viewElement: queryRequired(".pi-view"),
+      toolbarTitleElement: queryRequired(".pi-toolbar__title"),
+      toolbarTitleTextElement: queryRequired(".pi-toolbar__title-text"),
+      toolbarTimestampElement: queryRequired(".pi-toolbar__timestamp"),
+      sessionNameInputElement: queryRequired(".pi-toolbar__title-input"),
+      sessionToggleButton: queryRequired(".pi-toolbar__sessions"),
+      treeToggleButton: queryRequired(".pi-toolbar__tree"),
+      sessionMenuWrapElement: queryRequired(".pi-toolbar__menu-wrap"),
+      sessionMenuButton: queryRequired(".pi-toolbar__menu-button"),
+      sessionMenuElement: queryRequired(".pi-toolbar__menu"),
+      sessionMenuItemElements: queryAll(".pi-toolbar__menu-item"),
+      chatHelpWrapElement: queryRequired(".pi-toolbar__chat-help-wrap"),
+      chatHelpButton: queryRequired(".pi-toolbar__chat-help-button"),
+      chatHelpPopoverElement: queryRequired(".pi-toolbar__chat-help-popover"),
+      sessionHelpWrapElement: queryRequired(".pi-toolbar__session-help-wrap"),
+      sessionHelpButton: queryRequired(".pi-toolbar__session-help-button"),
+      sessionHelpPopoverElement: queryRequired(".pi-toolbar__session-help-popover"),
+      toastElement: queryRequired(".pi-toast"),
+      messagesElement: queryRequired(".messages"),
+      sessionsElement: queryRequired(".sessions"),
+      customUiElement: queryRequired(".custom-ui"),
+      customUiOutputElement: queryRequired(".custom-ui__output"),
+      customUiCloseButton: queryRequired(".custom-ui__close"),
+      form: queryRequired(".composer"),
+      textarea: queryRequired("textarea"),
+      slashMenuElement: queryRequired(".composer__slash-menu"),
+      contextBadgesElement: queryRequired(".composer__context-badges"),
+      busySubmitElement: queryRequired(".composer__busy-submit"),
+      diffSummaryElement: queryRequired(".composer__diff-summary"),
+      diffAddedElement: queryRequired(".composer__diff-added"),
+      diffRemovedElement: queryRequired(".composer__diff-removed"),
+      streamingBehaviorButtonElements: queryAll(".composer__mode-button"),
+      newSessionButton: queryRequired(".composer__add"),
+      contextElement: queryRequired(".composer__context"),
+      contextValueElement: queryRequired(".composer__context-value"),
+      contextTooltipElement: queryRequired(".composer__context-tooltip"),
+      modelElement: queryRequired(".composer__model"),
+      modelMenuElement: queryRequired(".composer__model-menu"),
+      modelSelectElement: queryRequired(".composer__model-select"),
+      thinkingSelectElement: queryRequired(".composer__thinking-select"),
+      submitButton: queryRequired(".composer__submit")
+    };
+  }
+  function queryRequired(selector) {
+    const element = document.querySelector(selector);
+    if (!element) {
+      throw new Error(`Missing required webview element: ${selector}`);
+    }
+    return element;
+  }
+  function queryAll(selector) {
+    return Array.from(document.querySelectorAll(selector));
   }
 
   // src/webview/messages/actionButtons.ts
@@ -4885,6 +5126,9 @@ ${after}`;
     toastElement,
     messagesElement,
     sessionsElement,
+    customUiElement,
+    customUiOutputElement,
+    customUiCloseButton,
     form,
     textarea,
     slashMenuElement,
@@ -4926,6 +5170,13 @@ ${after}`;
   var pendingReturnToChatAfterRender = false;
   var sessionLane = "sessions";
   var sessionsController;
+  var customUiController = new CustomUiController({
+    vscode,
+    customUiElement,
+    customUiOutputElement,
+    customUiCloseButton,
+    form
+  });
   var messagesController = new MessageListController({
     getState: () => state,
     postMessage: (message) => vscode.postMessage(message),
@@ -4986,11 +5237,15 @@ ${after}`;
   });
   composerController.attachEventListeners();
   sessionsController.attachEventListeners();
+  customUiController.attachEventListeners();
   chatHelpButton.addEventListener("click", toggleChatHelpPopover);
   newSessionButton.addEventListener("click", startNewSession);
   diffSummaryElement.addEventListener("click", showCurrentChanges);
   messagesElement.addEventListener("click", (event) => messagesController.handleMessageClick(event));
   window.addEventListener("message", (event) => {
+    if (customUiController.handleHostMessage(event.data)) {
+      return;
+    }
     if (handleCodeHighlightMessage(event.data)) {
       return;
     }
@@ -5057,6 +5312,9 @@ ${after}`;
     handleChatHelpWindowClick(target);
   });
   window.addEventListener("keydown", (event) => {
+    if (customUiController.handleGlobalKeydown(event)) {
+      return;
+    }
     if (sessionsController.handleGlobalKeydown(event)) {
       return;
     }
@@ -5073,6 +5331,7 @@ ${after}`;
   window.addEventListener("resize", () => {
     render();
     composerController.syncComposer({ preserveBottom: true });
+    customUiController.handleResize();
   });
   function showCurrentChanges() {
     vscode.postMessage({ type: "showCurrentChanges" });
@@ -5184,6 +5443,7 @@ ${after}`;
     form.inert = isListView;
     renderedViewMode = state.viewMode;
     sessionsController.syncForRender(isListView);
+    customUiController.syncForRender(isListView);
     syncChatHelpForRender(isListView);
     if (isListView) {
       busyStatusElement.hidden = true;
@@ -5201,7 +5461,9 @@ ${after}`;
     messagesController.syncBusyStatus();
     composerController.syncModelLabel();
     composerController.syncPromptContextBadges();
-    composerController.syncComposer();
+    if (!customUiController.isActive()) {
+      composerController.syncComposer();
+    }
     composerController.syncSlashMenu();
     if (shouldStickToBottom) {
       messagesController.scrollMessagesToBottom();

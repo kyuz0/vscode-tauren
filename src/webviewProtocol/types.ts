@@ -37,6 +37,9 @@ export type WebviewMessage =
   | { type: 'copyText'; text: string; successMessage?: string }
   | { type: 'openFile'; path: string; line?: number; column?: number }
   | { type: 'highlightCode'; id: string; code: string; language: string; themeId?: string }
+  | { type: 'customUiInput'; id: string; data: string }
+  | { type: 'customUiCancel'; id: string }
+  | { type: 'customUiDimensions'; id: string; columns: number; rows: number }
   | { type: 'submit'; text: string; streamingBehavior?: WebviewStreamingBehavior }
   | { type: 'setModel'; provider: string; modelId: string }
   | { type: 'setThinkingLevel'; level: string }

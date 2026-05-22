@@ -8,6 +8,7 @@ import type { WebviewMessage, WebviewStateMessage } from './webviewProtocol/type
 import { type PiClientFactory, type PiClient } from './pi/clientTypes';
 import type { PiClientOptions } from './pi/types';
 import { PiSdkClient } from './sdk/piSdkClient';
+import { ExtensionCustomUiHost, type CustomUiHostMessage } from './extensionUi/customUiHost';
 import type { ExtensionUi } from './extensionUi/types';
 import { createSessionDiffStatsFileWatcher, readSessionDiffSnapshot, writeSessionDiffSnapshot } from './diff/sessionDiffStorage';
 import { SessionDiffViewer } from './diff/sessionDiffViewer';
@@ -63,6 +64,7 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
   private readonly webviewDisposables: vscode.Disposable[] = [];
   private sidebarFocusContext: boolean | undefined;
   private busyContext: boolean | undefined;
+  private readonly customUiHost: ExtensionCustomUiHost;
 
   public constructor(
     private readonly extensionUri: vscode.Uri,
@@ -70,6 +72,13 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
     private readonly workspaceState?: vscode.Memento,
     private readonly globalState?: vscode.Memento
   ) {
+    this.customUiHost = new ExtensionCustomUiHost({
+      isAvailable: () => Boolean(this.webviewReady && this.webviewView),
+      postMessage: (message) => this.postCustomUiMessage(message),
+      getOutputColors: () => getOutputColorsSetting(),
+      notify: (message, notifyType) => this.showNotification(message, notifyType)
+    });
+
     const extensionUi: ExtensionUi = {
       notify: (message, notifyType) => this.showNotification(message, notifyType),
       select: (title, options) => vscode.window.showQuickPick(options, {
@@ -80,7 +89,8 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
       input: (title, placeholder) => vscode.window.showInputBox({
         title,
         placeHolder: placeholder
-      })
+      }),
+      custom: (factory, options) => this.customUiHost.custom(factory, options)
     };
     const configuredCreateClient = createClient ?? ((options: PiClientOptions) => createConfiguredPiClient(options, {
       extensionUi,
@@ -148,6 +158,7 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
       disposable.dispose();
     }
 
+    this.customUiHost.dispose();
     this.codeRenderer.dispose();
     this.sessionDiffViewer.dispose();
     this.controller.dispose();
@@ -187,6 +198,7 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
           return;
         }
 
+        this.customUiHost.cancelActive();
         this.webviewView = undefined;
         this.webviewReady = false;
         this.setSidebarFocusContext(false);
@@ -403,6 +415,21 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
       return;
     }
 
+    if (message.type === 'customUiInput') {
+      this.customUiHost.handleInput(message.id, message.data);
+      return;
+    }
+
+    if (message.type === 'customUiCancel') {
+      this.customUiHost.cancel(message.id);
+      return;
+    }
+
+    if (message.type === 'customUiDimensions') {
+      this.customUiHost.updateDimensions(message.id, message.columns, message.rows);
+      return;
+    }
+
     await this.controller.handleWebviewMessage(message);
   }
 
@@ -420,6 +447,15 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
 
   private isWelcomeDismissed(): boolean {
     return this.globalState?.get<boolean>(welcomeDismissedStorageKey) === true;
+  }
+
+  private postCustomUiMessage(message: CustomUiHostMessage): boolean {
+    if (!this.webviewReady || !this.webviewView) {
+      return false;
+    }
+
+    void this.webviewView.webview.postMessage(message);
+    return true;
   }
 
   private async handleCodeHighlightRequest(id: string, code: string, language: string, themeId?: string): Promise<void> {
@@ -464,6 +500,8 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
   }
 
   private disposeWebviewDisposables(): void {
+    this.customUiHost.cancelActive();
+
     for (const disposable of this.webviewDisposables.splice(0)) {
       disposable.dispose();
     }

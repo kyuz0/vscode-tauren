@@ -1530,7 +1530,8 @@ const composerStyles = /* css */ `    .composer {
       will-change: opacity, transform, max-height;
     }
 
-    .composer--list-hidden {
+    .composer--list-hidden,
+    .composer--custom-hidden {
       opacity: 0;
       pointer-events: none;
       transform: translateY(32px);
@@ -2209,6 +2210,95 @@ const composerStyles = /* css */ `    .composer {
       cursor: default;
     }`;
 
+const customUiStyles = /* css */ `    .custom-ui {
+      position: relative;
+      grid-row: 3;
+      grid-column: 1;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 6px;
+      min-height: 96px;
+      max-height: min(52vh, calc(100vh - 80px));
+      max-width: 100%;
+      margin: 0 20px 1lh;
+      padding: 8px 9px 9px;
+      overflow: hidden;
+      color: var(--vscode-foreground);
+      background: var(--vscode-input-background);
+      border: 1px solid var(--vscode-focusBorder, var(--vscode-input-border, transparent));
+      border-radius: 14px;
+      box-shadow: inset 0 1px 0 color-mix(in srgb, var(--vscode-foreground) 8%, transparent);
+    }
+
+    .custom-ui[hidden] {
+      display: none;
+    }
+
+    .custom-ui:focus,
+    .custom-ui:focus-visible {
+      outline: 1px solid var(--vscode-focusBorder);
+      outline-offset: -1px;
+    }
+
+    .custom-ui__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+      color: var(--vscode-descriptionForeground);
+      font-size: 11px;
+      line-height: 1.2;
+    }
+
+    .custom-ui__title {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .custom-ui__close {
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      width: 22px;
+      height: 22px;
+      padding: 0;
+      color: var(--vscode-descriptionForeground);
+      background: transparent;
+      border: 0;
+      border-radius: 999px;
+      font: inherit;
+      font-size: 16px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .custom-ui__close:hover,
+    .custom-ui__close:focus-visible {
+      color: var(--vscode-foreground);
+      background: color-mix(in srgb, var(--vscode-foreground) 10%, transparent);
+      outline: none;
+    }
+
+    .custom-ui__output {
+      min-width: 0;
+      min-height: 0;
+      overflow: auto;
+      padding: 2px 0;
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: var(--vscode-editor-font-size, 12px);
+      line-height: 1.35;
+      white-space: pre;
+      tab-size: 2;
+    }
+
+    .custom-ui__line {
+      min-height: 1.35em;
+      white-space: pre;
+    }
+`;
+
 const reducedMotionStyles = /* css */ `    body.vscode-reduce-motion *,
     body.vscode-reduce-motion *::before,
     body.vscode-reduce-motion *::after,
@@ -2264,5 +2354,6 @@ export const chatWebviewStyles = [
   messageStyles,
   activityStyles,
   composerStyles,
+  customUiStyles,
   reducedMotionStyles,
 ].join("");
