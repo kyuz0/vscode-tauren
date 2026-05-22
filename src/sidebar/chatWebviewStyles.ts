@@ -2402,6 +2402,49 @@ const customUiStyles = /* css */ `    .custom-ui {
       padding: 8px 10px;
     }
 
+    body.tau-custom-ui-theme-modern .composer.composer--custom-hidden {
+      opacity: 0.98;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.03) 18%, transparent 42%) padding-box,
+        linear-gradient(180deg, #25282b, #090a0b 68%, #000) border-box;
+      border: 3px solid transparent;
+      border-radius: 18px 18px 26px 26px;
+      box-shadow:
+        0 18px 30px rgba(0, 0, 0, 0.34),
+        inset 0 1px 0 rgba(255, 255, 255, 0.16),
+        inset 0 -18px 28px rgba(0, 0, 0, 0.42);
+      transform: perspective(300px) rotateX(9deg) translateY(-2px) scaleX(0.985);
+      transform-origin: top center;
+    }
+
+    body.tau-custom-ui-theme-modern .composer.composer--custom-hidden::before {
+      content: "";
+      position: absolute;
+      inset: 11px 12px 9px;
+      pointer-events: none;
+      background:
+        repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.065) 0 1px, transparent 1px 18px),
+        repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0 1px, transparent 1px 18px),
+        radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.08), transparent 62%);
+      border-radius: 12px 12px 18px 18px;
+      opacity: 0.42;
+    }
+
+    body.tau-custom-ui-theme-modern .composer.composer--custom-hidden .composer__input {
+      padding: 2px 8px 5px;
+      color: color-mix(in srgb, var(--vscode-input-foreground) 86%, var(--vscode-input-background) 14%);
+      background: rgba(255, 255, 255, 0.035);
+      border: 1px solid color-mix(in srgb, var(--vscode-foreground) 9%, transparent);
+      border-radius: 10px;
+      box-shadow: inset 0 1px 8px rgba(0, 0, 0, 0.18);
+    }
+
+    body.tau-custom-ui-theme-modern .composer.composer--custom-hidden .composer__button,
+    body.tau-custom-ui-theme-modern .composer.composer--custom-hidden .composer__model,
+    body.tau-custom-ui-theme-modern .composer.composer--custom-hidden .composer__context {
+      filter: saturate(0.82) brightness(0.92);
+    }
+
     body.tau-custom-ui-theme-crt .custom-ui,
     body.tau-custom-ui-theme-amber .custom-ui,
     body.tau-custom-ui-theme-matrix .custom-ui {
