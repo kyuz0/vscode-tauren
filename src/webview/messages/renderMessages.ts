@@ -3,6 +3,7 @@ import { createIconActionButton } from './actionButtons';
 import { renderHighlightedCodeInto, renderMarkdownInto, type RenderMarkdownOptions } from './markdown';
 import type { Activity, ChatImage, ChatMessage } from '../types';
 
+const maxRememberedActivityIds = 1000;
 const activityExpansion = new Map<string, boolean>();
 const activityBodyExpansion = new Map<string, boolean>();
 
@@ -13,8 +14,10 @@ export function toggleActivityBodyExpansion(activityId: string): boolean {
 }
 
 export function pruneActivityRenderState(activeActivityIds: Set<string>): void {
-  pruneStringMap(activityExpansion, activeActivityIds);
-  pruneStringMap(activityBodyExpansion, activeActivityIds);
+  const retainedActivityIds = getRecentActivityIds(activeActivityIds);
+
+  pruneStringMap(activityExpansion, retainedActivityIds);
+  pruneStringMap(activityBodyExpansion, retainedActivityIds);
 }
 
 export type MessageRenderOptions = RenderMarkdownOptions & {
@@ -110,9 +113,17 @@ export function updateMessageBodyElement(
   return true;
 }
 
-function pruneStringMap(map: Map<string, unknown>, activeKeys: Set<string>): void {
+function getRecentActivityIds(activeActivityIds: Set<string>): Set<string> {
+  if (activeActivityIds.size <= maxRememberedActivityIds) {
+    return activeActivityIds;
+  }
+
+  return new Set(Array.from(activeActivityIds).slice(-maxRememberedActivityIds));
+}
+
+function pruneStringMap(map: Map<string, unknown>, retainedKeys: Set<string>): void {
   for (const key of Array.from(map.keys())) {
-    if (!activeKeys.has(key)) {
+    if (!retainedKeys.has(key)) {
       map.delete(key);
     }
   }

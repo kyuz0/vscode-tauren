@@ -1,5 +1,5 @@
-import { configureCodeHighlighting, handleCodeHighlightMessage, pruneDisconnectedCodeHighlights, watchCodeHighlightThemeChanges } from './codeHighlighting';
-import { configureMarkdownImageRendering, handleMarkdownImageMessage, pruneDisconnectedLocalImageRequests } from './messages/markdown';
+import { configureCodeHighlighting, handleCodeHighlightMessage, watchCodeHighlightThemeChanges } from './codeHighlighting';
+import { configureMarkdownImageRendering, handleMarkdownImageMessage } from './messages/markdown';
 import { ComposerController } from './composer/composer';
 import { CustomUiController } from './customUI/customUi';
 import { getWebviewDom } from './dom';
@@ -450,8 +450,6 @@ function render(): void {
   }
 
   messagesController.renderMessageList();
-  pruneDisconnectedCodeHighlights();
-  pruneDisconnectedLocalImageRequests();
 
   messagesController.syncBusyStatus();
   composerController.syncModelLabel();

@@ -1,5 +1,6 @@
-import { requestCodeHighlightsIn } from '../codeHighlighting';
+import { pruneDisconnectedCodeHighlights, requestCodeHighlightsIn } from '../codeHighlighting';
 import { messagesBottomThreshold } from '../constants';
+import { pruneDisconnectedLocalImageRequests } from './markdown';
 import { createMessageElement, pruneActivityRenderState, toggleActivityBodyExpansion, updateMessageBodyElement } from './renderMessages';
 import {
   createScrollFollowState,
@@ -46,6 +47,8 @@ export class MessageListController {
     if (state.messages.length === 0) {
       this.renderedMessageViews = [];
       this.options.messagesContentElement.replaceChildren(this.createEmptyStateElement());
+      pruneActivityRenderState(new Set());
+      pruneDisconnectedMessageRenderState();
       return;
     }
 
@@ -73,6 +76,7 @@ export class MessageListController {
 
     this.renderedMessageViews.length = state.messages.length;
     pruneActivityRenderState(getActiveActivityIds(state.messages));
+    pruneDisconnectedMessageRenderState();
     requestCodeHighlightsIn(this.options.messagesContentElement);
   }
 
@@ -354,6 +358,7 @@ export class MessageListController {
             allowRemoteImages: state.allowRemoteImages
           }
         );
+        pruneDisconnectedMessageRenderState();
       }
 
       existingView.message = message;
@@ -399,6 +404,12 @@ export class MessageListController {
     }
 
     const existingView = this.renderedMessageViews[index];
+
+    if (!existingView) {
+      this.renderMessageList();
+      return;
+    }
+
     const previousMessage = index > 0 ? state.messages[index - 1] : undefined;
     const showRole = state.messages[index].role !== previousMessage?.role;
     const nextView: RenderedMessageView = {
@@ -416,8 +427,9 @@ export class MessageListController {
       copyable: canCopyAssistantMessage(state.messages[index])
     };
 
-    existingView?.element.replaceWith(nextView.element);
+    existingView.element.replaceWith(nextView.element);
     this.renderedMessageViews[index] = nextView;
+    pruneDisconnectedMessageRenderState();
     requestCodeHighlightsIn(nextView.element);
   }
 
@@ -530,6 +542,11 @@ export class MessageListController {
   }
 }
 
+function pruneDisconnectedMessageRenderState(): void {
+  pruneDisconnectedCodeHighlights();
+  pruneDisconnectedLocalImageRequests();
+}
+
 function createPlainEmptyStateElement(): HTMLElement {
   const empty = document.createElement('p');
   empty.className = 'empty-state';
@@ -638,6 +655,7 @@ function getActiveActivityIds(messages: ChatMessage[]): Set<string> {
   for (const message of messages) {
     for (const activity of message.activities ?? []) {
       if (typeof activity.id === 'string' && activity.id) {
+        ids.delete(activity.id);
         ids.add(activity.id);
       }
     }

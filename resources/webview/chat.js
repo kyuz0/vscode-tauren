@@ -2556,6 +2556,7 @@
   }
 
   // src/webview/messages/renderMessages.ts
+  var maxRememberedActivityIds = 1e3;
   var activityExpansion = /* @__PURE__ */ new Map();
   var activityBodyExpansion = /* @__PURE__ */ new Map();
   function toggleActivityBodyExpansion(activityId) {
@@ -2564,8 +2565,9 @@
     return next;
   }
   function pruneActivityRenderState(activeActivityIds) {
-    pruneStringMap(activityExpansion, activeActivityIds);
-    pruneStringMap(activityBodyExpansion, activeActivityIds);
+    const retainedActivityIds = getRecentActivityIds(activeActivityIds);
+    pruneStringMap(activityExpansion, retainedActivityIds);
+    pruneStringMap(activityBodyExpansion, retainedActivityIds);
   }
   function createMessageElement(message, showRole, messageIndex, options = {}) {
     const article = document.createElement("article");
@@ -2626,9 +2628,15 @@
     renderMessageBodyInto(body, message, options);
     return true;
   }
-  function pruneStringMap(map, activeKeys) {
+  function getRecentActivityIds(activeActivityIds) {
+    if (activeActivityIds.size <= maxRememberedActivityIds) {
+      return activeActivityIds;
+    }
+    return new Set(Array.from(activeActivityIds).slice(-maxRememberedActivityIds));
+  }
+  function pruneStringMap(map, retainedKeys) {
     for (const key of Array.from(map.keys())) {
-      if (!activeKeys.has(key)) {
+      if (!retainedKeys.has(key)) {
         map.delete(key);
       }
     }
@@ -3051,6 +3059,8 @@ ${after}`;
       if (state2.messages.length === 0) {
         this.renderedMessageViews = [];
         this.options.messagesContentElement.replaceChildren(this.createEmptyStateElement());
+        pruneActivityRenderState(/* @__PURE__ */ new Set());
+        pruneDisconnectedMessageRenderState();
         return;
       }
       if (this.options.messagesContentElement.querySelector(".empty-state")) {
@@ -3071,6 +3081,7 @@ ${after}`;
       }
       this.renderedMessageViews.length = state2.messages.length;
       pruneActivityRenderState(getActiveActivityIds(state2.messages));
+      pruneDisconnectedMessageRenderState();
       requestCodeHighlightsIn(this.options.messagesContentElement);
     }
     syncBusyStatus() {
@@ -3289,6 +3300,7 @@ ${after}`;
               allowRemoteImages: state2.allowRemoteImages
             }
           );
+          pruneDisconnectedMessageRenderState();
         }
         existingView.message = message;
         existingView.showRole = showRole;
@@ -3328,6 +3340,10 @@ ${after}`;
         return;
       }
       const existingView = this.renderedMessageViews[index];
+      if (!existingView) {
+        this.renderMessageList();
+        return;
+      }
       const previousMessage = index > 0 ? state2.messages[index - 1] : void 0;
       const showRole = state2.messages[index].role !== previousMessage?.role;
       const nextView = {
@@ -3344,8 +3360,9 @@ ${after}`;
         allowRemoteImages: state2.allowRemoteImages,
         copyable: canCopyAssistantMessage2(state2.messages[index])
       };
-      existingView?.element.replaceWith(nextView.element);
+      existingView.element.replaceWith(nextView.element);
       this.renderedMessageViews[index] = nextView;
+      pruneDisconnectedMessageRenderState();
       requestCodeHighlightsIn(nextView.element);
     }
     getStreamingAnimationStartText(existingView, message, index) {
@@ -3416,6 +3433,10 @@ ${after}`;
       return state2.currentSessionFile || "__transient_chat__";
     }
   };
+  function pruneDisconnectedMessageRenderState() {
+    pruneDisconnectedCodeHighlights();
+    pruneDisconnectedLocalImageRequests();
+  }
   function createPlainEmptyStateElement() {
     const empty = document.createElement("p");
     empty.className = "empty-state";
@@ -3494,6 +3515,7 @@ ${after}`;
     for (const message of messages) {
       for (const activity of message.activities ?? []) {
         if (typeof activity.id === "string" && activity.id) {
+          ids.delete(activity.id);
           ids.add(activity.id);
         }
       }
@@ -6254,8 +6276,6 @@ ${after}`;
       return;
     }
     messagesController.renderMessageList();
-    pruneDisconnectedCodeHighlights();
-    pruneDisconnectedLocalImageRequests();
     messagesController.syncBusyStatus();
     composerController.syncModelLabel();
     composerController.syncPromptContextBadges();
