@@ -323,12 +323,12 @@ suite('Chat webview helpers', () => {
     assert.ok(!html.includes('data-session-command="clone"'));
     assert.ok(!html.includes('data-session-command="delete"'));
     assert.ok(!html.includes('pi-toolbar__session-menu'));
-    assert.ok(html.includes('class="messages" aria-live="polite" aria-label="Pi conversation"'));
+    assert.ok(html.includes('class="messages" aria-live="polite" aria-label="Tau conversation"'));
     assert.ok(html.includes('Don\'t show again'));
-    assert.ok(html.includes('class="sessions" aria-label="Pi sessions" role="listbox" tabindex="-1" aria-hidden="true"'));
-    assert.ok(html.includes('class="session-tree" aria-label="Pi session tree" role="listbox" tabindex="-1" aria-hidden="true"'));
-    assert.ok(!html.includes('class="session-tree" aria-label="Pi session tree" role="listbox" tabindex="-1" hidden'));
-    assert.ok(html.includes('<form class="composer" aria-label="Pi message input">'));
+    assert.ok(html.includes('class="sessions" aria-label="Tau sessions" role="listbox" tabindex="-1" aria-hidden="true"'));
+    assert.ok(html.includes('class="session-tree" aria-label="Tau session tree" role="listbox" tabindex="-1" aria-hidden="true"'));
+    assert.ok(!html.includes('class="session-tree" aria-label="Tau session tree" role="listbox" tabindex="-1" hidden'));
+    assert.ok(html.includes('<form class="composer" aria-label="Prompt input">'));
     assert.ok(html.includes('class="composer__button composer__add"'));
     assert.ok(!html.includes('class="composer__button composer__fork"'));
     assert.ok(!html.includes('class="composer__button composer__clone"'));

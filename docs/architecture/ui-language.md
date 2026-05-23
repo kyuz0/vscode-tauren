@@ -18,7 +18,7 @@
   - Session Tree Lane: right lane for Pi tree navigation.
 - Chat Face: front/back state of the Chat Lane.
   - Main Face: transcript/composer.
-  - Settings Face: internal Tau/Pi settings surface.
+  - Settings Face: internal Tau settings surface for Pi engine/runtime details.
 
 ## Runtime UI
 

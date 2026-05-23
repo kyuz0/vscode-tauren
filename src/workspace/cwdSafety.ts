@@ -36,7 +36,7 @@ export function assertSafeWorkspaceCwd(cwd: string | undefined): string {
   const state = getWorkspaceCwdState(cwd);
 
   if (state.status !== 'ready') {
-    throw new Error(`Tau cannot start Pi because ${state.reason}. Open a project folder and try again.`);
+    throw new Error(`Tau cannot start Pi engine because ${state.reason}. Open a project folder and try again.`);
   }
 
   return state.cwd;
@@ -83,7 +83,7 @@ export function assertPiStartupCwd(cwd: string | undefined, rejectWithoutWorkspa
   const state = getPiStartupCwdState(cwd, rejectWithoutWorkspace);
 
   if (state.status !== 'ready') {
-    throw new Error(`Tau cannot start Pi because ${state.reason}. Open a project folder and try again.`);
+    throw new Error(`Tau cannot start Pi engine because ${state.reason}. Open a project folder and try again.`);
   }
 
   return state.cwd;

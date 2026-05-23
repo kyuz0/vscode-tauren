@@ -266,7 +266,7 @@ export class SessionViewController {
 
   public async setTreeEntryLabel(entryId: string, label: string): Promise<void> {
     if (this.options.isBusy()) {
-      this.options.showNotification('Wait for Pi to finish before editing session tree labels.', 'warning');
+      this.options.showNotification('Wait for Pi engine to finish before editing session tree labels.', 'warning');
       return;
     }
 
@@ -291,7 +291,7 @@ export class SessionViewController {
     options: { summarize?: boolean; customInstructions?: string } = {}
   ): Promise<void> {
     if (this.options.isBusy()) {
-      this.options.showNotification('Wait for Pi to finish before navigating the session tree.', 'warning');
+      this.options.showNotification('Wait for Pi engine to finish before navigating the session tree.', 'warning');
       return;
     }
 
@@ -331,7 +331,7 @@ export class SessionViewController {
 
   public async switchSession(sessionPath: string): Promise<void> {
     if (this.options.isBusy()) {
-      this.options.showNotification('Wait for Pi to finish before switching sessions.', 'warning');
+      this.options.showNotification('Wait for Pi engine to finish before switching sessions.', 'warning');
       return;
     }
 

@@ -35,7 +35,7 @@ const settingsSections: SettingsSectionDefinition[] = [
     cards: [
       {
         title: 'Provider slots',
-        body: () => 'Reserved for configured Pi providers and account status.',
+        body: () => 'Reserved for configured Pi engine providers and account status.',
         status: () => 'Placeholder'
       },
       {
@@ -55,11 +55,11 @@ const settingsSections: SettingsSectionDefinition[] = [
       {
         title: 'Current model',
         body: (state) => formatModelSummary(state),
-        status: (state) => state.modelLabel || 'Waiting for Pi'
+        status: (state) => state.modelLabel || 'Waiting for Pi engine'
       },
       {
         title: 'Available models',
-        body: (state) => `${state.modelOptions.length} model${state.modelOptions.length === 1 ? '' : 's'} reported by Pi metadata.`,
+        body: (state) => `${state.modelOptions.length} model${state.modelOptions.length === 1 ? '' : 's'} reported by Pi engine metadata.`,
         status: () => 'Read-only'
       }
     ]
@@ -69,11 +69,11 @@ const settingsSections: SettingsSectionDefinition[] = [
     label: 'Runtime',
     eyebrow: 'Session',
     title: 'Runtime',
-    description: 'Runtime controls should make Pi process/session state visible before they mutate anything.',
+    description: 'Runtime controls should make Pi engine and session state visible before they mutate anything.',
     cards: [
       {
         title: 'Session state',
-        body: (state) => state.busy ? 'Pi is currently working in this session.' : 'Pi is idle for this session.',
+        body: (state) => state.busy ? 'Pi engine is currently working in this session.' : 'Pi engine is idle for this session.',
         status: (state) => state.busy ? 'Running' : 'Idle'
       },
       {
@@ -352,7 +352,7 @@ function createTextElement(tagName: string, className: string, text: string): HT
 
 function formatModelSummary(state: WebviewState): string {
   if (!state.modelLabel) {
-    return 'Pi has not reported live model metadata yet.';
+    return 'Pi engine has not reported live model metadata yet.';
   }
 
   const provider = state.modelProvider ? ` via ${state.modelProvider}` : '';

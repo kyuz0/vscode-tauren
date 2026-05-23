@@ -90,7 +90,7 @@ suite('PiChatController', () => {
     assert.strictEqual(harness.createCalls, 0);
     assert.match(harness.notifications[0]?.message ?? '', /rejectEditWriteOutsideWorkspace is enabled/);
     assert.deepStrictEqual(lastState(harness).messages, [
-      { role: 'system', text: 'Tau cannot start Pi because no workspace folder is available while tau.rejectEditWriteOutsideWorkspace is enabled. Open a project folder and try again.', error: true }
+      { role: 'system', text: 'Tau cannot start Pi engine because no workspace folder is available while tau.rejectEditWriteOutsideWorkspace is enabled. Open a project folder and try again.', error: true }
     ]);
     harness.controller.dispose();
   });
@@ -123,7 +123,7 @@ suite('PiChatController', () => {
       { cwd: '/workspace', sessionFile: '/sessions/current.jsonl' }
     ]);
     assert.deepStrictEqual(lastState(harness).messages, [
-      { role: 'system', text: 'Workspace changed to /workspace. Restarting Pi for the new workspace.' }
+      { role: 'system', text: 'Workspace changed to /workspace. Restarting Pi engine for the new workspace.' }
     ]);
     harness.controller.dispose();
   });
@@ -1904,7 +1904,7 @@ suite('PiChatController', () => {
     assert.strictEqual(client.statsCalls, 1);
     assert.strictEqual(client.commandsCalls, 1);
     assert.deepStrictEqual(lastState(harness).messages, [
-      { role: 'system', text: 'Reloading Pi resources...' },
+      { role: 'system', text: 'Reloading Pi engine resources...' },
       { role: 'system', text: 'Reloaded keybindings, extensions, skills, prompts, and themes.' }
     ]);
     assert.strictEqual(lastState(harness).modelId, 'claude-test');
@@ -1939,8 +1939,8 @@ suite('PiChatController', () => {
     assert.strictEqual(oldClient.disposed, true);
     assert.strictEqual(newClient.commandsCalls, 1);
     assert.deepStrictEqual(lastState(harness).messages, [
-      { role: 'system', text: 'Reloading Pi resources...' },
-      { role: 'system', text: 'Reloaded Tau by restarting Pi. Skills, prompts, extensions, and metadata were rediscovered. Current persisted session was reconnected.' }
+      { role: 'system', text: 'Reloading Pi engine resources...' },
+      { role: 'system', text: 'Reloaded Tau by restarting the Pi engine. Skills, prompts, extensions, and metadata were rediscovered. Current persisted session was reconnected.' }
     ]);
     assert.deepStrictEqual(lastState(harness).slashCommands, [
       { name: 'skill:new-skill', description: 'Newly added skill', source: 'skill', location: 'project', path: undefined }
@@ -1957,7 +1957,7 @@ suite('PiChatController', () => {
     assert.strictEqual(client.reloadCalls, 1);
     assert.strictEqual(client.commandsCalls, 0);
     assert.deepStrictEqual(lastState(harness).messages, [
-      { role: 'system', text: 'Reloading Pi resources...' },
+      { role: 'system', text: 'Reloading Pi engine resources...' },
       { role: 'system', text: 'reload unavailable', error: true }
     ]);
     harness.controller.dispose();
@@ -2145,7 +2145,7 @@ suite('PiChatController', () => {
             kind: 'queue',
             title: '/new not queued',
             status: 'error',
-            summary: 'Sidebar commands are not available while Pi is working.'
+            summary: 'Sidebar commands are not available while Pi engine is working.'
           }
         ]
       }

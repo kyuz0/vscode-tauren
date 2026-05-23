@@ -1,6 +1,6 @@
 # Tau
 
-Tau is a transparent AI coding assistant for VS Code focused on session-based workflows and code traceability.
+Tau is a transparent AI coding assistant for VS Code focused on session-based workflows and code traceability. Tau is the VS Code product/UI; Pi is the backend agent engine it runs on.
 
 ## Philosophy
 
@@ -33,7 +33,7 @@ From there, session diffs make it easy to inspect exactly what changed during th
 
 ### What else?
 
-Tau builds on top of Pi's existing capabilities:
+Tau builds on top of the Pi engine's existing capabilities:
 
 - tree-based session management
 - plugin ecosystem
@@ -44,7 +44,7 @@ It also adds parallel session workflows, allowing you to switch between multiple
 
 ## Requirements / Setup
 
-Tau bundles the Pi SDK for runtime use. It still uses Pi-compatible credentials, so set up authentication the same way you would for terminal use:
+Tau bundles the Pi SDK runtime. It still uses Pi-compatible credentials, so set up authentication the same way you would for terminal use:
 
 ```sh
 npm install -g @earendil-works/pi-coding-agent

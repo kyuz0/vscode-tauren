@@ -307,7 +307,7 @@ export function createWebviewHtml(scriptUris: WebviewScriptUris, options: Create
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${imageSources}; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
-  <title>Pi</title>
+  <title>Tau</title>
   <style>
 ${chatWebviewStyles}
   </style>
@@ -321,7 +321,7 @@ ${chatWebviewStyles}
         </svg>
         <span class="tau-icon-action-tooltip">Show sessions</span>
       </button>
-      <div class="pi-toolbar__title"><span class="pi-toolbar__title-text">Pi</span><span class="pi-toolbar__timestamp" hidden></span><input class="pi-toolbar__title-input" type="text" aria-label="Session name" spellcheck="false" hidden></div>
+      <div class="pi-toolbar__title"><span class="pi-toolbar__title-text">Tau</span><span class="pi-toolbar__timestamp" hidden></span><input class="pi-toolbar__title-input" type="text" aria-label="Session name" spellcheck="false" hidden></div>
       <button class="pi-toolbar__tree" type="button" aria-label="Show tree">
         <svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" fill="none">
           <path d="M6.75 4.5L11.25 9L6.75 13.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
@@ -377,9 +377,9 @@ ${chatWebviewStyles}
         </section>
       </div>
     </section>
-    <div class="tau-chat-surface" aria-label="Pi chat surface">
+    <div class="tau-chat-surface" aria-label="Tau chat surface">
       <div class="tau-chat-surface__face tau-chat-surface__main">
-        <section class="messages" aria-live="polite" aria-label="Pi conversation">
+        <section class="messages" aria-live="polite" aria-label="Tau conversation">
 ${createInitialEmptyStateHtml(Boolean(options.welcomeDismissed))}
         </section>
         <section class="custom-ui" aria-label="Pi extension UI" role="dialog" tabindex="0" hidden>
@@ -389,7 +389,7 @@ ${createInitialEmptyStateHtml(Boolean(options.welcomeDismissed))}
           </div>
           <div class="custom-ui__output" aria-live="polite"></div>
         </section>
-        <form class="composer" aria-label="Pi message input">
+        <form class="composer" aria-label="Prompt input">
       <div id="slash-command-list" class="composer__slash-menu" role="listbox" aria-label="Slash commands"></div>
       <div class="composer__context-badges" aria-label="Attached context" hidden></div>
       <textarea class="composer__input" rows="1" aria-label="Message" placeholder="Write your prompt…" aria-autocomplete="list" aria-controls="slash-command-list" aria-expanded="false"></textarea>
@@ -445,11 +445,11 @@ ${createInitialEmptyStateHtml(Boolean(options.welcomeDismissed))}
       </button>
         </form>
       </div>
-      <section class="settings-surface tau-chat-surface__face tau-chat-surface__settings" aria-label="Pi settings" tabindex="-1" aria-hidden="true">
+      <section class="settings-surface tau-chat-surface__face tau-chat-surface__settings" aria-label="Pi engine settings" tabindex="-1" aria-hidden="true">
         <div class="settings-surface__chrome" aria-hidden="true"></div>
         <header class="settings-surface__header">
           <div>
-            <div class="settings-surface__eyebrow">Pi Control Surface</div>
+            <div class="settings-surface__eyebrow">Pi Engine Settings</div>
             <h2 class="settings-surface__title">Settings</h2>
           </div>
           <button class="settings-surface__back" type="button" aria-label="Back to chat">Back</button>
@@ -457,8 +457,8 @@ ${createInitialEmptyStateHtml(Boolean(options.welcomeDismissed))}
         <div class="settings-surface__body"></div>
       </section>
     </div>
-    <section class="sessions" aria-label="Pi sessions" role="listbox" tabindex="-1" aria-hidden="true"></section>
-    <section class="session-tree" aria-label="Pi session tree" role="listbox" tabindex="-1" aria-hidden="true"></section>
+    <section class="sessions" aria-label="Tau sessions" role="listbox" tabindex="-1" aria-hidden="true"></section>
+    <section class="session-tree" aria-label="Tau session tree" role="listbox" tabindex="-1" aria-hidden="true"></section>
   </main>
 
   <script nonce="${nonce}" src="${scriptUris.markdownItScriptUri}"></script>

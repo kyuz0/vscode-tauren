@@ -484,12 +484,12 @@ export class MessageListController {
     const activity = this.getLatestRunningActivity();
 
     if (!activity) {
-      return 'Pi is working...';
+      return 'Pi engine is working...';
     }
 
     const title = typeof activity.title === 'string' && activity.title
       ? activity.title
-      : 'Pi is working';
+      : 'Pi engine is working';
     const summary = typeof activity.summary === 'string' && activity.summary
       ? ': ' + activity.summary
       : '';

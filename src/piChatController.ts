@@ -611,7 +611,7 @@ export class PiChatController {
       if (this.sessionHistory.needsInitialHistoryRestore) {
         this.session.replaceMessages([]);
       } else {
-        this.session.addSystemMessage(`VS Code workspace is ready: ${cwd}. Starting Pi.`);
+        this.session.addSystemMessage(`VS Code workspace is ready: ${cwd}. Starting Pi engine.`);
       }
 
       this.workspaceWaitingNoticeAdded = false;
@@ -633,7 +633,7 @@ export class PiChatController {
     this.sessionHistory.startNewSession();
     this.resetReadyScriptArming();
     this.resetSessionMeta();
-    this.session.addSystemMessage(`Workspace changed to ${cwd}. Restarting Pi for the new workspace.`);
+    this.session.addSystemMessage(`Workspace changed to ${cwd}. Restarting Pi engine for the new workspace.`);
     this.postState();
     void this.refreshSessionMeta({ startClient: true, force: true });
   }
@@ -707,7 +707,7 @@ export class PiChatController {
       kind: 'queue',
       title: `/${commandName} not queued`,
       status: 'error',
-      summary: 'Sidebar commands are not available while Pi is working.'
+      summary: 'Sidebar commands are not available while Pi engine is working.'
     });
     this.postState();
   }
@@ -850,7 +850,7 @@ export class PiChatController {
   }
 
   private getPiStartupErrorMessage(state: Extract<PiStartupCwdState, { status: 'blocked' }>): string {
-    return `Tau cannot start Pi because ${state.reason}. Open a project folder and try again.`;
+    return `Tau cannot start Pi engine because ${state.reason}. Open a project folder and try again.`;
   }
 
   private handlePiStartupBlocked(message: string): void {
@@ -872,12 +872,12 @@ export class PiChatController {
 
   private addWorkspaceWaitingNotice(warn: boolean): void {
     if (!this.workspaceWaitingNoticeAdded) {
-      this.session.addSystemMessage('Waiting for VS Code to provide the workspace folder before starting Pi.');
+      this.session.addSystemMessage('Waiting for VS Code to provide the workspace folder before starting Pi engine.');
       this.workspaceWaitingNoticeAdded = true;
     }
 
     if (warn && !this.workspaceWarningNoticeAdded) {
-      this.session.addSystemMessage('Still waiting for VS Code workspace folders. Pi will start automatically when the workspace is available.');
+      this.session.addSystemMessage('Still waiting for VS Code workspace folders. Pi engine will start automatically when the workspace is available.');
       this.workspaceWarningNoticeAdded = true;
     }
 

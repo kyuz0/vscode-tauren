@@ -89,7 +89,7 @@
       },
       {
         "command": "tau.reloadPi",
-        "title": "Reload Pi",
+        "title": "Reload Pi Engine",
         "category": "Tau"
       },
       {
@@ -268,27 +268,27 @@
             "Use an amber monochrome custom UI terminal.",
             "Use a high-contrast green matrix-style custom UI terminal."
           ],
-          "description": "Choose the visual theme for Pi custom UI terminal panels."
+          "description": "Choose the visual theme for Pi extension custom UI terminal panels."
         },
         "tau.allowRemoteImages": {
           "type": "boolean",
           "default": true,
-          "description": "Allow Tau chat markdown to load remote HTTPS images. Turn this off to block external image requests while still allowing Pi image data and workspace images."
+          "description": "Allow Tau chat markdown to load remote HTTPS images. Turn this off to block external image requests while still allowing Pi engine image data and workspace images."
         },
         "tau.readyScript": {
           "type": "string",
           "default": "",
-          "description": "Path to an executable script to run when Pi becomes ready: after starting a new Pi process without resuming a session, and after each agent run completes. Relative paths resolve from the workspace folder. Leave empty to disable."
+          "description": "Path to an executable script to run when the Pi engine becomes ready: after starting a new Pi engine process without resuming a session, and after each agent run completes. Relative paths resolve from the workspace folder. Leave empty to disable."
         },
         "tau.readyScriptEnabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable running tau.readyScript when Pi becomes ready. Turn this off to temporarily disable the script without clearing its path."
+          "description": "Enable running tau.readyScript when the Pi engine becomes ready. Turn this off to temporarily disable the script without clearing its path."
         },
         "tau.rejectEditWriteOutsideWorkspace": {
           "type": "boolean",
           "default": false,
-          "description": "Reject Pi edit/write tool mutations outside the active workspace folder. This does not restrict bash commands."
+          "description": "Reject Pi engine edit/write tool mutations outside the active workspace folder. This does not restrict bash commands."
         }
       }
     }

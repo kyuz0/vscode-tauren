@@ -398,7 +398,7 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
     const editor = vscode.window.activeTextEditor;
 
     if (!editor) {
-      this.showNotification('Open a file or select code before adding Pi context.', 'warning');
+      this.showNotification('Open a file or select code before adding prompt context.', 'warning');
       return;
     }
 
@@ -417,7 +417,7 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
     const editor = vscode.window.activeTextEditor;
 
     if (!editor) {
-      this.showNotification('Open a file or select code before tracing its Pi origin.', 'warning');
+      this.showNotification('Open a file or select code before tracing its Tau origin.', 'warning');
       return;
     }
 
@@ -441,7 +441,7 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
       });
 
       if (!traceLinkedCommit) {
-        this.showNotification('No Pi session origin found for the selected code or file.', 'info');
+        this.showNotification('No Tau session origin found for the selected code or file.', 'info');
         return;
       }
 
@@ -864,7 +864,7 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
       return sessionFile;
     }
 
-    const message = `Tau ignored persisted Pi session ${sessionFile} because ${unsafeReason}. Starting a new session in ${workspaceCwd}.`;
+    const message = `Tau ignored persisted session ${sessionFile} because ${unsafeReason}. Starting a new session in ${workspaceCwd}.`;
     void this.workspaceState?.update(currentSessionFileStorageKey, undefined).then(undefined, () => undefined);
     this.showNotification(message, 'warning');
     this.pendingToastMessages.push({ message, kind: 'warning' });
@@ -944,7 +944,7 @@ function createOriginPromptContext(
     ...entry,
     source: 'origin',
     label: `Origin: ${entry.label ?? getPathBasename(entry.path)}`,
-    title: `${entry.title ?? entry.path}\nTraced to Pi session: ${match.sessionPath}`,
+    title: `${entry.title ?? entry.path}\nTraced to Tau session: ${match.sessionPath}`,
     traceOrigin: {
       historicalPath: match.filePath,
       currentRelativePath: entry.path,

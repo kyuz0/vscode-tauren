@@ -4,6 +4,7 @@ All notable changes to Tau will be documented in this file.
 
 ## Unreleased
 
+- Aligned user-facing naming so Tau refers to the product/UI and Pi refers to the backend engine/runtime.
 - Consolidated shared webview protocol parsing and removed the stale `showChanges` session item command.
 - Pruned stale webview render state during long chat sessions to reduce sidebar memory growth.
 - Tightened remote image blocking so disabling `tau.allowRemoteImages` also removes HTTPS image sources from the webview CSP.
@@ -16,19 +17,19 @@ All notable changes to Tau will be documented in this file.
 - Added a native Tau view toolbar help action with a combined chat/session shortcut table.
 - Removed the chat toolbar session commands menu and the session-list New session button.
 - Added a native Tau view toolbar gear for toggling the internal settings pane.
-- Added the initial internal Pi settings surface shell in the sidebar with front/back navigation.
+- Added the initial internal Pi engine settings surface shell in the sidebar with front/back navigation.
 - Fixed session tree/sidebar lane animation by separating the session list and session tree into left/right panes.
 - Allowed Tau to start without an open workspace by using the user home directory, unless `tau.rejectEditWriteOutsideWorkspace` is enabled.
 - Fixed chat autoscroll so delayed rendering does not stop output following, and preserved chat scroll when returning from session list/tree.
 - Added a New session icon to the session list toolbar.
 - Allowed clearing a session name from Tau's sidebar UI.
-- Fixed `tau.readyScript` so it waits for Pi auto-retry and compaction work before running.
+- Fixed `tau.readyScript` so it waits for Pi engine auto-retry and compaction work before running.
 - Kept Pi custom UI scoped to its originating open session, including background sessions.
 - Fixed simultaneous Pi custom UIs so a stale hide from one open session cannot hide another session's UI.
 - Added a `tau.confirmSessionDeletion` setting to optionally skip session deletion confirmation.
-- Allowed session renaming while Pi is working, including running open sessions.
-- Fixed Tau startup so Pi waits for VS Code workspace folders before starting, cannot silently run from an unsafe root cwd, and supports optional `tau.rejectEditWriteOutsideWorkspace` edit/write mutation guarding.
-- Added a `tau.customUiTheme` setting with default, modern, CRT, amber, and matrix styles for Pi custom UI terminal panels.
+- Allowed session renaming while the Pi engine is working, including running open sessions.
+- Fixed Tau startup so the Pi engine waits for VS Code workspace folders before starting, cannot silently run from an unsafe root cwd, and supports optional `tau.rejectEditWriteOutsideWorkspace` edit/write mutation guarding.
+- Added a `tau.customUiTheme` setting with default, modern, CRT, amber, and matrix styles for Pi extension custom UI terminal panels.
 - Refined the modern custom UI theme so the existing prompt area becomes a decorative keyboard deck while custom UI is active.
 - Added a visible block cursor for Pi custom UI components that emit `CURSOR_MARKER`.
 - Fixed compaction summary output so it starts collapsed, can be expanded, and scrolls when long.

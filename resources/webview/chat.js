@@ -3396,9 +3396,9 @@ ${after}`;
     getBusyStatusText() {
       const activity = this.getLatestRunningActivity();
       if (!activity) {
-        return "Pi is working...";
+        return "Pi engine is working...";
       }
-      const title = typeof activity.title === "string" && activity.title ? activity.title : "Pi is working";
+      const title = typeof activity.title === "string" && activity.title ? activity.title : "Pi engine is working";
       const summary = typeof activity.summary === "string" && activity.summary ? ": " + activity.summary : "";
       return title + summary;
     }
@@ -5474,7 +5474,7 @@ ${after}`;
       cards: [
         {
           title: "Provider slots",
-          body: () => "Reserved for configured Pi providers and account status.",
+          body: () => "Reserved for configured Pi engine providers and account status.",
           status: () => "Placeholder"
         },
         {
@@ -5494,11 +5494,11 @@ ${after}`;
         {
           title: "Current model",
           body: (state2) => formatModelSummary(state2),
-          status: (state2) => state2.modelLabel || "Waiting for Pi"
+          status: (state2) => state2.modelLabel || "Waiting for Pi engine"
         },
         {
           title: "Available models",
-          body: (state2) => `${state2.modelOptions.length} model${state2.modelOptions.length === 1 ? "" : "s"} reported by Pi metadata.`,
+          body: (state2) => `${state2.modelOptions.length} model${state2.modelOptions.length === 1 ? "" : "s"} reported by Pi engine metadata.`,
           status: () => "Read-only"
         }
       ]
@@ -5508,11 +5508,11 @@ ${after}`;
       label: "Runtime",
       eyebrow: "Session",
       title: "Runtime",
-      description: "Runtime controls should make Pi process/session state visible before they mutate anything.",
+      description: "Runtime controls should make Pi engine and session state visible before they mutate anything.",
       cards: [
         {
           title: "Session state",
-          body: (state2) => state2.busy ? "Pi is currently working in this session." : "Pi is idle for this session.",
+          body: (state2) => state2.busy ? "Pi engine is currently working in this session." : "Pi engine is idle for this session.",
           status: (state2) => state2.busy ? "Running" : "Idle"
         },
         {
@@ -5745,7 +5745,7 @@ ${after}`;
   }
   function formatModelSummary(state2) {
     if (!state2.modelLabel) {
-      return "Pi has not reported live model metadata yet.";
+      return "Pi engine has not reported live model metadata yet.";
     }
     const provider = state2.modelProvider ? ` via ${state2.modelProvider}` : "";
     const reasoning = state2.modelReasoning ? " Reasoning is available for this model." : "";
