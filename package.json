@@ -182,11 +182,6 @@
           "group": "tau@1"
         },
         {
-          "command": "tau.resume",
-          "when": "view == tau.chatView && !tau.busy",
-          "group": "tau@2"
-        },
-        {
           "command": "tau.renameSession",
           "when": "view == tau.chatView",
           "group": "tau@3"
