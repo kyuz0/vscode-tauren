@@ -27,6 +27,7 @@ import { SessionHistoryController } from './sessions/sessionHistoryController';
 import { PiClientManager } from './controller/piClientManager';
 import { PiEventHandler } from './controller/piEventHandler';
 import { SessionViewController } from './sessions/sessionViewController';
+import { SettingsViewController } from './settings/settingsViewController';
 import { getPiStartupCwdState, type PiStartupCwdState } from './workspace/cwdSafety';
 
 export type { PiChatControllerOptions } from './controller/types';
@@ -40,6 +41,7 @@ export class PiChatController {
   private readonly sessionMetadataRefresh: SessionMetadataRefreshController;
   private readonly slashCommandController: LocalSlashCommandController;
   private readonly sessionView: SessionViewController;
+  private readonly settingsView: SettingsViewController;
   private pendingComposerText: { text: string; revision: number } | undefined;
   private composerTextRevision = 0;
   private readonly clientManager: PiClientManager;
@@ -62,6 +64,8 @@ export class PiChatController {
       loadSnapshot: (sessionFile) => this.options.loadSessionDiffSnapshot?.(sessionFile),
       saveSnapshot: (sessionFile, snapshot) => this.options.saveSessionDiffSnapshot?.(sessionFile, snapshot)
     });
+
+    this.settingsView = new SettingsViewController(() => this.postState());
 
     this.sessionView = new SessionViewController({
       createClient: options.createClient,
@@ -202,13 +206,25 @@ export class PiChatController {
         this.startNewSession();
         return;
       case 'showSessions':
+        this.settingsView.hideSettings({ post: false });
         this.sessionView.showSessions();
         return;
       case 'showTree':
+        this.settingsView.hideSettings({ post: false });
         this.sessionView.showTree();
         return;
       case 'hideSessions':
         this.sessionView.hideSessions();
+        return;
+      case 'showSettings':
+        this.sessionView.showChat({ clearSessionsError: true, clearTreeError: true });
+        this.settingsView.showSettings();
+        return;
+      case 'hideSettings':
+        this.settingsView.hideSettings();
+        return;
+      case 'setSettingsSection':
+        this.settingsView.setActiveSection(message.section);
         return;
       case 'refreshSessions':
         await this.sessionView.refreshSessions();
@@ -455,7 +471,8 @@ export class PiChatController {
       contextUsage: metadataState.contextUsage,
       metadataRefreshing: metadataState.metadataRefreshing,
       workspaceDiffStats: this.sessionDiffController.getStats(),
-      sessionView: this.sessionView.getWebviewState(this.sessionHistory.isLoading)
+      sessionView: this.sessionView.getWebviewState(this.sessionHistory.isLoading),
+      settingsView: this.settingsView.getWebviewState()
     });
   }
 

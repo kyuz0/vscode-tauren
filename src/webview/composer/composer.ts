@@ -1014,6 +1014,7 @@ export class ComposerController {
       window.innerWidth,
       window.innerHeight,
       state.viewMode,
+      state.surfaceSide,
       state.busy ? '1' : '0',
       state.workspaceDiffStats.addedLines,
       state.workspaceDiffStats.removedLines,

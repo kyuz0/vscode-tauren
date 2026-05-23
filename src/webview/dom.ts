@@ -13,6 +13,10 @@ export type WebviewDom = {
   chatHelpWrapElement: HTMLElement;
   chatHelpButton: HTMLButtonElement;
   chatHelpPopoverElement: HTMLElement;
+  settingsToggleButton: HTMLButtonElement;
+  settingsElement: HTMLElement;
+  settingsBodyElement: HTMLElement;
+  settingsBackButton: HTMLButtonElement;
   sessionHelpWrapElement: HTMLElement;
   sessionHelpButton: HTMLButtonElement;
   sessionHelpPopoverElement: HTMLElement;
@@ -60,6 +64,10 @@ export function getWebviewDom(): WebviewDom {
     chatHelpWrapElement: queryRequired<HTMLElement>('.pi-toolbar__chat-help-wrap'),
     chatHelpButton: queryRequired<HTMLButtonElement>('.pi-toolbar__chat-help-button'),
     chatHelpPopoverElement: queryRequired<HTMLElement>('.pi-toolbar__chat-help-popover'),
+    settingsToggleButton: queryRequired<HTMLButtonElement>('.pi-toolbar__settings'),
+    settingsElement: queryRequired<HTMLElement>('.settings-surface'),
+    settingsBodyElement: queryRequired<HTMLElement>('.settings-surface__body'),
+    settingsBackButton: queryRequired<HTMLButtonElement>('.settings-surface__back'),
     sessionHelpWrapElement: queryRequired<HTMLElement>('.pi-toolbar__session-help-wrap'),
     sessionHelpButton: queryRequired<HTMLButtonElement>('.pi-toolbar__session-help-button'),
     sessionHelpPopoverElement: queryRequired<HTMLElement>('.pi-toolbar__session-help-popover'),

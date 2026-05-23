@@ -4,6 +4,7 @@ import { CustomUiController } from './customUI/customUi';
 import { getWebviewDom } from './dom';
 import { MessageListController } from './messages/messageList';
 import { SessionViewController } from './sessions/sessionView';
+import { SettingsPaneController } from './settings/settingsPane';
 import { initialWebviewState, parseWebviewStateMessage } from './state';
 import type { WebviewState } from './types';
 
@@ -26,6 +27,10 @@ const {
   chatHelpWrapElement,
   chatHelpButton,
   chatHelpPopoverElement,
+  settingsToggleButton,
+  settingsElement,
+  settingsBodyElement,
+  settingsBackButton,
   sessionHelpWrapElement,
   sessionHelpButton,
   sessionHelpPopoverElement,
@@ -79,6 +84,7 @@ let pendingRenderFrame: number | undefined;
 let pendingReturnToChatAfterRender = false;
 
 let sessionsController: SessionViewController;
+let settingsController: SettingsPaneController;
 
 const customUiController = new CustomUiController({
   vscode,
@@ -127,6 +133,20 @@ const composerController = new ComposerController({
   scrollMessagesToBottom: () => messagesController.scrollMessagesToBottom()
 });
 
+settingsController = new SettingsPaneController({
+  getState: () => state,
+  postMessage: (message) => vscode.postMessage(message),
+  settingsToggleButton,
+  settingsElement,
+  settingsBodyElement,
+  settingsBackButton,
+  focusPromptInput,
+  closeSessionCommandMenu: () => sessionsController.closeSessionCommandMenu(),
+  closeSlashMenu: () => composerController.closeSlashMenu(),
+  closeModelMenu: () => composerController.closeModelMenu(),
+  closeChatHelpPopover
+});
+
 sessionsController = new SessionViewController({
   getState: () => state,
   postMessage: (message) => vscode.postMessage(message),
@@ -154,6 +174,7 @@ sessionsController = new SessionViewController({
 
 composerController.attachEventListeners();
 sessionsController.attachEventListeners();
+settingsController.attachEventListeners();
 customUiController.attachEventListeners();
 
 chatHelpButton.addEventListener('click', toggleChatHelpPopover);
@@ -200,6 +221,7 @@ window.addEventListener('message', (event) => {
   }
 
   const previousViewMode = state.viewMode;
+  const previousSurfaceSide = state.surfaceSide;
   const previousCurrentSessionFile = state.currentSessionFile;
   const previousSessionCount = Array.isArray(state.sessions) ? state.sessions.length : 0;
   const previousTreeCount = Array.isArray(state.treeItems) ? state.treeItems.length : 0;
@@ -245,7 +267,11 @@ window.addEventListener('message', (event) => {
     composerController.applyComposerTextFromState();
   }
 
-  scheduleRender({ returnToChat: wasListView && state.viewMode === 'chat' });
+  scheduleRender({ returnToChat: wasListView && state.viewMode === 'chat' && state.surfaceSide !== 'settings' });
+
+  if (previousSurfaceSide === 'settings' && state.surfaceSide === 'front' && state.viewMode === 'chat') {
+    requestAnimationFrame(() => focusPromptInput());
+  }
 });
 
 window.addEventListener('click', (event) => {
@@ -257,6 +283,10 @@ window.addEventListener('click', (event) => {
 
 window.addEventListener('keydown', (event) => {
   if (customUiController.handleGlobalKeydown(event)) {
+    return;
+  }
+
+  if (settingsController.handleGlobalKeydown(event)) {
     return;
   }
 
@@ -353,29 +383,41 @@ function scheduleRender(options: { returnToChat?: boolean } = {}): void {
 
 function render(): void {
   const isListView = state.viewMode === 'sessions' || state.viewMode === 'tree';
-  const shouldStickToBottom = !isListView && messagesController.shouldFollowOutput();
+  const isSettingsVisible = !isListView && state.surfaceSide === 'settings';
+  const shouldStickToBottom = !isListView && !isSettingsVisible && messagesController.shouldFollowOutput();
   viewElement.classList.toggle('pi-view--list', isListView);
   viewElement.classList.toggle('pi-view--sessions', state.viewMode === 'sessions');
   viewElement.classList.toggle('pi-view--tree', state.viewMode === 'tree');
   viewElement.classList.toggle('pi-view--chat', !isListView);
+  viewElement.classList.toggle('pi-view--settings', isSettingsVisible);
   messagesElement.hidden = false;
   sessionsElement.hidden = false;
   sessionTreeElement.hidden = false;
-  messagesElement.setAttribute('aria-hidden', isListView ? 'true' : 'false');
+  messagesElement.setAttribute('aria-hidden', isListView || isSettingsVisible ? 'true' : 'false');
   sessionsElement.setAttribute('aria-hidden', state.viewMode === 'sessions' ? 'false' : 'true');
   sessionTreeElement.setAttribute('aria-hidden', state.viewMode === 'tree' ? 'false' : 'true');
-  messagesElement.inert = isListView;
+  messagesElement.inert = isListView || isSettingsVisible;
   sessionsElement.inert = state.viewMode !== 'sessions';
   sessionTreeElement.inert = state.viewMode !== 'tree';
   sessionsElement.tabIndex = state.viewMode === 'sessions' ? 0 : -1;
   sessionTreeElement.tabIndex = state.viewMode === 'tree' ? 0 : -1;
   form.classList.toggle('composer--list-hidden', isListView);
-  form.setAttribute('aria-hidden', isListView ? 'true' : 'false');
-  form.inert = isListView;
+  form.setAttribute('aria-hidden', isListView || isSettingsVisible ? 'true' : 'false');
+  form.inert = isListView || isSettingsVisible;
 
   sessionsController.syncForRender(isListView);
-  customUiController.syncForRender(isListView);
-  syncChatHelpForRender(isListView);
+  settingsController.syncForRender(isListView);
+  customUiController.syncForRender(isListView || isSettingsVisible);
+  syncChatHelpForRender(isListView || isSettingsVisible);
+
+  if (isSettingsVisible) {
+    busyStatusElement.hidden = true;
+    composerController.closeSlashMenu();
+    composerController.closeModelMenu();
+    sessionsController.closeSessionCommandMenu();
+    sessionsController.cancelSessionNameEdit();
+    return;
+  }
 
   if (isListView) {
     busyStatusElement.hidden = true;

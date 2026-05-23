@@ -21,6 +21,9 @@ export type WebviewMessage =
   | { type: 'showSessions' }
   | { type: 'showTree' }
   | { type: 'hideSessions' }
+  | { type: 'showSettings' }
+  | { type: 'hideSettings' }
+  | { type: 'setSettingsSection'; section: WebviewSettingsSection }
   | { type: 'refreshSessions' }
   | { type: 'showCurrentChanges' }
   | { type: 'dismissWelcome' }
@@ -62,6 +65,13 @@ export type WebviewSlashCommand = {
 };
 
 export type WebviewViewMode = 'chat' | 'sessions' | 'tree';
+export type WebviewSurfaceSide = 'front' | 'settings';
+export type WebviewSettingsSection = 'providers' | 'models' | 'runtime' | 'appearance' | 'advanced';
+
+export type WebviewSettingsViewState = {
+  surfaceSide?: WebviewSurfaceSide;
+  activeSection?: WebviewSettingsSection;
+};
 
 export type WebviewSessionItem = {
   path: string;
@@ -132,6 +142,8 @@ export type WebviewStateMessage = ChatState & {
   treeRefreshing?: boolean;
   treeError?: string;
   sessionLoading?: boolean;
+  surfaceSide?: WebviewSurfaceSide;
+  settingsSection?: WebviewSettingsSection;
 };
 
 export type CreateWebviewStateMessageOptions = {
@@ -174,6 +186,7 @@ export type CreateWebviewStateMessageOptions = {
     treeError?: string;
     sessionLoading?: boolean;
   };
+  settingsView?: WebviewSettingsViewState;
 };
 
 export type WebviewScriptUris = {

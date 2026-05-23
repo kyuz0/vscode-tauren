@@ -122,11 +122,13 @@ export class TopSessionControls {
 
   public syncForRender(isListView: boolean): void {
     const state = this.options.getState();
-    const toolbarTitle = state.viewMode === 'sessions' ? 'Sessions' : state.viewMode === 'tree' ? 'Session tree' : this.options.getCurrentSessionTitle();
-    const toolbarTimestamp = isListView ? '' : formatRelativeTime(this.options.getCurrentSessionTimestamp());
+    const isSettingsView = state.surfaceSide === 'settings' && state.viewMode === 'chat';
+    const isFrontHidden = isListView || isSettingsView;
+    const toolbarTitle = isSettingsView ? 'Settings' : state.viewMode === 'sessions' ? 'Sessions' : state.viewMode === 'tree' ? 'Session tree' : this.options.getCurrentSessionTitle();
+    const toolbarTimestamp = isFrontHidden ? '' : formatRelativeTime(this.options.getCurrentSessionTimestamp());
     const toolbarTitleTooltip = [toolbarTitle, toolbarTimestamp].filter(Boolean).join(' · ');
 
-    if (isListView && this.sessionNameEditing) {
+    if (isFrontHidden && this.sessionNameEditing) {
       this.cancelSessionNameEdit();
     }
 
@@ -137,13 +139,13 @@ export class TopSessionControls {
     this.options.toolbarTitleElement.classList.toggle('pi-toolbar__title--editing', this.sessionNameEditing);
     this.options.toolbarTitleTextElement.hidden = this.sessionNameEditing;
     this.options.sessionNameInputElement.hidden = !this.sessionNameEditing;
-    this.options.sessionMenuWrapElement.hidden = isListView;
+    this.options.sessionMenuWrapElement.hidden = isFrontHidden;
     this.options.sessionNewButton.hidden = state.viewMode !== 'sessions';
     this.options.sessionHelpWrapElement.hidden = state.viewMode !== 'sessions';
     this.options.sessionMenuButton.disabled = this.sessionNameEditing;
     this.syncSessionCommandMenuItems();
 
-    if (isListView || this.sessionNameEditing) {
+    if (isFrontHidden || this.sessionNameEditing) {
       this.closeSessionCommandMenu();
     }
 

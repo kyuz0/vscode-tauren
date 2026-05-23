@@ -6,6 +6,7 @@ import type {
   WebviewMessage,
   WebviewScriptUris,
   WebviewSessionItemCommand,
+  WebviewSettingsSection,
   WebviewStateMessage,
   WebviewStreamingBehavior
 } from '../webviewProtocol/types';
@@ -30,6 +31,14 @@ export function parseWebviewMessage(value: unknown): WebviewMessage {
       return { type: 'showTree' };
     case 'hideSessions':
       return { type: 'hideSessions' };
+    case 'showSettings':
+      return { type: 'showSettings' };
+    case 'hideSettings':
+      return { type: 'hideSettings' };
+    case 'setSettingsSection':
+      return isWebviewSettingsSection(value.section)
+        ? { type: 'setSettingsSection', section: value.section }
+        : { type: 'unknown' };
     case 'refreshSessions':
       return { type: 'refreshSessions' };
     case 'showCurrentChanges':
@@ -182,7 +191,8 @@ export function createWebviewStateMessage({
   welcomeDismissed,
   promptContext = [],
   composer,
-  sessionView
+  sessionView,
+  settingsView
 }: CreateWebviewStateMessageOptions): WebviewStateMessage {
   const message: WebviewStateMessage = {
     type: 'state',
@@ -220,6 +230,16 @@ export function createWebviewStateMessage({
   if (composer && typeof composer.revision === 'number' && composer.revision > 0) {
     message.composerText = composer.text ?? '';
     message.composerTextRevision = composer.revision;
+  }
+
+  if (settingsView) {
+    if (settingsView.surfaceSide) {
+      message.surfaceSide = settingsView.surfaceSide;
+    }
+
+    if (settingsView.activeSection) {
+      message.settingsSection = settingsView.activeSection;
+    }
   }
 
   if (sessionView) {
@@ -333,6 +353,13 @@ ${chatWebviewStyles}
           </button>
         </div>
       </div>
+      <button class="pi-toolbar__settings" type="button" aria-label="Open settings" aria-pressed="false">
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M8 5.55A2.45 2.45 0 1 1 8 10.45A2.45 2.45 0 0 1 8 5.55Z" stroke="currentColor" stroke-width="1.25"/>
+          <path d="M8 1.9L9.12 2.22L9.6 3.68L10.95 4.25L12.35 3.57L13.12 4.9L12.12 6.07L12.3 7.52L13.5 8.5L12.8 9.87L11.25 9.73L10.12 10.65L9.82 12.18H8.18L7.88 10.65L6.75 9.73L5.2 9.87L4.5 8.5L5.7 7.52L5.88 6.07L4.88 4.9L5.65 3.57L7.05 4.25L8.4 3.68L8.88 2.22L8 1.9Z" stroke="currentColor" stroke-width="1.05" stroke-linejoin="round"/>
+        </svg>
+        <span class="tau-icon-action-tooltip">Open settings</span>
+      </button>
       <div class="pi-toolbar__help-wrap pi-toolbar__chat-help-wrap">
         <button class="pi-toolbar__help-button pi-toolbar__chat-help-button" type="button" aria-label="Chat shortcuts" aria-haspopup="dialog" aria-expanded="false" aria-controls="chat-shortcuts">
           <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -398,19 +425,19 @@ ${chatWebviewStyles}
       </button>
     </header>
     <div class="pi-toast" role="status" aria-live="polite" hidden></div>
-    <section class="messages" aria-live="polite" aria-label="Pi conversation">
+    <div class="tau-chat-surface" aria-label="Pi chat surface">
+      <div class="tau-chat-surface__face tau-chat-surface__front">
+        <section class="messages" aria-live="polite" aria-label="Pi conversation">
 ${createInitialEmptyStateHtml(Boolean(options.welcomeDismissed))}
-    </section>
-    <section class="sessions" aria-label="Pi sessions" role="listbox" tabindex="-1" aria-hidden="true"></section>
-    <section class="session-tree" aria-label="Pi session tree" role="listbox" tabindex="-1" aria-hidden="true"></section>
-    <section class="custom-ui" aria-label="Pi extension UI" role="dialog" tabindex="0" hidden>
-      <div class="custom-ui__header">
-        <span class="custom-ui__title">Extension UI</span>
-        <button class="custom-ui__close" type="button" aria-label="Close extension UI">×</button>
-      </div>
-      <div class="custom-ui__output" aria-live="polite"></div>
-    </section>
-    <form class="composer" aria-label="Pi message input">
+        </section>
+        <section class="custom-ui" aria-label="Pi extension UI" role="dialog" tabindex="0" hidden>
+          <div class="custom-ui__header">
+            <span class="custom-ui__title">Extension UI</span>
+            <button class="custom-ui__close" type="button" aria-label="Close extension UI">×</button>
+          </div>
+          <div class="custom-ui__output" aria-live="polite"></div>
+        </section>
+        <form class="composer" aria-label="Pi message input">
       <div id="slash-command-list" class="composer__slash-menu" role="listbox" aria-label="Slash commands"></div>
       <div class="composer__context-badges" aria-label="Attached context" hidden></div>
       <textarea class="composer__input" rows="1" aria-label="Message" placeholder="Write your prompt…" aria-autocomplete="list" aria-controls="slash-command-list" aria-expanded="false"></textarea>
@@ -464,7 +491,22 @@ ${createInitialEmptyStateHtml(Boolean(options.welcomeDismissed))}
         </svg>
         <span class="tau-icon-action-tooltip">Send message</span>
       </button>
-    </form>
+        </form>
+      </div>
+      <section class="settings-surface tau-chat-surface__face tau-chat-surface__back" aria-label="Pi settings" tabindex="-1" aria-hidden="true">
+        <div class="settings-surface__chrome" aria-hidden="true"></div>
+        <header class="settings-surface__header">
+          <div>
+            <div class="settings-surface__eyebrow">Pi Control Surface</div>
+            <h2 class="settings-surface__title">Settings</h2>
+          </div>
+          <button class="settings-surface__back" type="button" aria-label="Back to chat">Back</button>
+        </header>
+        <div class="settings-surface__body"></div>
+      </section>
+    </div>
+    <section class="sessions" aria-label="Pi sessions" role="listbox" tabindex="-1" aria-hidden="true"></section>
+    <section class="session-tree" aria-label="Pi session tree" role="listbox" tabindex="-1" aria-hidden="true"></section>
   </main>
 
   <script nonce="${nonce}" src="${scriptUris.markdownItScriptUri}"></script>
@@ -500,6 +542,14 @@ function parseStreamingBehavior(value: unknown): WebviewStreamingBehavior | unde
 
 function normalizeDiffLineCount(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+function isWebviewSettingsSection(value: unknown): value is WebviewSettingsSection {
+  return value === 'providers'
+    || value === 'models'
+    || value === 'runtime'
+    || value === 'appearance'
+    || value === 'advanced';
 }
 
 function isWebviewSessionItemCommand(command: unknown): command is WebviewSessionItemCommand {

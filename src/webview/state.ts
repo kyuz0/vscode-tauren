@@ -24,6 +24,8 @@ export const initialWebviewState: WebviewState = {
   composerText: '',
   composerTextRevision: 0,
   viewMode: 'chat',
+  surfaceSide: 'front',
+  settingsSection: 'providers',
   sessions: [],
   sessionsRefreshing: false,
   sessionsError: '',
@@ -62,6 +64,8 @@ export function parseWebviewStateMessage(data: unknown): WebviewState {
     composerText: typeof record.composerText === 'string' ? record.composerText : '',
     composerTextRevision: typeof record.composerTextRevision === 'number' ? record.composerTextRevision : 0,
     viewMode: record.viewMode === 'sessions' || record.viewMode === 'tree' ? record.viewMode : 'chat',
+    surfaceSide: record.surfaceSide === 'settings' ? 'settings' : 'front',
+    settingsSection: parseSettingsSection(record.settingsSection),
     sessions: Array.isArray(record.sessions) ? record.sessions : [],
     sessionsRefreshing: Boolean(record.sessionsRefreshing),
     sessionsError: typeof record.sessionsError === 'string' ? record.sessionsError : '',
@@ -76,6 +80,15 @@ export function parseWebviewStateMessage(data: unknown): WebviewState {
 
 function parseCustomUiTheme(value: unknown) {
   return value === 'modern' || value === 'crt' || value === 'amber' || value === 'matrix' ? value : 'default';
+}
+
+function parseSettingsSection(value: unknown) {
+  return value === 'models'
+    || value === 'runtime'
+    || value === 'appearance'
+    || value === 'advanced'
+    ? value
+    : 'providers';
 }
 
 function parseWorkspaceDiffStats(value: unknown): { addedLines: number; removedLines: number } {

@@ -108,6 +108,9 @@ suite('Chat webview helpers', () => {
     assert.deepStrictEqual(parseWebviewMessage({ type: 'showSessions' }), { type: 'showSessions' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'showTree' }), { type: 'showTree' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'hideSessions' }), { type: 'hideSessions' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'showSettings' }), { type: 'showSettings' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'hideSettings' }), { type: 'hideSettings' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'setSettingsSection', section: 'models' }), { type: 'setSettingsSection', section: 'models' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'refreshSessions' }), { type: 'refreshSessions' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'showCurrentChanges' }), { type: 'showCurrentChanges' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'dismissWelcome' }), { type: 'dismissWelcome' });
@@ -205,6 +208,7 @@ suite('Chat webview helpers', () => {
     assert.deepStrictEqual(parseWebviewMessage(undefined), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({}), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'focusChanged', focused: 'yes' }), { type: 'unknown' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'setSettingsSection', section: 'bogus' }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'submit', text: 42 }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'selectSession', sessionPath: '' }), { type: 'unknown' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'deleteSession', sessionPath: '' }), { type: 'unknown' });
@@ -252,19 +256,19 @@ suite('Chat webview helpers', () => {
       webviewScriptUri: 'vscode-resource://chat.js'
     });
 
-    assert.ok(html.includes('.messages,\n    .sessions,\n    .session-tree'));
+    assert.ok(html.includes('.tau-chat-surface,\n    .sessions,\n    .session-tree'));
     assert.match(html, /\.pi-view--chat \.sessions \{\n      transform: translate3d\(-100%, 0, 0\);/);
     assert.match(html, /\.pi-view--chat \.session-tree \{\n      transform: translate3d\(100%, 0, 0\);/);
-    assert.match(html, /\.pi-view--sessions \.messages \{\n      transform: translate3d\(100%, 0, 0\);/);
+    assert.match(html, /\.pi-view--sessions \.tau-chat-surface \{\n      transform: translate3d\(100%, 0, 0\);/);
     assert.match(html, /\.pi-view--sessions \.sessions \{\n      transform: translate3d\(0, 0, 0\);/);
     assert.match(html, /\.pi-view--sessions \.session-tree \{\n      transform: translate3d\(100%, 0, 0\);/);
-    assert.match(html, /\.pi-view--tree \.messages \{\n      transform: translate3d\(-100%, 0, 0\);/);
+    assert.match(html, /\.pi-view--tree \.tau-chat-surface \{\n      transform: translate3d\(-100%, 0, 0\);/);
     assert.match(html, /\.pi-view--tree \.sessions \{\n      transform: translate3d\(-100%, 0, 0\);/);
     assert.match(html, /\.pi-view--tree \.session-tree \{\n      transform: translate3d\(0, 0, 0\);/);
     assert.ok(html.includes('--tau-lane-transition-duration: 190ms'));
     assert.ok(html.includes('--tau-lane-transition-easing: cubic-bezier(0.16, 1, 0.3, 1)'));
     assert.ok(html.includes('transition: transform var(--tau-lane-transition-duration) var(--tau-lane-transition-easing);'));
-    assert.ok(html.includes('Lane contract: every pane stays mounted; list hides left, tree hides right, visible panes sit at 0.'));
+    assert.ok(html.includes('class="settings-surface tau-chat-surface__face tau-chat-surface__back"'));
     assert.ok(!html.includes('translate3d(200%, 0, 0)'));
     assert.ok(!html.includes('translate3d(-200%, 0, 0)'));
     assert.ok(!html.includes('pi-view--tree-enter'));
@@ -299,6 +303,7 @@ suite('Chat webview helpers', () => {
     assert.ok(html.includes('class="pi-toolbar__sessions"'));
     assert.ok(html.includes('class="pi-toolbar__tree"'));
     assert.ok(html.includes('class="pi-toolbar__new-session"'));
+    assert.ok(html.includes('class="pi-toolbar__settings"'));
     assert.ok(html.includes('<span class="tau-icon-action-tooltip">New session</span>'));
     assert.ok(html.includes('<span class="tau-icon-action-tooltip">Show tree</span>'));
     assert.ok(!html.includes('class="pi-toolbar__edit"'));

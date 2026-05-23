@@ -7,6 +7,8 @@ suite('Webview state helpers', () => {
     assert.strictEqual(initialWebviewState.busy, false);
     assert.deepStrictEqual(initialWebviewState.workspaceDiffStats, { addedLines: 0, removedLines: 0 });
     assert.strictEqual(initialWebviewState.viewMode, 'chat');
+    assert.strictEqual(initialWebviewState.surfaceSide, 'front');
+    assert.strictEqual(initialWebviewState.settingsSection, 'providers');
     assert.strictEqual(initialWebviewState.customUiTheme, 'default');
     assert.strictEqual(initialWebviewState.welcomeDismissed, false);
     assert.deepStrictEqual(initialWebviewState.sessions, []);
@@ -35,6 +37,8 @@ suite('Webview state helpers', () => {
       composerText: 'draft',
       composerTextRevision: 2,
       viewMode: 'sessions',
+      surfaceSide: 'settings',
+      settingsSection: 'runtime',
       sessions: [{ path: '/session.jsonl' }],
       sessionsRefreshing: true,
       sessionsError: 'failed',
@@ -50,6 +54,8 @@ suite('Webview state helpers', () => {
     assert.strictEqual(parsed.modelLabel, 'gpt-test');
     assert.deepStrictEqual(parsed.workspaceDiffStats, { addedLines: 300, removedLines: 200 });
     assert.strictEqual(parsed.viewMode, 'sessions');
+    assert.strictEqual(parsed.surfaceSide, 'settings');
+    assert.strictEqual(parsed.settingsSection, 'runtime');
     assert.strictEqual(parsed.customUiTheme, 'modern');
     assert.strictEqual(parsed.welcomeDismissed, true);
     assert.strictEqual(parsed.sessions[0]?.path, '/session.jsonl');
@@ -65,6 +71,8 @@ suite('Webview state helpers', () => {
       composerTextRevision: 'bad',
       customUiTheme: 'bad',
       viewMode: 'unknown',
+      surfaceSide: 'bad',
+      settingsSection: 'bad',
       sessions: 'bad'
     });
 
@@ -73,6 +81,8 @@ suite('Webview state helpers', () => {
     assert.deepStrictEqual(parsed.workspaceDiffStats, { addedLines: 0, removedLines: 0 });
     assert.strictEqual(parsed.composerTextRevision, 0);
     assert.strictEqual(parsed.viewMode, 'chat');
+    assert.strictEqual(parsed.surfaceSide, 'front');
+    assert.strictEqual(parsed.settingsSection, 'providers');
     assert.strictEqual(parsed.customUiTheme, 'default');
     assert.strictEqual(parsed.welcomeDismissed, false);
     assert.deepStrictEqual(parsed.sessions, []);

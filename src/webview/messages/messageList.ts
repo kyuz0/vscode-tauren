@@ -96,7 +96,7 @@ export class MessageListController {
   public handleChatPageScroll(event: KeyboardEvent): boolean {
     const state = this.options.getState();
 
-    if (state.viewMode !== 'chat' || (event.key !== 'PageUp' && event.key !== 'PageDown')) {
+    if (state.viewMode !== 'chat' || state.surfaceSide === 'settings' || (event.key !== 'PageUp' && event.key !== 'PageDown')) {
       return false;
     }
 

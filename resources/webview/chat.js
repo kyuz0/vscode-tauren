@@ -1137,6 +1137,7 @@
         window.innerWidth,
         window.innerHeight,
         state2.viewMode,
+        state2.surfaceSide,
         state2.busy ? "1" : "0",
         state2.workspaceDiffStats.addedLines,
         state2.workspaceDiffStats.removedLines,
@@ -2091,6 +2092,10 @@
       chatHelpWrapElement: queryRequired(".pi-toolbar__chat-help-wrap"),
       chatHelpButton: queryRequired(".pi-toolbar__chat-help-button"),
       chatHelpPopoverElement: queryRequired(".pi-toolbar__chat-help-popover"),
+      settingsToggleButton: queryRequired(".pi-toolbar__settings"),
+      settingsElement: queryRequired(".settings-surface"),
+      settingsBodyElement: queryRequired(".settings-surface__body"),
+      settingsBackButton: queryRequired(".settings-surface__back"),
       sessionHelpWrapElement: queryRequired(".pi-toolbar__session-help-wrap"),
       sessionHelpButton: queryRequired(".pi-toolbar__session-help-button"),
       sessionHelpPopoverElement: queryRequired(".pi-toolbar__session-help-popover"),
@@ -2870,7 +2875,7 @@ ${after}`;
     }
     handleChatPageScroll(event) {
       const state2 = this.options.getState();
-      if (state2.viewMode !== "chat" || event.key !== "PageUp" && event.key !== "PageDown") {
+      if (state2.viewMode !== "chat" || state2.surfaceSide === "settings" || event.key !== "PageUp" && event.key !== "PageDown") {
         return false;
       }
       if (event.altKey || event.metaKey || event.shiftKey) {
@@ -4162,10 +4167,12 @@ ${after}`;
     }
     syncForRender(isListView) {
       const state2 = this.options.getState();
-      const toolbarTitle = state2.viewMode === "sessions" ? "Sessions" : state2.viewMode === "tree" ? "Session tree" : this.options.getCurrentSessionTitle();
-      const toolbarTimestamp = isListView ? "" : formatRelativeTime(this.options.getCurrentSessionTimestamp());
+      const isSettingsView = state2.surfaceSide === "settings" && state2.viewMode === "chat";
+      const isFrontHidden = isListView || isSettingsView;
+      const toolbarTitle = isSettingsView ? "Settings" : state2.viewMode === "sessions" ? "Sessions" : state2.viewMode === "tree" ? "Session tree" : this.options.getCurrentSessionTitle();
+      const toolbarTimestamp = isFrontHidden ? "" : formatRelativeTime(this.options.getCurrentSessionTimestamp());
       const toolbarTitleTooltip = [toolbarTitle, toolbarTimestamp].filter(Boolean).join(" \xB7 ");
-      if (isListView && this.sessionNameEditing) {
+      if (isFrontHidden && this.sessionNameEditing) {
         this.cancelSessionNameEdit();
       }
       this.options.toolbarTitleTextElement.textContent = toolbarTitle;
@@ -4175,12 +4182,12 @@ ${after}`;
       this.options.toolbarTitleElement.classList.toggle("pi-toolbar__title--editing", this.sessionNameEditing);
       this.options.toolbarTitleTextElement.hidden = this.sessionNameEditing;
       this.options.sessionNameInputElement.hidden = !this.sessionNameEditing;
-      this.options.sessionMenuWrapElement.hidden = isListView;
+      this.options.sessionMenuWrapElement.hidden = isFrontHidden;
       this.options.sessionNewButton.hidden = state2.viewMode !== "sessions";
       this.options.sessionHelpWrapElement.hidden = state2.viewMode !== "sessions";
       this.options.sessionMenuButton.disabled = this.sessionNameEditing;
       this.syncSessionCommandMenuItems();
-      if (isListView || this.sessionNameEditing) {
+      if (isFrontHidden || this.sessionNameEditing) {
         this.closeSessionCommandMenu();
       }
       if (state2.viewMode !== "sessions") {
@@ -5446,6 +5453,321 @@ ${after}`;
     return key === "a" || key === "c" || key === "v" || key === "x" || key === "z" || key === "y";
   }
 
+  // src/webview/settings/settingsPane.ts
+  var settingsSections = [
+    {
+      id: "providers",
+      label: "Providers",
+      eyebrow: "Connectivity",
+      title: "Providers",
+      description: "A home for provider accounts, routing, and health. Login flows are intentionally not wired yet.",
+      cards: [
+        {
+          title: "Provider slots",
+          body: () => "Reserved for configured Pi providers and account status.",
+          status: () => "Placeholder"
+        },
+        {
+          title: "Authentication",
+          body: () => "Future provider sign-in controls will live here without leaving the chat surface.",
+          status: () => "Not implemented"
+        }
+      ]
+    },
+    {
+      id: "models",
+      label: "Models",
+      eyebrow: "Selection",
+      title: "Models",
+      description: "Model inventory and defaults will be managed here. The current composer picker remains the source of truth for now.",
+      cards: [
+        {
+          title: "Current model",
+          body: (state2) => formatModelSummary(state2),
+          status: (state2) => state2.modelLabel || "Waiting for Pi"
+        },
+        {
+          title: "Available models",
+          body: (state2) => `${state2.modelOptions.length} model${state2.modelOptions.length === 1 ? "" : "s"} reported by Pi metadata.`,
+          status: () => "Read-only"
+        }
+      ]
+    },
+    {
+      id: "runtime",
+      label: "Runtime",
+      eyebrow: "Session",
+      title: "Runtime",
+      description: "Runtime controls should make Pi process/session state visible before they mutate anything.",
+      cards: [
+        {
+          title: "Session state",
+          body: (state2) => state2.busy ? "Pi is currently working in this session." : "Pi is idle for this session.",
+          status: (state2) => state2.busy ? "Running" : "Idle"
+        },
+        {
+          title: "Session binding",
+          body: (state2) => state2.currentSessionName || state2.currentSessionFile || "No persisted session file is selected yet.",
+          status: () => "Observed"
+        }
+      ]
+    },
+    {
+      id: "appearance",
+      label: "Appearance",
+      eyebrow: "Surface",
+      title: "Appearance",
+      description: "Visual controls should feel native to the sidebar while preserving VS Code theme integration.",
+      cards: [
+        {
+          title: "Theme alignment",
+          body: () => "Tau follows VS Code colors and typography. Future display preferences can be staged here.",
+          status: () => "VS Code native"
+        },
+        {
+          title: "Motion",
+          body: (state2) => state2.animationsEnabled ? "Subtle surface transitions are enabled." : "Tau animations are disabled.",
+          status: (state2) => state2.animationsEnabled ? "Enabled" : "Reduced"
+        }
+      ]
+    },
+    {
+      id: "advanced",
+      label: "Advanced",
+      eyebrow: "Diagnostics",
+      title: "Advanced",
+      description: "Advanced controls should stay explicit and inspectable, not hidden in JSON settings.",
+      cards: [
+        {
+          title: "Diagnostics",
+          body: () => "Reserved for transport diagnostics, logs, and reset actions.",
+          status: () => "Placeholder"
+        },
+        {
+          title: "Safety rails",
+          body: () => "Future dangerous actions should be grouped here with clear confirmation steps.",
+          status: () => "Planned"
+        }
+      ]
+    }
+  ];
+  var SettingsPaneController = class {
+    constructor(options) {
+      this.options = options;
+    }
+    options;
+    renderedSection;
+    wasVisible = false;
+    attachEventListeners() {
+      this.options.settingsToggleButton.addEventListener("click", () => {
+        const state2 = this.options.getState();
+        if (state2.surfaceSide === "settings") {
+          this.hideSettings({ focusPrompt: true });
+          return;
+        }
+        this.showSettings();
+      });
+      this.options.settingsBackButton.addEventListener("click", () => this.hideSettings({ focusPrompt: true }));
+      this.options.settingsElement.addEventListener("click", (event) => {
+        const button = event.target instanceof Element ? event.target.closest("[data-settings-section]") : null;
+        if (!button) {
+          return;
+        }
+        const section = parseSettingsSection(button.dataset.settingsSection);
+        if (section) {
+          this.selectSection(section);
+        }
+      });
+      this.options.settingsElement.addEventListener("keydown", (event) => this.handleSettingsKeydown(event));
+    }
+    handleGlobalKeydown(event) {
+      if (this.options.getState().surfaceSide !== "settings") {
+        return false;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        this.hideSettings({ focusPrompt: true });
+        return true;
+      }
+      return false;
+    }
+    syncForRender(isListView) {
+      const state2 = this.options.getState();
+      const visible = !isListView && state2.surfaceSide === "settings";
+      const toggleLabel = visible ? "Back to chat" : "Open settings";
+      this.options.settingsToggleButton.hidden = isListView;
+      this.options.settingsToggleButton.setAttribute("aria-label", toggleLabel);
+      this.options.settingsToggleButton.setAttribute("aria-pressed", visible ? "true" : "false");
+      const tooltip = this.options.settingsToggleButton.querySelector(".tau-icon-action-tooltip");
+      if (tooltip) {
+        tooltip.textContent = toggleLabel;
+      }
+      this.options.settingsElement.hidden = false;
+      this.options.settingsElement.inert = !visible;
+      this.options.settingsElement.setAttribute("aria-hidden", visible ? "false" : "true");
+      this.options.settingsElement.tabIndex = visible ? 0 : -1;
+      this.renderSection(state2.settingsSection);
+      if (visible && !this.wasVisible) {
+        requestAnimationFrame(() => {
+          if (this.options.getState().surfaceSide === "settings") {
+            this.focusActiveSectionButton();
+          }
+        });
+      }
+      this.wasVisible = visible;
+    }
+    showSettings() {
+      this.options.closeSlashMenu();
+      this.options.closeModelMenu();
+      this.options.closeSessionCommandMenu();
+      this.options.closeChatHelpPopover();
+      this.options.postMessage({ type: "showSettings" });
+    }
+    hideSettings(options = {}) {
+      this.options.postMessage({ type: "hideSettings" });
+      if (options.focusPrompt) {
+        this.options.focusPromptInput();
+      }
+    }
+    selectSection(section) {
+      this.options.postMessage({ type: "setSettingsSection", section });
+    }
+    handleSettingsKeydown(event) {
+      if (!(event.target instanceof HTMLElement) || !event.target.matches("[data-settings-section]")) {
+        return;
+      }
+      const currentIndex = settingsSections.findIndex((section2) => section2.id === this.options.getState().settingsSection);
+      let nextIndex = currentIndex;
+      if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+        nextIndex = (currentIndex + 1) % settingsSections.length;
+      } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+        nextIndex = (currentIndex - 1 + settingsSections.length) % settingsSections.length;
+      } else if (event.key === "Home") {
+        nextIndex = 0;
+      } else if (event.key === "End") {
+        nextIndex = settingsSections.length - 1;
+      } else {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      const section = settingsSections[nextIndex];
+      this.selectSection(section.id);
+      requestAnimationFrame(() => this.focusSectionButton(section.id));
+    }
+    renderSection(sectionId) {
+      if (this.renderedSection === sectionId) {
+        this.updateDynamicCardText(sectionId);
+        return;
+      }
+      const state2 = this.options.getState();
+      const section = getSettingsSection(sectionId);
+      const nav = document.createElement("nav");
+      nav.className = "settings-surface__nav";
+      nav.setAttribute("aria-label", "Settings sections");
+      nav.setAttribute("role", "tablist");
+      nav.setAttribute("aria-orientation", "vertical");
+      for (const item of settingsSections) {
+        const button = document.createElement("button");
+        button.className = "settings-surface__nav-item";
+        button.type = "button";
+        button.dataset.settingsSection = item.id;
+        button.setAttribute("role", "tab");
+        button.setAttribute("aria-controls", "settings-panel");
+        button.textContent = item.label;
+        nav.append(button);
+      }
+      const panel = document.createElement("section");
+      panel.id = "settings-panel";
+      panel.className = "settings-surface__panel";
+      panel.setAttribute("role", "tabpanel");
+      panel.setAttribute("aria-label", section.title);
+      const intro = document.createElement("div");
+      intro.className = "settings-surface__intro";
+      intro.append(createTextElement("div", "settings-surface__section-eyebrow", section.eyebrow));
+      intro.append(createTextElement("h3", "settings-surface__section-title", section.title));
+      intro.append(createTextElement("p", "settings-surface__section-description", section.description));
+      panel.append(intro);
+      const cards = document.createElement("div");
+      cards.className = "settings-surface__cards";
+      section.cards.forEach((card, index) => {
+        const cardElement = document.createElement("article");
+        cardElement.className = "settings-surface__card";
+        cardElement.dataset.cardIndex = String(index);
+        const titleRow = document.createElement("div");
+        titleRow.className = "settings-surface__card-title-row";
+        titleRow.append(createTextElement("h4", "settings-surface__card-title", card.title));
+        if (card.status) {
+          titleRow.append(createTextElement("span", "settings-surface__card-status", card.status(state2)));
+        }
+        cardElement.append(titleRow, createTextElement("p", "settings-surface__card-body", card.body(state2)));
+        cards.append(cardElement);
+      });
+      panel.append(cards);
+      this.options.settingsBodyElement.replaceChildren(nav, panel);
+      this.renderedSection = sectionId;
+      this.syncNavState(sectionId);
+      if (state2.surfaceSide === "settings") {
+        requestAnimationFrame(() => this.focusSectionButton(sectionId));
+      }
+    }
+    updateDynamicCardText(sectionId) {
+      const state2 = this.options.getState();
+      const section = getSettingsSection(sectionId);
+      for (const cardElement of this.options.settingsBodyElement.querySelectorAll(".settings-surface__card")) {
+        const cardIndex = Number(cardElement.dataset.cardIndex);
+        const card = section.cards[cardIndex];
+        if (!card) {
+          continue;
+        }
+        const body = cardElement.querySelector(".settings-surface__card-body");
+        if (body) {
+          body.textContent = card.body(state2);
+        }
+        const status = cardElement.querySelector(".settings-surface__card-status");
+        if (status && card.status) {
+          status.textContent = card.status(state2);
+        }
+      }
+      this.syncNavState(sectionId);
+    }
+    syncNavState(sectionId) {
+      for (const button of this.options.settingsBodyElement.querySelectorAll("[data-settings-section]")) {
+        const selected = button.dataset.settingsSection === sectionId;
+        button.classList.toggle("settings-surface__nav-item--active", selected);
+        button.setAttribute("aria-selected", selected ? "true" : "false");
+        button.tabIndex = selected ? 0 : -1;
+      }
+    }
+    focusActiveSectionButton() {
+      this.focusSectionButton(this.options.getState().settingsSection);
+    }
+    focusSectionButton(section) {
+      this.options.settingsBodyElement.querySelector(`[data-settings-section="${section}"]`)?.focus({ preventScroll: true });
+    }
+  };
+  function getSettingsSection(sectionId) {
+    return settingsSections.find((section) => section.id === sectionId) ?? settingsSections[0];
+  }
+  function parseSettingsSection(value) {
+    return settingsSections.some((section) => section.id === value) ? value : void 0;
+  }
+  function createTextElement(tagName, className, text) {
+    const element = document.createElement(tagName);
+    element.className = className;
+    element.textContent = text;
+    return element;
+  }
+  function formatModelSummary(state2) {
+    if (!state2.modelLabel) {
+      return "Pi has not reported live model metadata yet.";
+    }
+    const provider = state2.modelProvider ? ` via ${state2.modelProvider}` : "";
+    const reasoning = state2.modelReasoning ? " Reasoning is available for this model." : "";
+    return `${state2.modelLabel}${provider}.${reasoning}`;
+  }
+
   // src/webview/state.ts
   var initialWebviewState = {
     messages: [],
@@ -5471,6 +5793,8 @@ ${after}`;
     composerText: "",
     composerTextRevision: 0,
     viewMode: "chat",
+    surfaceSide: "front",
+    settingsSection: "providers",
     sessions: [],
     sessionsRefreshing: false,
     sessionsError: "",
@@ -5507,6 +5831,8 @@ ${after}`;
       composerText: typeof record.composerText === "string" ? record.composerText : "",
       composerTextRevision: typeof record.composerTextRevision === "number" ? record.composerTextRevision : 0,
       viewMode: record.viewMode === "sessions" || record.viewMode === "tree" ? record.viewMode : "chat",
+      surfaceSide: record.surfaceSide === "settings" ? "settings" : "front",
+      settingsSection: parseSettingsSection2(record.settingsSection),
       sessions: Array.isArray(record.sessions) ? record.sessions : [],
       sessionsRefreshing: Boolean(record.sessionsRefreshing),
       sessionsError: typeof record.sessionsError === "string" ? record.sessionsError : "",
@@ -5520,6 +5846,9 @@ ${after}`;
   }
   function parseCustomUiTheme(value) {
     return value === "modern" || value === "crt" || value === "amber" || value === "matrix" ? value : "default";
+  }
+  function parseSettingsSection2(value) {
+    return value === "models" || value === "runtime" || value === "appearance" || value === "advanced" ? value : "providers";
   }
   function parseWorkspaceDiffStats(value) {
     if (!isRecord2(value)) {
@@ -5556,6 +5885,10 @@ ${after}`;
     chatHelpWrapElement,
     chatHelpButton,
     chatHelpPopoverElement,
+    settingsToggleButton,
+    settingsElement,
+    settingsBodyElement,
+    settingsBackButton,
     sessionHelpWrapElement,
     sessionHelpButton,
     sessionHelpPopoverElement,
@@ -5606,6 +5939,7 @@ ${after}`;
   var pendingRenderFrame;
   var pendingReturnToChatAfterRender = false;
   var sessionsController;
+  var settingsController;
   var customUiController = new CustomUiController({
     vscode,
     customUiElement,
@@ -5650,6 +5984,19 @@ ${after}`;
     isMessagesAtBottom: () => messagesController.isMessagesAtBottom(),
     scrollMessagesToBottom: () => messagesController.scrollMessagesToBottom()
   });
+  settingsController = new SettingsPaneController({
+    getState: () => state,
+    postMessage: (message) => vscode.postMessage(message),
+    settingsToggleButton,
+    settingsElement,
+    settingsBodyElement,
+    settingsBackButton,
+    focusPromptInput,
+    closeSessionCommandMenu: () => sessionsController.closeSessionCommandMenu(),
+    closeSlashMenu: () => composerController.closeSlashMenu(),
+    closeModelMenu: () => composerController.closeModelMenu(),
+    closeChatHelpPopover
+  });
   sessionsController = new SessionViewController({
     getState: () => state,
     postMessage: (message) => vscode.postMessage(message),
@@ -5676,6 +6023,7 @@ ${after}`;
   });
   composerController.attachEventListeners();
   sessionsController.attachEventListeners();
+  settingsController.attachEventListeners();
   customUiController.attachEventListeners();
   chatHelpButton.addEventListener("click", toggleChatHelpPopover);
   newSessionButton.addEventListener("click", startNewSession);
@@ -5713,6 +6061,7 @@ ${after}`;
       return;
     }
     const previousViewMode = state.viewMode;
+    const previousSurfaceSide = state.surfaceSide;
     const previousCurrentSessionFile = state.currentSessionFile;
     const previousSessionCount = Array.isArray(state.sessions) ? state.sessions.length : 0;
     const previousTreeCount = Array.isArray(state.treeItems) ? state.treeItems.length : 0;
@@ -5745,7 +6094,10 @@ ${after}`;
     if (hasComposerTextUpdate) {
       composerController.applyComposerTextFromState();
     }
-    scheduleRender({ returnToChat: wasListView && state.viewMode === "chat" });
+    scheduleRender({ returnToChat: wasListView && state.viewMode === "chat" && state.surfaceSide !== "settings" });
+    if (previousSurfaceSide === "settings" && state.surfaceSide === "front" && state.viewMode === "chat") {
+      requestAnimationFrame(() => focusPromptInput());
+    }
   });
   window.addEventListener("click", (event) => {
     const target = eventTargetNode(event);
@@ -5755,6 +6107,9 @@ ${after}`;
   });
   window.addEventListener("keydown", (event) => {
     if (customUiController.handleGlobalKeydown(event)) {
+      return;
+    }
+    if (settingsController.handleGlobalKeydown(event)) {
       return;
     }
     if (sessionsController.handleGlobalKeydown(event)) {
@@ -5832,28 +6187,39 @@ ${after}`;
   }
   function render() {
     const isListView = state.viewMode === "sessions" || state.viewMode === "tree";
-    const shouldStickToBottom = !isListView && messagesController.shouldFollowOutput();
+    const isSettingsVisible = !isListView && state.surfaceSide === "settings";
+    const shouldStickToBottom = !isListView && !isSettingsVisible && messagesController.shouldFollowOutput();
     viewElement.classList.toggle("pi-view--list", isListView);
     viewElement.classList.toggle("pi-view--sessions", state.viewMode === "sessions");
     viewElement.classList.toggle("pi-view--tree", state.viewMode === "tree");
     viewElement.classList.toggle("pi-view--chat", !isListView);
+    viewElement.classList.toggle("pi-view--settings", isSettingsVisible);
     messagesElement.hidden = false;
     sessionsElement.hidden = false;
     sessionTreeElement.hidden = false;
-    messagesElement.setAttribute("aria-hidden", isListView ? "true" : "false");
+    messagesElement.setAttribute("aria-hidden", isListView || isSettingsVisible ? "true" : "false");
     sessionsElement.setAttribute("aria-hidden", state.viewMode === "sessions" ? "false" : "true");
     sessionTreeElement.setAttribute("aria-hidden", state.viewMode === "tree" ? "false" : "true");
-    messagesElement.inert = isListView;
+    messagesElement.inert = isListView || isSettingsVisible;
     sessionsElement.inert = state.viewMode !== "sessions";
     sessionTreeElement.inert = state.viewMode !== "tree";
     sessionsElement.tabIndex = state.viewMode === "sessions" ? 0 : -1;
     sessionTreeElement.tabIndex = state.viewMode === "tree" ? 0 : -1;
     form.classList.toggle("composer--list-hidden", isListView);
-    form.setAttribute("aria-hidden", isListView ? "true" : "false");
-    form.inert = isListView;
+    form.setAttribute("aria-hidden", isListView || isSettingsVisible ? "true" : "false");
+    form.inert = isListView || isSettingsVisible;
     sessionsController.syncForRender(isListView);
-    customUiController.syncForRender(isListView);
-    syncChatHelpForRender(isListView);
+    settingsController.syncForRender(isListView);
+    customUiController.syncForRender(isListView || isSettingsVisible);
+    syncChatHelpForRender(isListView || isSettingsVisible);
+    if (isSettingsVisible) {
+      busyStatusElement.hidden = true;
+      composerController.closeSlashMenu();
+      composerController.closeModelMenu();
+      sessionsController.closeSessionCommandMenu();
+      sessionsController.cancelSessionNameEdit();
+      return;
+    }
     if (isListView) {
       busyStatusElement.hidden = true;
       state.viewMode === "tree" ? sessionsController.renderTree() : sessionsController.renderSessions();

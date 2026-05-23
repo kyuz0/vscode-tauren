@@ -1,6 +1,8 @@
 export type WebviewStreamingBehavior = 'steer' | 'followUp';
 export type CustomUiTheme = 'default' | 'modern' | 'crt' | 'amber' | 'matrix';
 export type ViewMode = 'chat' | 'sessions' | 'tree';
+export type SurfaceSide = 'front' | 'settings';
+export type SettingsSection = 'providers' | 'models' | 'runtime' | 'appearance' | 'advanced';
 export type SessionItemCommand = 'rename' | 'fork' | 'clone' | 'compact' | 'export' | 'delete';
 
 export type WebviewApi = {
@@ -111,6 +113,8 @@ export type WebviewState = {
   composerText: string;
   composerTextRevision: number;
   viewMode: ViewMode;
+  surfaceSide: SurfaceSide;
+  settingsSection: SettingsSection;
   sessions: SessionItem[];
   sessionsRefreshing: boolean;
   sessionsError: string;
