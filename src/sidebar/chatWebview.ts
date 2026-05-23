@@ -1,3 +1,11 @@
+import { normalizeDiffLineCount } from '../diff/lineCount';
+import {
+  parseWebviewChatFace,
+  parseWebviewLane,
+  parseWebviewSessionItemCommand,
+  parseWebviewSettingsSection,
+  parseWebviewStreamingBehavior
+} from '../webviewProtocol/values';
 import { chatWebviewStyles } from './chatWebviewStyles';
 import { createNonce } from './nonce';
 import type {
@@ -5,10 +13,7 @@ import type {
   CreateWebviewStateMessageOptions,
   WebviewMessage,
   WebviewScriptUris,
-  WebviewSessionItemCommand,
-  WebviewSettingsSection,
-  WebviewStateMessage,
-  WebviewStreamingBehavior
+  WebviewStateMessage
 } from '../webviewProtocol/types';
 
 export function parseWebviewMessage(value: unknown): WebviewMessage {
@@ -25,20 +30,26 @@ export function parseWebviewMessage(value: unknown): WebviewMessage {
         : { type: 'unknown' };
     case 'newSession':
       return { type: 'newSession' };
-    case 'showLane':
-      return isWebviewLane(value.lane)
-        ? { type: 'showLane', lane: value.lane }
+    case 'showLane': {
+      const lane = parseWebviewLane(value.lane, 'chat');
+      return lane === value.lane
+        ? { type: 'showLane', lane }
         : { type: 'unknown' };
-    case 'showChatFace':
-      return isWebviewChatFace(value.chatFace)
-        ? { type: 'showChatFace', chatFace: value.chatFace }
+    }
+    case 'showChatFace': {
+      const chatFace = parseWebviewChatFace(value.chatFace, 'main');
+      return chatFace === value.chatFace
+        ? { type: 'showChatFace', chatFace }
         : { type: 'unknown' };
+    }
     case 'hideChatFace':
       return { type: 'hideChatFace' };
-    case 'setSettingsSection':
-      return isWebviewSettingsSection(value.section)
-        ? { type: 'setSettingsSection', section: value.section }
+    case 'setSettingsSection': {
+      const section = parseWebviewSettingsSection(value.section);
+      return section
+        ? { type: 'setSettingsSection', section }
         : { type: 'unknown' };
+    }
     case 'refreshSessions':
       return { type: 'refreshSessions' };
     case 'showCurrentChanges':
@@ -53,10 +64,12 @@ export function parseWebviewMessage(value: unknown): WebviewMessage {
       return typeof value.sessionPath === 'string' && value.sessionPath
         ? { type: 'deleteSession', sessionPath: value.sessionPath }
         : { type: 'unknown' };
-    case 'sessionItemCommand':
-      return typeof value.sessionPath === 'string' && value.sessionPath && isWebviewSessionItemCommand(value.command)
-        ? { type: 'sessionItemCommand', sessionPath: value.sessionPath, command: value.command }
+    case 'sessionItemCommand': {
+      const command = parseWebviewSessionItemCommand(value.command);
+      return typeof value.sessionPath === 'string' && value.sessionPath && command
+        ? { type: 'sessionItemCommand', sessionPath: value.sessionPath, command }
         : { type: 'unknown' };
+    }
     case 'setSessionItemName':
       return typeof value.sessionPath === 'string' && value.sessionPath && typeof value.name === 'string'
         ? { type: 'setSessionItemName', sessionPath: value.sessionPath, name: value.name }
@@ -158,7 +171,7 @@ export function parseWebviewMessage(value: unknown): WebviewMessage {
         return { type: 'unknown' };
       }
 
-      const streamingBehavior = parseStreamingBehavior(value.streamingBehavior);
+      const streamingBehavior = parseWebviewStreamingBehavior(value.streamingBehavior);
 
       if ('streamingBehavior' in value && !streamingBehavior) {
         return { type: 'unknown' };
@@ -475,46 +488,12 @@ function createInitialEmptyStateHtml(welcomeDismissed: boolean): string {
       </div>`;
 }
 
-function parseStreamingBehavior(value: unknown): WebviewStreamingBehavior | undefined {
-  return value === 'steer' || value === 'followUp' ? value : undefined;
-}
-
 function escapeHtmlAttribute(value: string): string {
   return value
     .replace(/&/g, '&amp;')
     .replace(/"/g, '&quot;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
-}
-
-function normalizeDiffLineCount(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
-}
-
-function isWebviewLane(value: unknown): value is 'chat' | 'sessions' | 'tree' {
-  return value === 'chat' || value === 'sessions' || value === 'tree';
-}
-
-function isWebviewChatFace(value: unknown): value is 'main' | 'settings' {
-  return value === 'main' || value === 'settings';
-}
-
-function isWebviewSettingsSection(value: unknown): value is WebviewSettingsSection {
-  return value === 'providers'
-    || value === 'models'
-    || value === 'runtime'
-    || value === 'appearance'
-    || value === 'advanced';
-}
-
-function isWebviewSessionItemCommand(command: unknown): command is WebviewSessionItemCommand {
-  return command === 'rename'
-    || command === 'showChanges'
-    || command === 'fork'
-    || command === 'clone'
-    || command === 'compact'
-    || command === 'export'
-    || command === 'delete';
 }
 
 function parsePositiveInteger(value: unknown): number | undefined {

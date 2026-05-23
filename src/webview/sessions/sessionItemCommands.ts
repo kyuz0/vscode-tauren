@@ -1,6 +1,7 @@
+import { parseWebviewSessionItemCommand, webviewSessionItemCommands } from '../../webviewProtocol/values';
 import type { SessionItemCommand } from '../types';
 
-export const sessionItemMenuCommands: SessionItemCommand[] = ['rename', 'fork', 'clone', 'compact', 'export', 'delete'];
+export const sessionItemMenuCommands = webviewSessionItemCommands;
 
 const sessionItemCommandIcons: Record<SessionItemCommand, string> = {
   rename: '<svg class="pi-toolbar__menu-icon" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4.1 11.9L5.45 11.6L11.15 5.9C11.55 5.5 11.55 4.85 11.15 4.45L10.9 4.2C10.5 3.8 9.85 3.8 9.45 4.2L3.75 9.9L3.45 11.25C3.37 11.65 3.7 11.98 4.1 11.9Z" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.85 4.8L10.55 6.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/></svg>',
@@ -12,14 +13,7 @@ const sessionItemCommandIcons: Record<SessionItemCommand, string> = {
 };
 
 export function parseSessionItemCommand(command: string | null): SessionItemCommand | undefined {
-  return command === 'rename'
-    || command === 'fork'
-    || command === 'clone'
-    || command === 'compact'
-    || command === 'export'
-    || command === 'delete'
-    ? command
-    : undefined;
+  return parseWebviewSessionItemCommand(command);
 }
 
 export function getSessionItemCommandLabel(command: SessionItemCommand): string {

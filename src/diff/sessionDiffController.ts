@@ -1,3 +1,4 @@
+import { normalizeDiffLineCount } from './lineCount';
 import { emptySessionDiffStats, parseSessionDiffStatsFromFile, SessionDiffTracker } from './sessionDiffTracker';
 import type {
   SessionDiffControllerOptions,
@@ -149,10 +150,6 @@ type RefreshInFlight = {
   key: string;
   promise: Promise<void>;
 };
-
-function normalizeDiffLineCount(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
-}
 
 function hasSessionDiffStats(stats: SessionDiffStats | undefined): boolean {
   return Boolean(stats && (stats.addedLines > 0 || stats.removedLines > 0));

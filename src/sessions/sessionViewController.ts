@@ -502,11 +502,6 @@ export class SessionViewController {
     }
 
     await this.runSessionAction(sessionPath, async (session, isCurrentSession) => {
-      if (command === 'showChanges') {
-        await this.showSessionChanges(session);
-        return;
-      }
-
       if (command === 'compact' && isCurrentSession) {
         await this.options.handleCompactCurrentSession();
         return;

@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { iterSessionJsonlRecords, parseSessionJsonlFileRecords } from '../pi/sessionJsonl';
+import { normalizeDiffLineCount } from './lineCount';
 import type {
   FileMutation,
   SessionDiffSnapshot,
@@ -633,13 +634,9 @@ function normalizeStats(value: unknown): SessionDiffStats {
   }
 
   return {
-    addedLines: normalizeLineCount(value.addedLines),
-    removedLines: normalizeLineCount(value.removedLines)
+    addedLines: normalizeDiffLineCount(value.addedLines),
+    removedLines: normalizeDiffLineCount(value.removedLines)
   };
-}
-
-function normalizeLineCount(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

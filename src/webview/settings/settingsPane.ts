@@ -1,3 +1,4 @@
+import { parseWebviewSettingsSection } from '../../webviewProtocol/values';
 import type { SettingsSection, WebviewState } from '../types';
 
 type SettingsPaneControllerOptions = {
@@ -140,7 +141,7 @@ export class SettingsPaneController {
         return;
       }
 
-      const section = parseSettingsSection(button.dataset.settingsSection);
+      const section = parseWebviewSettingsSection(button.dataset.settingsSection);
 
       if (section) {
         this.selectSection(section);
@@ -340,10 +341,6 @@ export class SettingsPaneController {
 
 function getSettingsSection(sectionId: SettingsSection): SettingsSectionDefinition {
   return settingsSections.find((section) => section.id === sectionId) ?? settingsSections[0];
-}
-
-function parseSettingsSection(value: unknown): SettingsSection | undefined {
-  return settingsSections.some((section) => section.id === value) ? value as SettingsSection : undefined;
 }
 
 function createTextElement(tagName: string, className: string, text: string): HTMLElement {

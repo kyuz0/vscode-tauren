@@ -629,6 +629,11 @@
     return extensionMatch?.[1] ?? "";
   }
 
+  // src/diff/lineCount.ts
+  function normalizeDiffLineCount(value) {
+    return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+  }
+
   // src/webview/composer/diffCounter.ts
   function createDiffCounter(element, prefix) {
     const value = parseDiffCounterValue(element.textContent, prefix);
@@ -673,11 +678,8 @@
       counter.animationFrame = requestAnimationFrame((time) => tickDiffCounter(counter, time));
     }
   }
-  function normalizeDiffLineCount(value) {
-    return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
-  }
   function formatDiffLineCount(value) {
-    return Math.max(0, Math.floor(value)).toLocaleString();
+    return normalizeDiffLineCount(value).toLocaleString();
   }
   function tickDiffCounter(counter, time) {
     const nextValue = getInterpolatedDiffCounterValue(counter, time);
@@ -3627,8 +3629,29 @@ ${after}`;
     });
   }
 
+  // src/webviewProtocol/values.ts
+  var webviewCustomUiThemes = ["default", "modern", "crt", "amber", "matrix"];
+  var webviewLanes = ["chat", "sessions", "tree"];
+  var webviewSettingsSections = ["providers", "models", "runtime", "appearance", "advanced"];
+  var webviewSessionItemCommands = ["rename", "fork", "clone", "compact", "export", "delete"];
+  function parseWebviewCustomUiTheme(value, fallback = "default") {
+    return includesValue(webviewCustomUiThemes, value) ? value : fallback;
+  }
+  function parseWebviewLane(value, fallback = "chat") {
+    return includesValue(webviewLanes, value) ? value : fallback;
+  }
+  function parseWebviewSettingsSection(value, fallback) {
+    return includesValue(webviewSettingsSections, value) ? value : fallback;
+  }
+  function parseWebviewSessionItemCommand(command) {
+    return includesValue(webviewSessionItemCommands, command) ? command : void 0;
+  }
+  function includesValue(values, value) {
+    return typeof value === "string" && values.includes(value);
+  }
+
   // src/webview/sessions/sessionItemCommands.ts
-  var sessionItemMenuCommands = ["rename", "fork", "clone", "compact", "export", "delete"];
+  var sessionItemMenuCommands = webviewSessionItemCommands;
   var sessionItemCommandIcons = {
     rename: '<svg class="pi-toolbar__menu-icon" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4.1 11.9L5.45 11.6L11.15 5.9C11.55 5.5 11.55 4.85 11.15 4.45L10.9 4.2C10.5 3.8 9.85 3.8 9.45 4.2L3.75 9.9L3.45 11.25C3.37 11.65 3.7 11.98 4.1 11.9Z" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.85 4.8L10.55 6.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/></svg>',
     fork: '<svg class="pi-toolbar__menu-icon" aria-hidden="true" width="14" height="14" viewBox="0 0 19 19" fill="none"><path d="M5.5 4.25V8.5C5.5 10.16 6.84 11.5 8.5 11.5H10.5" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.5 4.25V14.75" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/><path d="M10.25 8.5L13.25 11.5L10.25 14.5" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/><circle cx="5.5" cy="4.25" r="1.55" fill="currentColor"/><circle cx="5.5" cy="14.75" r="1.55" fill="currentColor"/></svg>',
@@ -3638,7 +3661,7 @@ ${after}`;
     delete: '<svg class="pi-toolbar__menu-icon" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16"><path fill="currentColor" d="M6 2h4l1 1h3v1H2V3h3l1-1Zm-2 3h8l-.6 9.2A2 2 0 0 1 9.4 16H6.6a2 2 0 0 1-2-1.8L4 5Zm2 1v8h1V6H6Zm3 0v8h1V6H9Z"/></svg>'
   };
   function parseSessionItemCommand(command) {
-    return command === "rename" || command === "fork" || command === "clone" || command === "compact" || command === "export" || command === "delete" ? command : void 0;
+    return parseWebviewSessionItemCommand(command);
   }
   function getSessionItemCommandLabel(command) {
     switch (command) {
@@ -5552,7 +5575,7 @@ ${after}`;
         if (!button) {
           return;
         }
-        const section = parseSettingsSection(button.dataset.settingsSection);
+        const section = parseWebviewSettingsSection(button.dataset.settingsSection);
         if (section) {
           this.selectSection(section);
         }
@@ -5714,9 +5737,6 @@ ${after}`;
   function getSettingsSection(sectionId) {
     return settingsSections.find((section) => section.id === sectionId) ?? settingsSections[0];
   }
-  function parseSettingsSection(value) {
-    return settingsSections.some((section) => section.id === value) ? value : void 0;
-  }
   function createTextElement(tagName, className, text) {
     const element = document.createElement(tagName);
     element.className = className;
@@ -5790,15 +5810,15 @@ ${after}`;
       slashCommandsRefreshing: Boolean(record.slashCommandsRefreshing),
       outputColors: typeof record.outputColors === "boolean" ? record.outputColors : true,
       animationsEnabled: typeof record.animationsEnabled === "boolean" ? record.animationsEnabled : true,
-      customUiTheme: parseCustomUiTheme(record.customUiTheme),
+      customUiTheme: parseWebviewCustomUiTheme(record.customUiTheme),
       allowRemoteImages: typeof record.allowRemoteImages === "boolean" ? record.allowRemoteImages : true,
       welcomeDismissed: Boolean(record.welcomeDismissed),
       promptContext: Array.isArray(record.promptContext) ? record.promptContext : [],
       composerText: typeof record.composerText === "string" ? record.composerText : "",
       composerTextRevision: typeof record.composerTextRevision === "number" ? record.composerTextRevision : 0,
-      lane: parseLane(record.lane),
-      chatFace: parseChatFace(record.chatFace, parseLane(record.lane)),
-      settingsSection: parseSettingsSection2(record.settingsSection),
+      lane: parseWebviewLane(record.lane, "chat"),
+      chatFace: parseChatFace(record.chatFace, parseWebviewLane(record.lane, "chat")),
+      settingsSection: parseWebviewSettingsSection(record.settingsSection, "providers"),
       sessions: Array.isArray(record.sessions) ? record.sessions : [],
       sessionsRefreshing: Boolean(record.sessionsRefreshing),
       sessionsError: typeof record.sessionsError === "string" ? record.sessionsError : "",
@@ -5809,9 +5829,6 @@ ${after}`;
       treeError: typeof record.treeError === "string" ? record.treeError : "",
       sessionLoading: Boolean(record.sessionLoading)
     };
-  }
-  function parseLane(value) {
-    return value === "sessions" || value === "tree" ? value : "chat";
   }
   function parseChatFace(value, lane) {
     return lane === "chat" && value === "settings" ? "settings" : "main";
@@ -5879,23 +5896,14 @@ ${after}`;
       return { ...activity, images: previous.images };
     });
   }
-  function parseCustomUiTheme(value) {
-    return value === "modern" || value === "crt" || value === "amber" || value === "matrix" ? value : "default";
-  }
-  function parseSettingsSection2(value) {
-    return value === "models" || value === "runtime" || value === "appearance" || value === "advanced" ? value : "providers";
-  }
   function parseWorkspaceDiffStats(value) {
     if (!isRecord3(value)) {
       return { addedLines: 0, removedLines: 0 };
     }
     return {
-      addedLines: normalizeDiffLineCount2(value.addedLines),
-      removedLines: normalizeDiffLineCount2(value.removedLines)
+      addedLines: normalizeDiffLineCount(value.addedLines),
+      removedLines: normalizeDiffLineCount(value.removedLines)
     };
-  }
-  function normalizeDiffLineCount2(value) {
-    return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
   }
   function isRecord3(value) {
     return typeof value === "object" && value !== null;

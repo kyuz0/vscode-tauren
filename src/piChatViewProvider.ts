@@ -4,6 +4,7 @@ import {
   createWebviewHtml,
   parseWebviewMessage
 } from './sidebar/chatWebview';
+import { parseWebviewCustomUiTheme } from './webviewProtocol/values';
 import type { WebviewCustomUiTheme, WebviewMessage, WebviewStateMessage } from './webviewProtocol/types';
 import { type PiClientFactory, type PiClient } from './pi/clientTypes';
 import type { PiClientOptions } from './pi/types';
@@ -979,7 +980,7 @@ function getConfirmSessionDeletionSetting(): boolean {
 
 function getCustomUiThemeSetting(): WebviewCustomUiTheme {
   const value = vscode.workspace.getConfiguration('tau').get<string>('customUiTheme', 'default');
-  return value === 'modern' || value === 'crt' || value === 'amber' || value === 'matrix' ? value : 'default';
+  return parseWebviewCustomUiTheme(value);
 }
 
 function getAllowRemoteImagesSetting(): boolean {

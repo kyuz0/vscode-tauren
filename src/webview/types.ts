@@ -1,69 +1,34 @@
-export type WebviewStreamingBehavior = 'steer' | 'followUp';
-export type CustomUiTheme = 'default' | 'modern' | 'crt' | 'amber' | 'matrix';
-export type Lane = 'chat' | 'sessions' | 'tree';
-export type ChatFace = 'main' | 'settings';
-export type SettingsSection = 'providers' | 'models' | 'runtime' | 'appearance' | 'advanced';
-export type SessionItemCommand = 'rename' | 'fork' | 'clone' | 'compact' | 'export' | 'delete';
+import type {
+  WebviewChatFace,
+  WebviewCustomUiTheme,
+  WebviewLane,
+  WebviewModelOption,
+  WebviewPromptContextAttachment,
+  WebviewSessionItem,
+  WebviewSessionItemCommand,
+  WebviewSettingsSection,
+  WebviewSlashCommand,
+  WebviewStreamingBehavior as ProtocolWebviewStreamingBehavior,
+  WebviewTreeItem,
+  WebviewWorkspaceDiffStats
+} from '../webviewProtocol/types';
+
+export type WebviewStreamingBehavior = ProtocolWebviewStreamingBehavior;
+export type CustomUiTheme = WebviewCustomUiTheme;
+export type Lane = WebviewLane;
+export type ChatFace = WebviewChatFace;
+export type SettingsSection = WebviewSettingsSection;
+export type SessionItemCommand = WebviewSessionItemCommand;
 
 export type WebviewApi = {
   postMessage(message: unknown): void;
 };
 
-export type ModelOption = {
-  provider: string;
-  id: string;
-  name: string;
-  reasoning: boolean;
-};
-
-export type SlashCommand = {
-  name: string;
-  description: string;
-  source: string;
-  location?: string;
-  path?: string;
-};
-
-export type PromptContextAttachment = {
-  id: string;
-  kind: 'file' | 'selection';
-  label: string;
-  title: string;
-  source?: 'origin';
-  xml?: string;
-};
-
-export type SessionItem = {
-  path: string;
-  id: string;
-  cwd: string;
-  name?: string;
-  parentSessionPath?: string;
-  created: string;
-  modified: string;
-  messageCount: number;
-  firstMessage: string;
-  depth: number;
-  isLast: boolean;
-  ancestorContinues: boolean[];
-  current: boolean;
-  liveStatus?: 'idle' | 'running' | 'done' | 'error';
-  unread?: boolean;
-  customUiOpen?: boolean;
-};
-
-export type TreeItem = {
-  entryId: string;
-  role: string;
-  text: string;
-  current: boolean;
-  depth?: number;
-  isLast?: boolean;
-  ancestorContinues?: boolean[];
-  activePath?: boolean;
-  label?: string;
-  prefix?: string;
-};
+export type ModelOption = WebviewModelOption;
+export type SlashCommand = WebviewSlashCommand;
+export type PromptContextAttachment = WebviewPromptContextAttachment;
+export type SessionItem = WebviewSessionItem;
+export type TreeItem = WebviewTreeItem;
 
 export type ChatImage = {
   type?: string;
@@ -100,10 +65,7 @@ export type MessagePatch = {
   deleteFrom?: number;
 };
 
-export type WorkspaceDiffStats = {
-  addedLines: number;
-  removedLines: number;
-};
+export type WorkspaceDiffStats = WebviewWorkspaceDiffStats;
 
 export type WebviewState = {
   messages: ChatMessage[];

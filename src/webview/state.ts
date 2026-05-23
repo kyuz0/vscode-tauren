@@ -1,3 +1,5 @@
+import { normalizeDiffLineCount } from '../diff/lineCount';
+import { parseWebviewCustomUiTheme, parseWebviewLane, parseWebviewSettingsSection } from '../webviewProtocol/values';
 import type { Activity, ChatMessage, MessagePatch, WebviewState } from './types';
 
 export const initialWebviewState: WebviewState = {
@@ -59,15 +61,15 @@ export function parseWebviewStateMessage(data: unknown, previousState?: WebviewS
     slashCommandsRefreshing: Boolean(record.slashCommandsRefreshing),
     outputColors: typeof record.outputColors === 'boolean' ? record.outputColors : true,
     animationsEnabled: typeof record.animationsEnabled === 'boolean' ? record.animationsEnabled : true,
-    customUiTheme: parseCustomUiTheme(record.customUiTheme),
+    customUiTheme: parseWebviewCustomUiTheme(record.customUiTheme),
     allowRemoteImages: typeof record.allowRemoteImages === 'boolean' ? record.allowRemoteImages : true,
     welcomeDismissed: Boolean(record.welcomeDismissed),
     promptContext: Array.isArray(record.promptContext) ? record.promptContext : [],
     composerText: typeof record.composerText === 'string' ? record.composerText : '',
     composerTextRevision: typeof record.composerTextRevision === 'number' ? record.composerTextRevision : 0,
-    lane: parseLane(record.lane),
-    chatFace: parseChatFace(record.chatFace, parseLane(record.lane)),
-    settingsSection: parseSettingsSection(record.settingsSection),
+    lane: parseWebviewLane(record.lane, 'chat'),
+    chatFace: parseChatFace(record.chatFace, parseWebviewLane(record.lane, 'chat')),
+    settingsSection: parseWebviewSettingsSection(record.settingsSection, 'providers'),
     sessions: Array.isArray(record.sessions) ? record.sessions : [],
     sessionsRefreshing: Boolean(record.sessionsRefreshing),
     sessionsError: typeof record.sessionsError === 'string' ? record.sessionsError : '',
@@ -80,11 +82,7 @@ export function parseWebviewStateMessage(data: unknown, previousState?: WebviewS
   };
 }
 
-function parseLane(value: unknown) {
-  return value === 'sessions' || value === 'tree' ? value : 'chat';
-}
-
-function parseChatFace(value: unknown, lane: 'chat' | 'sessions' | 'tree') {
+function parseChatFace(value: unknown, lane: WebviewState['lane']): WebviewState['chatFace'] {
   return lane === 'chat' && value === 'settings' ? 'settings' : 'main';
 }
 
@@ -184,19 +182,6 @@ function mergePatchedActivities(previousActivities: Activity[], incomingActiviti
   });
 }
 
-function parseCustomUiTheme(value: unknown) {
-  return value === 'modern' || value === 'crt' || value === 'amber' || value === 'matrix' ? value : 'default';
-}
-
-function parseSettingsSection(value: unknown) {
-  return value === 'models'
-    || value === 'runtime'
-    || value === 'appearance'
-    || value === 'advanced'
-    ? value
-    : 'providers';
-}
-
 function parseWorkspaceDiffStats(value: unknown): { addedLines: number; removedLines: number } {
   if (!isRecord(value)) {
     return { addedLines: 0, removedLines: 0 };
@@ -206,10 +191,6 @@ function parseWorkspaceDiffStats(value: unknown): { addedLines: number; removedL
     addedLines: normalizeDiffLineCount(value.addedLines),
     removedLines: normalizeDiffLineCount(value.removedLines)
   };
-}
-
-function normalizeDiffLineCount(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

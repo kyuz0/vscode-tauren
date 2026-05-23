@@ -1,3 +1,7 @@
+import { normalizeDiffLineCount } from '../../diff/lineCount';
+
+export { normalizeDiffLineCount };
+
 export type DiffCounterState = {
   element: HTMLElement;
   prefix: '+' | '-';
@@ -64,12 +68,8 @@ export function updateDiffCounter(counter: DiffCounterState, targetValue: number
   }
 }
 
-export function normalizeDiffLineCount(value: number): number {
-  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
-}
-
 export function formatDiffLineCount(value: number): string {
-  return Math.max(0, Math.floor(value)).toLocaleString();
+  return normalizeDiffLineCount(value).toLocaleString();
 }
 
 function tickDiffCounter(counter: DiffCounterState, time: number): void {

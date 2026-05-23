@@ -586,38 +586,6 @@ suite('PiChatController', () => {
     harness.controller.dispose();
   });
 
-  test('session item show changes opens listed session diff without creating a Pi client', async () => {
-    const shownChanges: Array<{ path: string; name: string }> = [];
-    const harness = createControllerHarness([], {
-      listSessions: async () => [
-        {
-          path: '/sessions/old.jsonl',
-          id: 'old',
-          cwd: '/workspace',
-          name: 'Old work',
-          created: '2026-01-01T00:00:00.000Z',
-          modified: '2026-01-01T00:01:00.000Z',
-          messageCount: 1,
-          firstMessage: 'Old question',
-          depth: 0,
-          isLast: true,
-          ancestorContinues: [],
-          current: false
-        }
-      ],
-      showSessionChanges: async (path, name) => {
-        shownChanges.push({ path, name });
-      }
-    });
-
-    await harness.controller.handleWebviewMessage({ type: 'showLane', lane: 'sessions' });
-    await harness.controller.handleWebviewMessage({ type: 'sessionItemCommand', sessionPath: '/sessions/old.jsonl', command: 'showChanges' });
-
-    assert.deepStrictEqual(shownChanges, [{ path: '/sessions/old.jsonl', name: 'Old work' }]);
-    assert.strictEqual(harness.createCalls, 0);
-    harness.controller.dispose();
-  });
-
   test('session item clone updates the list without switching sessions', async () => {
     const sessions: WebviewSessionItem[] = [
       {

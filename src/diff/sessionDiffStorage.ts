@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { normalizeDiffLineCount } from './lineCount';
 import type { SessionDiffSnapshot } from './types';
 
 const sessionDiffSnapshotsStorageKey = 'tau.sessionDiffSnapshots';
@@ -85,8 +86,8 @@ function parseSessionDiffSnapshot(value: unknown): SessionDiffSnapshot | undefin
     return undefined;
   }
 
-  const addedLines = normalizeLineCount(value.stats.addedLines);
-  const removedLines = normalizeLineCount(value.stats.removedLines);
+  const addedLines = normalizeDiffLineCount(value.stats.addedLines);
+  const removedLines = normalizeDiffLineCount(value.stats.removedLines);
 
   return { stats: { addedLines, removedLines } };
 }
@@ -122,10 +123,6 @@ function getNextSnapshotUpdatedAt(snapshots: Record<string, StoredSessionDiffSna
 }
 
 function normalizeTimestamp(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
-}
-
-function normalizeLineCount(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
 }
 
