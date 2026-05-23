@@ -8,6 +8,11 @@ Guide future agents working on Tau, a minimal TypeScript VS Code extension that 
 
 Update this file only for durable, project-specific guidance that prevents repeated research, preserves integration details, or records established local patterns. Do not add transient notes, guesses, one-off debugging observations, or generic coding advice.
 
+## Ubiquitous Language
+
+Use the Tau UI Language from `docs/architecture/ui-language.md`.
+Do not invent new names for surfaces.
+
 ## Pi Docs Lookup
 
 Pi docs are installed with the SDK package. Prefer local package docs before web links:
