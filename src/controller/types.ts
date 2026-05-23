@@ -2,6 +2,7 @@ import type { SessionDiffSnapshot } from '../diff/types';
 import type { ExtensionUi } from '../extensionUi/types';
 import type { TauChatSessionMetaSnapshot } from '../metadata/types';
 import type { PiClientFactory } from '../pi/clientTypes';
+import type { SettingValue, TauSettingId } from '../settings/settingsRegistry';
 import type {
   WebviewCustomUiTheme,
   WebviewSessionItem,
@@ -22,6 +23,8 @@ export type TauChatControllerOptions = {
   getReadyScript?: () => string | undefined;
   getReadyScriptEnabled?: () => boolean;
   getRejectEditWriteOutsideWorkspace?: () => boolean;
+  getTauSettingValues?: () => Partial<Record<TauSettingId, SettingValue>>;
+  updateTauSetting?: (id: TauSettingId, value: SettingValue) => PromiseLike<void> | Promise<void> | void;
   runReadyScript?: (scriptPath: string, cwd: string | undefined) => void;
   stateScheduler?: StatePublisherScheduler;
   useMessagePatches?: boolean;

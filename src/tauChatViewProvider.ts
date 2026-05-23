@@ -5,6 +5,7 @@ import {
   parseWebviewMessage
 } from './sidebar/chatWebview';
 import { parseWebviewCustomUiTheme } from './webviewProtocol/values';
+import type { SettingValue, TauSettingId } from './settings/settingsRegistry';
 import type { WebviewCustomUiTheme, WebviewMessage, WebviewStateMessage } from './webviewProtocol/types';
 import { type PiClientFactory, type PiClient } from './pi/clientTypes';
 import type { PiClientOptions } from './pi/types';
@@ -109,6 +110,8 @@ export class TauChatViewProvider implements vscode.WebviewViewProvider, vscode.D
       getReadyScript: () => getReadyScriptSetting(),
       getReadyScriptEnabled: () => getReadyScriptEnabledSetting(),
       getRejectEditWriteOutsideWorkspace: () => getRejectEditWriteOutsideWorkspaceSetting(),
+      getTauSettingValues: () => getTauSettingValues(),
+      updateTauSetting: (id, value) => updateTauSetting(id, value),
       runReadyScript: (scriptPath, cwd) => {
         runReadyScript(scriptPath, cwd, {
           onError: (message) => this.showNotification(message, 'warning')
@@ -998,6 +1001,29 @@ function getReadyScriptEnabledSetting(): boolean {
 
 function getRejectEditWriteOutsideWorkspaceSetting(): boolean {
   return vscode.workspace.getConfiguration('tau').get<boolean>('rejectEditWriteOutsideWorkspace', false);
+}
+
+function getTauSettingValues(): Partial<Record<TauSettingId, SettingValue>> {
+  return {
+    'tau.outputColors': getOutputColorsSetting(),
+    'tau.animationsEnabled': getAnimationsEnabledSetting(),
+    'tau.customUiTheme': getCustomUiThemeSetting(),
+    'tau.allowRemoteImages': getAllowRemoteImagesSetting(),
+    'tau.confirmSessionDeletion': getConfirmSessionDeletionSetting(),
+    'tau.rejectEditWriteOutsideWorkspace': getRejectEditWriteOutsideWorkspaceSetting(),
+    'tau.readyScript': getReadyScriptSetting() ?? '',
+    'tau.readyScriptEnabled': getReadyScriptEnabledSetting()
+  };
+}
+
+async function updateTauSetting(id: TauSettingId, value: SettingValue): Promise<void> {
+  const configKey = id.slice('tau.'.length);
+
+  if (Array.isArray(value)) {
+    throw new Error(`Unsupported Tau setting value for ${id}.`);
+  }
+
+  await vscode.workspace.getConfiguration('tau').update(configKey, value, vscode.ConfigurationTarget.Global);
 }
 
 function resolveWorkspaceFileUri(filePath: string): vscode.Uri | undefined {

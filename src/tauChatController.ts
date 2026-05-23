@@ -31,6 +31,7 @@ import { SessionViewController } from './sessions/sessionViewController';
 import { SettingsViewController } from './settings/settingsViewController';
 import { NavigationController } from './navigation/navigationController';
 import { getPiStartupCwdState, type PiStartupCwdState } from './workspace/cwdSafety';
+import { getSettingDefinition, isPiSettingId, isTauSettingId, type SettingId, type SettingValue } from './settings/settingsRegistry';
 
 export type { TauChatControllerOptions } from './controller/types';
 export type { TauChatContextUsage, TauChatModelMeta, TauChatSessionMetaSnapshot } from './metadata/sessionMetadata';
@@ -254,6 +255,9 @@ export class TauChatController {
         return;
       case 'setSettingsSection':
         this.settingsView.setActiveSection(message.section);
+        return;
+      case 'updateSetting':
+        await this.updateSetting(message.settingId, message.value);
         return;
       case 'refreshSessions':
         await this.sessionView.refreshSessions();
@@ -502,6 +506,8 @@ export class TauChatController {
     const chatSync = this.options.useMessagePatches
       ? this.createChatMessageSyncPlan(chatState as ChatSnapshotState)
       : undefined;
+    this.settingsView.setSettings({ values: this.getSettingsValues(metadataState.piSettings) });
+
     const message = createWebviewStateMessage({
       state: chatState,
       ...(chatSync ? { includeMessages: chatSync.includeMessages, messagePatch: chatSync.messagePatch } : {}),
@@ -530,6 +536,51 @@ export class TauChatController {
       this.postedChatSyncByMessage.set(message, chatSync.postedSync);
     }
     return message;
+  }
+
+  private getSettingsValues(piSettings: Partial<Record<SettingId, SettingValue>>): Partial<Record<SettingId, SettingValue>> {
+    return {
+      ...piSettings,
+      ...(this.options.getTauSettingValues?.() ?? {})
+    };
+  }
+
+  private async updateSetting(settingId: SettingId, value: SettingValue): Promise<void> {
+    const definition = getSettingDefinition(settingId);
+
+    if (!definition || definition.readOnly) {
+      return;
+    }
+
+    try {
+      if (isTauSettingId(settingId)) {
+        if (!this.options.updateTauSetting) {
+          throw new Error('Tau settings are not available in this session.');
+        }
+
+        await this.options.updateTauSetting(settingId, value);
+        this.options.showToast?.('Setting saved.', 'success');
+        this.postState();
+        return;
+      }
+
+      if (isPiSettingId(settingId)) {
+        const client = this.getClient();
+        if (!client.updateRuntimeSetting) {
+          throw new Error('Pi runtime settings are not available in this session.');
+        }
+
+        const result = await client.updateRuntimeSetting(settingId, value);
+        this.options.showToast?.(result.message ?? 'Pi setting saved.', result.applied === 'live' ? 'success' : 'warning');
+        await this.refreshSessionMeta({ startClient: true, force: true });
+        await this.refreshSlashCommands({ startClient: true, force: true });
+        this.postState();
+      }
+    } catch (error) {
+      this.session.addErrorMessage(getErrorMessage(error));
+      this.options.showNotification(getErrorMessage(error), 'warning');
+      this.postState();
+    }
   }
 
   private createChatMessageSyncPlan(chatState: ChatSnapshotState): ChatMessageSyncPlan {

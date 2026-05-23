@@ -247,6 +247,36 @@ suite('PiSdkClient', () => {
     harness.client.dispose();
   });
 
+  test('updates live and persisted runtime settings through SDK APIs', async () => {
+    const harness = createSdkHarness();
+
+    assert.deepStrictEqual(
+      await harness.client.updateRuntimeSetting('compaction.enabled', false),
+      { applied: 'live', message: 'Auto-compaction updated.' }
+    );
+    assert.strictEqual(harness.session.autoCompactionEnabled, false);
+
+    assert.deepStrictEqual(
+      await harness.client.updateRuntimeSetting('steeringMode', 'one-at-a-time'),
+      { applied: 'live', message: 'Steering delivery updated.' }
+    );
+    assert.strictEqual(harness.session.steeringMode, 'one-at-a-time');
+
+    assert.deepStrictEqual(
+      await harness.client.updateRuntimeSetting('transport', 'websocket'),
+      { applied: 'reload', message: 'Saved. Reload Pi or start a new session to apply.' }
+    );
+    assert.strictEqual(harness.settingsManager.transport, 'websocket');
+    assert.strictEqual(harness.settingsManager.flushCount, 3);
+
+    await assert.rejects(
+      harness.client.updateRuntimeSetting('enabledModels', ['gpt-*']),
+      /deferred/
+    );
+
+    harness.client.dispose();
+  });
+
   test('maps extension UI bridge methods to Tau UI callbacks', async () => {
     const notifications: Array<{ message: string; notifyType: string }> = [];
     const ui = createSdkExtensionUiContext({
@@ -392,6 +422,24 @@ class FakeSession {
     this.thinkingLevel = level;
   }
 
+  public setAutoCompactionEnabled(enabled: boolean): void {
+    this.autoCompactionEnabled = enabled;
+  }
+
+  public setAutoRetryEnabled(enabled: boolean): void {
+    this.autoRetryEnabled = enabled;
+  }
+
+  public setSteeringMode(mode: string): void {
+    this.steeringMode = mode;
+  }
+
+  public setFollowUpMode(mode: string): void {
+    this.followUpMode = mode;
+  }
+
+  public autoRetryEnabled = true;
+
   public setSessionName(name: string): void {
     this.sessionName = name;
   }
@@ -427,6 +475,95 @@ class FakeSession {
   }
 }
 
+class FakeSettingsManager {
+  public defaultProvider: string | undefined;
+  public defaultModel: string | undefined;
+  public defaultThinkingLevel: string | undefined;
+  public transport = 'sse';
+  public blockImages = false;
+  public imageAutoResize = true;
+  public enabledModels: string[] | undefined;
+  public enableSkillCommands = true;
+  public flushCount = 0;
+
+  public getSessionDir(): string {
+    return '/configured-sessions';
+  }
+
+  public getDefaultProvider(): string | undefined {
+    return this.defaultProvider;
+  }
+
+  public setDefaultProvider(provider: string): void {
+    this.defaultProvider = provider;
+  }
+
+  public getDefaultModel(): string | undefined {
+    return this.defaultModel;
+  }
+
+  public setDefaultModel(model: string): void {
+    this.defaultModel = model;
+  }
+
+  public setDefaultModelAndProvider(provider: string, model: string): void {
+    this.defaultProvider = provider;
+    this.defaultModel = model;
+  }
+
+  public getDefaultThinkingLevel(): string | undefined {
+    return this.defaultThinkingLevel;
+  }
+
+  public setDefaultThinkingLevel(level: string): void {
+    this.defaultThinkingLevel = level;
+  }
+
+  public getTransport(): string {
+    return this.transport;
+  }
+
+  public setTransport(transport: string): void {
+    this.transport = transport;
+  }
+
+  public getBlockImages(): boolean {
+    return this.blockImages;
+  }
+
+  public setBlockImages(blocked: boolean): void {
+    this.blockImages = blocked;
+  }
+
+  public getImageAutoResize(): boolean {
+    return this.imageAutoResize;
+  }
+
+  public setImageAutoResize(enabled: boolean): void {
+    this.imageAutoResize = enabled;
+  }
+
+  public getEnabledModels(): string[] | undefined {
+    return this.enabledModels;
+  }
+
+  public getEnableSkillCommands(): boolean {
+    return this.enableSkillCommands;
+  }
+
+  public setEnableSkillCommands(enabled: boolean): void {
+    this.enableSkillCommands = enabled;
+  }
+
+  public async flush(): Promise<void> {
+    this.flushCount += 1;
+  }
+
+  public drainErrors(): [] {
+    return [];
+  }
+}
+
 class FakeRuntime {
   public diagnostics = [];
   public modelFallbackMessage: string | undefined;
@@ -459,19 +596,21 @@ function createSdkHarness(options: HarnessOptions = {}): {
   createdSessionManagers: SessionManagerCall[];
   initThemeCalls: Array<{ themeName: string | undefined; enableWatcher: boolean }>;
   customToolNames: string[];
+  settingsManager: FakeSettingsManager;
 } {
   const session = new FakeSession();
   const createdSessionManagers: SessionManagerCall[] = [];
   const initThemeCalls: Array<{ themeName: string | undefined; enableWatcher: boolean }> = [];
   const customToolNames: string[] = [];
   let remainingLoadSdkFailures = options.loadSdkFailures ?? 0;
+  const settingsManager = new FakeSettingsManager();
   const sdk = {
     initTheme: (themeName?: string, enableWatcher = false) => {
       initThemeCalls.push({ themeName, enableWatcher });
     },
     getAgentDir: () => '/agent',
     SettingsManager: {
-      create: () => ({ getSessionDir: () => '/configured-sessions' })
+      create: () => settingsManager
     },
     SessionManager: {
       create: (cwd: string, sessionDir?: string) => {
@@ -516,7 +655,8 @@ function createSdkHarness(options: HarnessOptions = {}): {
     }),
     session,
     createdSessionManagers,
-    customToolNames
+    customToolNames,
+    settingsManager
   };
 }
 

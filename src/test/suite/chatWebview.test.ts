@@ -112,7 +112,9 @@ suite('Chat webview helpers', () => {
     assert.deepStrictEqual(parseWebviewMessage({ type: 'showLane', lane: 'chat' }), { type: 'showLane', lane: 'chat' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'showChatFace', chatFace: 'settings' }), { type: 'showChatFace', chatFace: 'settings' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'hideChatFace' }), { type: 'hideChatFace' });
-    assert.deepStrictEqual(parseWebviewMessage({ type: 'setSettingsSection', section: 'models' }), { type: 'setSettingsSection', section: 'models' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'setSettingsSection', section: 'runtime' }), { type: 'setSettingsSection', section: 'runtime' });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'updateSetting', settingId: 'tau.outputColors', value: false }), { type: 'updateSetting', settingId: 'tau.outputColors', value: false });
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'updateSetting', settingId: 'defaultThinkingLevel', value: 'high' }), { type: 'updateSetting', settingId: 'defaultThinkingLevel', value: 'high' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'refreshSessions' }), { type: 'refreshSessions' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'showCurrentChanges' }), { type: 'showCurrentChanges' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'dismissWelcome' }), { type: 'dismissWelcome' });

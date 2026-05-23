@@ -1,3 +1,4 @@
+import { settingsSections } from '../settings/settingsRegistry';
 import type {
   WebviewChatFace,
   WebviewCustomUiTheme,
@@ -11,7 +12,7 @@ export const webviewStreamingBehaviors = ['steer', 'followUp'] as const satisfie
 export const webviewCustomUiThemes = ['default', 'modern', 'crt', 'amber', 'matrix'] as const satisfies readonly WebviewCustomUiTheme[];
 export const webviewLanes = ['chat', 'sessions', 'tree'] as const satisfies readonly WebviewLane[];
 export const webviewChatFaces = ['main', 'settings'] as const satisfies readonly WebviewChatFace[];
-export const webviewSettingsSections = ['providers', 'models', 'runtime', 'appearance', 'advanced'] as const satisfies readonly WebviewSettingsSection[];
+export const webviewSettingsSections = settingsSections.map((section) => section.id) as WebviewSettingsSection[];
 export const webviewSessionItemCommands = ['rename', 'showChanges', 'fork', 'clone', 'compact', 'export', 'delete'] as const satisfies readonly WebviewSessionItemCommand[];
 
 export function parseWebviewStreamingBehavior(value: unknown): WebviewStreamingBehavior | undefined {

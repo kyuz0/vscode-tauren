@@ -4,6 +4,7 @@ All notable changes to Tau will be documented in this file.
 
 ## Unreleased
 
+- Added the real Tau settings surface with Tau appearance/safety controls and Pi runtime/advanced controls backed by shared setting definitions.
 - Aligned user-facing naming so Tau refers to the product/UI and Pi refers to the backend engine/runtime.
 - Exposed the session-list `showChanges` command in the webview menu and removed the stale file-backed session tree entrypoint.
 - Pruned stale webview render state during long chat sessions to reduce sidebar memory growth.

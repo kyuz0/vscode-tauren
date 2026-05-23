@@ -7,6 +7,7 @@ import type {
   WebviewSessionItem,
   WebviewSessionItemCommand,
   WebviewSettingsSection,
+  WebviewSettingsState,
   WebviewSlashCommand,
   WebviewStreamingBehavior as ProtocolWebviewStreamingBehavior,
   WebviewTreeItem,
@@ -18,6 +19,7 @@ export type CustomUiTheme = WebviewCustomUiTheme;
 export type Lane = WebviewLane;
 export type ChatFace = WebviewChatFace;
 export type SettingsSection = WebviewSettingsSection;
+export type SettingsState = WebviewSettingsState;
 export type SessionItemCommand = WebviewSessionItemCommand;
 
 export type WebviewApi = {
@@ -94,6 +96,7 @@ export type WebviewState = {
   lane: Lane;
   chatFace: ChatFace;
   settingsSection: SettingsSection;
+  settings: SettingsState;
   sessions: SessionItem[];
   sessionsRefreshing: boolean;
   sessionsError: string;

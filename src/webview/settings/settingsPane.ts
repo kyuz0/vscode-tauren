@@ -1,3 +1,4 @@
+import { getSettingsForSection, settingDefinitions, settingsSections, type SettingDefinition, type SettingOption, type SettingValue } from '../../settings/settingsRegistry';
 import { parseWebviewSettingsSection } from '../../webviewProtocol/values';
 import type { SettingsSection, WebviewState } from '../types';
 
@@ -10,121 +11,8 @@ type SettingsPaneControllerOptions = {
   focusPromptInput: () => void;
 };
 
-type SettingsSectionDefinition = {
-  id: SettingsSection;
-  label: string;
-  eyebrow: string;
-  title: string;
-  description: string;
-  cards: SettingsCardDefinition[];
-};
-
-type SettingsCardDefinition = {
-  title: string;
-  body: (state: WebviewState) => string;
-  status?: (state: WebviewState) => string;
-};
-
-const settingsSections: SettingsSectionDefinition[] = [
-  {
-    id: 'providers',
-    label: 'Providers',
-    eyebrow: 'Connectivity',
-    title: 'Providers',
-    description: 'A home for provider accounts, routing, and health. Login flows are intentionally not wired yet.',
-    cards: [
-      {
-        title: 'Provider slots',
-        body: () => 'Reserved for configured Pi engine providers and account status.',
-        status: () => 'Placeholder'
-      },
-      {
-        title: 'Authentication',
-        body: () => 'Future provider sign-in controls will live here without leaving the chat surface.',
-        status: () => 'Not implemented'
-      }
-    ]
-  },
-  {
-    id: 'models',
-    label: 'Models',
-    eyebrow: 'Selection',
-    title: 'Models',
-    description: 'Model inventory and defaults will be managed here. The current composer picker remains the source of truth for now.',
-    cards: [
-      {
-        title: 'Current model',
-        body: (state) => formatModelSummary(state),
-        status: (state) => state.modelLabel || 'Waiting for Pi engine'
-      },
-      {
-        title: 'Available models',
-        body: (state) => `${state.modelOptions.length} model${state.modelOptions.length === 1 ? '' : 's'} reported by Pi engine metadata.`,
-        status: () => 'Read-only'
-      }
-    ]
-  },
-  {
-    id: 'runtime',
-    label: 'Runtime',
-    eyebrow: 'Session',
-    title: 'Runtime',
-    description: 'Runtime controls should make Pi engine and session state visible before they mutate anything.',
-    cards: [
-      {
-        title: 'Session state',
-        body: (state) => state.busy ? 'Pi engine is currently working in this session.' : 'Pi engine is idle for this session.',
-        status: (state) => state.busy ? 'Running' : 'Idle'
-      },
-      {
-        title: 'Session binding',
-        body: (state) => state.currentSessionName || state.currentSessionFile || 'No persisted session file is selected yet.',
-        status: () => 'Observed'
-      }
-    ]
-  },
-  {
-    id: 'appearance',
-    label: 'Appearance',
-    eyebrow: 'Surface',
-    title: 'Appearance',
-    description: 'Visual controls should feel native to the sidebar while preserving VS Code theme integration.',
-    cards: [
-      {
-        title: 'Theme alignment',
-        body: () => 'Tau follows VS Code colors and typography. Future display preferences can be staged here.',
-        status: () => 'VS Code native'
-      },
-      {
-        title: 'Motion',
-        body: (state) => state.animationsEnabled ? 'Subtle surface transitions are enabled.' : 'Tau animations are disabled.',
-        status: (state) => state.animationsEnabled ? 'Enabled' : 'Reduced'
-      }
-    ]
-  },
-  {
-    id: 'advanced',
-    label: 'Advanced',
-    eyebrow: 'Diagnostics',
-    title: 'Advanced',
-    description: 'Advanced controls should stay explicit and inspectable, not hidden in JSON settings.',
-    cards: [
-      {
-        title: 'Diagnostics',
-        body: () => 'Reserved for transport diagnostics, logs, and reset actions.',
-        status: () => 'Placeholder'
-      },
-      {
-        title: 'Safety rails',
-        body: () => 'Future dangerous actions should be grouped here with clear confirmation steps.',
-        status: () => 'Planned'
-      }
-    ]
-  }
-];
-
 export class SettingsPaneController {
-  private renderedSection: SettingsSection | undefined;
+  private renderedSignature = '';
   private wasVisible = false;
 
   public constructor(private readonly options: SettingsPaneControllerOptions) {}
@@ -148,6 +36,7 @@ export class SettingsPaneController {
       }
     });
 
+    this.options.settingsElement.addEventListener('change', (event) => this.handleSettingChange(event));
     this.options.settingsElement.addEventListener('keydown', (event) => this.handleSettingsKeydown(event));
   }
 
@@ -227,14 +116,37 @@ export class SettingsPaneController {
     requestAnimationFrame(() => this.focusSectionButton(section.id));
   }
 
-  private renderSection(sectionId: SettingsSection): void {
-    if (this.renderedSection === sectionId) {
-      this.updateDynamicCardText(sectionId);
+  private handleSettingChange(event: Event): void {
+    const target = event.target;
+
+    if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement)) {
       return;
     }
 
+    const settingId = target.dataset.settingId;
+    const definition = settingDefinitions.find((item) => item.id === settingId) as SettingDefinition | undefined;
+
+    if (!definition || definition.readOnly) {
+      return;
+    }
+
+    const value = target instanceof HTMLInputElement && target.type === 'checkbox'
+      ? target.checked
+      : target.value;
+
+    this.options.postMessage({ type: 'updateSetting', settingId: definition.id, value });
+  }
+
+  private renderSection(sectionId: SettingsSection): void {
     const state = this.options.getState();
-    const section = getSettingsSection(sectionId);
+    const signature = createSettingsSignature(sectionId, state);
+
+    if (this.renderedSignature === signature) {
+      this.syncNavState(sectionId);
+      return;
+    }
+
+    const section = settingsSections.find((item) => item.id === sectionId) ?? settingsSections[0];
     const nav = document.createElement('nav');
     nav.className = 'settings-surface__nav';
     nav.setAttribute('aria-label', 'Settings sections');
@@ -267,25 +179,14 @@ export class SettingsPaneController {
 
     const cards = document.createElement('div');
     cards.className = 'settings-surface__cards';
-    section.cards.forEach((card, index) => {
-      const cardElement = document.createElement('article');
-      cardElement.className = 'settings-surface__card';
-      cardElement.dataset.cardIndex = String(index);
-      const titleRow = document.createElement('div');
-      titleRow.className = 'settings-surface__card-title-row';
-      titleRow.append(createTextElement('h4', 'settings-surface__card-title', card.title));
 
-      if (card.status) {
-        titleRow.append(createTextElement('span', 'settings-surface__card-status', card.status(state)));
-      }
+    for (const definition of getSettingsForSection(section.id)) {
+      cards.append(this.createSettingCard(definition, state));
+    }
 
-      cardElement.append(titleRow, createTextElement('p', 'settings-surface__card-body', card.body(state)));
-      cards.append(cardElement);
-    });
     panel.append(cards);
-
     this.options.settingsBodyElement.replaceChildren(nav, panel);
-    this.renderedSection = sectionId;
+    this.renderedSignature = signature;
     this.syncNavState(sectionId);
 
     if (state.chatFace === 'settings') {
@@ -293,30 +194,110 @@ export class SettingsPaneController {
     }
   }
 
-  private updateDynamicCardText(sectionId: SettingsSection): void {
-    const state = this.options.getState();
-    const section = getSettingsSection(sectionId);
+  private createSettingCard(definition: SettingDefinition, state: WebviewState): HTMLElement {
+    const value = getSettingValue(definition, state);
+    const cardElement = document.createElement('article');
+    cardElement.className = 'settings-surface__card';
+    cardElement.classList.toggle('settings-surface__card--danger', Boolean(definition.danger));
+    cardElement.classList.toggle('settings-surface__card--subtle', Boolean(definition.subtle));
 
-    for (const cardElement of this.options.settingsBodyElement.querySelectorAll<HTMLElement>('.settings-surface__card')) {
-      const cardIndex = Number(cardElement.dataset.cardIndex);
-      const card = section.cards[cardIndex];
+    const titleRow = document.createElement('div');
+    titleRow.className = 'settings-surface__card-title-row';
+    titleRow.append(createTextElement('h4', 'settings-surface__card-title', definition.label));
+    titleRow.append(createTextElement('span', `settings-surface__card-status settings-surface__card-status--${definition.owner}`, definition.owner === 'tau' ? 'Tau' : 'Pi'));
 
-      if (!card) {
-        continue;
+    const control = this.createControl(definition, value, state);
+    const body = createTextElement('p', 'settings-surface__card-body', definition.description);
+    const helperText = getHelperText(definition);
+    const helper = helperText ? createTextElement('p', 'settings-surface__card-helper', helperText) : undefined;
+    const error = state.settings.errors?.[definition.id]
+      ? createTextElement('p', 'settings-surface__card-error', state.settings.errors[definition.id] ?? '')
+      : undefined;
+
+    cardElement.append(titleRow, body, control);
+
+    if (helper) {
+      cardElement.append(helper);
+    }
+
+    if (error) {
+      cardElement.append(error);
+    }
+
+    return cardElement;
+  }
+
+  private createControl(definition: SettingDefinition, value: SettingValue, state: WebviewState): HTMLElement {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'settings-surface__control';
+
+    if (definition.control === 'toggle') {
+      const label = document.createElement('label');
+      label.className = 'settings-surface__toggle';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.dataset.settingId = definition.id;
+      input.checked = value === true;
+      input.disabled = definition.readOnly === true || state.busy;
+      label.append(input, document.createElement('span'));
+      wrapper.append(label);
+      return wrapper;
+    }
+
+    if (definition.control === 'select') {
+      const select = document.createElement('select');
+      select.className = 'settings-surface__select';
+      select.dataset.settingId = definition.id;
+      select.disabled = definition.readOnly === true || state.busy;
+
+      const options = getSettingOptions(definition, state);
+      if (options.length === 0) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'Waiting for Pi…';
+        select.append(option);
+        select.disabled = true;
       }
 
-      const body = cardElement.querySelector('.settings-surface__card-body');
-      if (body) {
-        body.textContent = card.body(state);
+      for (const item of options) {
+        const option = document.createElement('option');
+        option.value = item.value;
+        option.textContent = item.label;
+        select.append(option);
       }
 
-      const status = cardElement.querySelector('.settings-surface__card-status');
-      if (status && card.status) {
-        status.textContent = card.status(state);
+      select.value = typeof value === 'string' ? value : '';
+      wrapper.append(select);
+      return wrapper;
+    }
+
+    if (definition.control === 'text') {
+      const input = document.createElement('input');
+      input.className = 'settings-surface__text';
+      input.type = 'text';
+      input.dataset.settingId = definition.id;
+      input.value = typeof value === 'string' ? value : '';
+      input.disabled = definition.readOnly === true;
+      wrapper.append(input);
+      return wrapper;
+    }
+
+    const list = document.createElement('div');
+    list.className = 'settings-surface__readonly-list';
+    const values = Array.isArray(value) ? value : [];
+
+    if (values.length === 0) {
+      list.textContent = 'No scoped model patterns configured.';
+    } else {
+      for (const entry of values) {
+        const item = document.createElement('code');
+        item.textContent = entry;
+        list.append(item);
       }
     }
 
-    this.syncNavState(sectionId);
+    wrapper.append(list);
+    return wrapper;
   }
 
   private syncNavState(sectionId: SettingsSection): void {
@@ -339,8 +320,42 @@ export class SettingsPaneController {
   }
 }
 
-function getSettingsSection(sectionId: SettingsSection): SettingsSectionDefinition {
-  return settingsSections.find((section) => section.id === sectionId) ?? settingsSections[0];
+function getSettingValue(definition: SettingDefinition, state: WebviewState): SettingValue {
+  return state.settings.values[definition.id] ?? definition.defaultValue;
+}
+
+function getSettingOptions(definition: SettingDefinition, state: WebviewState): SettingOption[] {
+  if (definition.id === 'defaultProvider') {
+    const providers = Array.from(new Set(state.modelOptions.map((model) => model.provider).filter(Boolean)));
+    return providers.map((provider) => ({ value: provider, label: provider }));
+  }
+
+  if (definition.id === 'defaultModel') {
+    return state.modelOptions.map((model) => ({
+      value: `${model.provider}/${model.id}`,
+      label: model.name || `${model.provider}/${model.id}`
+    }));
+  }
+
+  return definition.options ? [...definition.options] : [];
+}
+
+function getHelperText(definition: SettingDefinition): string {
+  if (definition.helper) {
+    return definition.helper;
+  }
+
+  return definition.liveBehavior === 'reload'
+    ? 'Saved for Pi; takes effect after reload or a new session.'
+    : '';
+}
+
+function createSettingsSignature(sectionId: SettingsSection, state: WebviewState): string {
+  const values = getSettingsForSection(sectionId).map((definition) => [definition.id, state.settings.values[definition.id]]);
+  const modelOptions = sectionId === 'runtime'
+    ? state.modelOptions.map((model) => `${model.provider}/${model.id}:${model.name}`).join('|')
+    : '';
+  return JSON.stringify([sectionId, values, modelOptions, state.busy, state.settings.errors]);
 }
 
 function createTextElement(tagName: string, className: string, text: string): HTMLElement {
@@ -348,14 +363,4 @@ function createTextElement(tagName: string, className: string, text: string): HT
   element.className = className;
   element.textContent = text;
   return element;
-}
-
-function formatModelSummary(state: WebviewState): string {
-  if (!state.modelLabel) {
-    return 'Pi engine has not reported live model metadata yet.';
-  }
-
-  const provider = state.modelProvider ? ` via ${state.modelProvider}` : '';
-  const reasoning = state.modelReasoning ? ' Reasoning is available for this model.' : '';
-  return `${state.modelLabel}${provider}.${reasoning}`;
 }

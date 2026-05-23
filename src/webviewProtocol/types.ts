@@ -1,4 +1,5 @@
 import type { ChatSnapshotMessage, ChatSnapshotState, ChatState } from '../chat/chatSession';
+import type { SettingId, SettingValue, TauSettingsSection } from '../settings/settingsRegistry';
 
 export type WebviewStreamingBehavior = 'steer' | 'followUp';
 export type WebviewCustomUiTheme = 'default' | 'modern' | 'crt' | 'amber' | 'matrix';
@@ -22,6 +23,7 @@ export type WebviewMessage =
   | { type: 'showChatFace'; chatFace: WebviewChatFace }
   | { type: 'hideChatFace' }
   | { type: 'setSettingsSection'; section: WebviewSettingsSection }
+  | { type: 'updateSetting'; settingId: SettingId; value: SettingValue }
   | { type: 'refreshSessions' }
   | { type: 'showCurrentChanges' }
   | { type: 'dismissWelcome' }
@@ -65,15 +67,22 @@ export type WebviewSlashCommand = {
 
 export type WebviewLane = 'chat' | 'sessions' | 'tree';
 export type WebviewChatFace = 'main' | 'settings';
-export type WebviewSettingsSection = 'providers' | 'models' | 'runtime' | 'appearance' | 'advanced';
+export type WebviewSettingsSection = TauSettingsSection;
 
 export type WebviewNavigationState = {
   lane?: WebviewLane;
   chatFace?: WebviewChatFace;
 };
 
+export type WebviewSettingsState = {
+  values: Partial<Record<SettingId, SettingValue>>;
+  pending?: SettingId[];
+  errors?: Partial<Record<SettingId, string>>;
+};
+
 export type WebviewSettingsViewState = {
   activeSection?: WebviewSettingsSection;
+  settings?: WebviewSettingsState;
 };
 
 export type WebviewSessionItem = {
@@ -155,6 +164,7 @@ export type WebviewStateMessage = Omit<ChatState, 'messages'> & {
   sessionLoading?: boolean;
   chatFace?: WebviewChatFace;
   settingsSection?: WebviewSettingsSection;
+  settings?: WebviewSettingsState;
 };
 
 export type CreateWebviewStateMessageOptions = {

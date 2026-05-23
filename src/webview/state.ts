@@ -1,4 +1,5 @@
 import { normalizeDiffLineCount } from '../diff/lineCount';
+import { isSettingId, normalizeSettingValue } from '../settings/settingsRegistry';
 import { parseWebviewCustomUiTheme, parseWebviewLane, parseWebviewSettingsSection } from '../webviewProtocol/values';
 import type { Activity, ChatMessage, MessagePatch, WebviewState } from './types';
 
@@ -28,7 +29,8 @@ export const initialWebviewState: WebviewState = {
   composerTextRevision: 0,
   lane: 'chat',
   chatFace: 'main',
-  settingsSection: 'providers',
+  settingsSection: 'appearance',
+  settings: { values: {} },
   sessions: [],
   sessionsRefreshing: false,
   sessionsError: '',
@@ -69,7 +71,8 @@ export function parseWebviewStateMessage(data: unknown, previousState?: WebviewS
     composerTextRevision: typeof record.composerTextRevision === 'number' ? record.composerTextRevision : 0,
     lane: parseWebviewLane(record.lane, 'chat'),
     chatFace: parseChatFace(record.chatFace, parseWebviewLane(record.lane, 'chat')),
-    settingsSection: parseWebviewSettingsSection(record.settingsSection, 'providers'),
+    settingsSection: parseWebviewSettingsSection(record.settingsSection, 'appearance'),
+    settings: parseSettingsState(record.settings),
     sessions: Array.isArray(record.sessions) ? record.sessions : [],
     sessionsRefreshing: Boolean(record.sessionsRefreshing),
     sessionsError: typeof record.sessionsError === 'string' ? record.sessionsError : '',
@@ -80,6 +83,47 @@ export function parseWebviewStateMessage(data: unknown, previousState?: WebviewS
     treeError: typeof record.treeError === 'string' ? record.treeError : '',
     sessionLoading: Boolean(record.sessionLoading)
   };
+}
+
+function parseSettingsState(value: unknown): WebviewState['settings'] {
+  if (!isRecord(value)) {
+    return { values: {} };
+  }
+
+  const parsedValues: WebviewState['settings']['values'] = {};
+  const values = isRecord(value.values) ? value.values : {};
+
+  for (const [settingId, settingValue] of Object.entries(values)) {
+    if (!isSettingId(settingId)) {
+      continue;
+    }
+
+    const normalizedValue = normalizeSettingValue(settingId, settingValue);
+    if (normalizedValue !== undefined) {
+      parsedValues[settingId] = normalizedValue;
+    }
+  }
+
+  return {
+    values: parsedValues,
+    pending: Array.isArray(value.pending) ? value.pending.filter(isSettingId) : undefined,
+    errors: parseSettingsErrors(value.errors)
+  };
+}
+
+function parseSettingsErrors(value: unknown): WebviewState['settings']['errors'] {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const parsedErrors: NonNullable<WebviewState['settings']['errors']> = {};
+  for (const [settingId, error] of Object.entries(value)) {
+    if (isSettingId(settingId) && typeof error === 'string') {
+      parsedErrors[settingId] = error;
+    }
+  }
+
+  return parsedErrors;
 }
 
 function parseChatFace(value: unknown, lane: WebviewState['lane']): WebviewState['chatFace'] {

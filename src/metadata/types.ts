@@ -1,3 +1,4 @@
+import type { SettingValue, PiSettingId } from '../settings/settingsRegistry';
 import type { WebviewModelOption, WebviewSlashCommand } from '../webviewProtocol/types';
 
 export type TauChatModelMeta = {
@@ -20,6 +21,8 @@ export type TauChatSessionMetaSnapshot = {
   contextUsage?: TauChatContextUsage;
 };
 
+export type PiRuntimeSettingsMeta = Partial<Record<PiSettingId, SettingValue>>;
+
 export type SessionMetadataWebviewState = {
   model: {
     label: string;
@@ -33,6 +36,7 @@ export type SessionMetadataWebviewState = {
   metadataRefreshing: boolean;
   slashCommands: WebviewSlashCommand[];
   slashCommandsRefreshing: boolean;
+  piSettings: PiRuntimeSettingsMeta;
 };
 
 export type SessionMetadataCacheStorage = {

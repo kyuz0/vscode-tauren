@@ -3629,10 +3629,323 @@ ${after}`;
     });
   }
 
+  // src/settings/settingsRegistry.ts
+  var thinkingLevelOptions = [
+    { value: "off", label: "Off" },
+    { value: "minimal", label: "Minimal" },
+    { value: "low", label: "Low" },
+    { value: "medium", label: "Medium" },
+    { value: "high", label: "High" },
+    { value: "xhigh", label: "X High" }
+  ];
+  var deliveryModeOptions = [
+    { value: "one-at-a-time", label: "One at a time" },
+    { value: "all", label: "All queued" }
+  ];
+  var transportOptions = [
+    { value: "sse", label: "SSE" },
+    { value: "websocket", label: "WebSocket" },
+    { value: "auto", label: "Auto" }
+  ];
+  var customUiThemeOptions = [
+    { value: "default", label: "Default" },
+    { value: "modern", label: "Modern" },
+    { value: "crt", label: "CRT" },
+    { value: "amber", label: "Amber" },
+    { value: "matrix", label: "Matrix" }
+  ];
+  var settingsSections = [
+    {
+      id: "appearance",
+      label: "Appearance",
+      eyebrow: "Tau host",
+      title: "Appearance",
+      description: "Tau-owned presentation controls for the sidebar and Pi extension UI."
+    },
+    {
+      id: "runtime",
+      label: "Runtime",
+      eyebrow: "Pi engine",
+      title: "Runtime",
+      description: "Pi engine defaults and runtime behavior. Pi remains the source of truth."
+    },
+    {
+      id: "workspaceSafety",
+      label: "Safety",
+      eyebrow: "Guardrails",
+      title: "Workspace / Safety",
+      description: "Explicit workflow and workspace safety controls."
+    },
+    {
+      id: "advanced",
+      label: "Advanced",
+      eyebrow: "Advanced",
+      title: "Advanced",
+      description: "Less common controls shown plainly, without turning Tau into a settings dump."
+    }
+  ];
+  var settingDefinitions = [
+    {
+      id: "tau.outputColors",
+      owner: "tau",
+      section: "appearance",
+      label: "Output colors",
+      description: "Render ANSI and syntax colors in Tau output.",
+      control: "toggle",
+      defaultValue: true,
+      liveBehavior: "immediate"
+    },
+    {
+      id: "tau.animationsEnabled",
+      owner: "tau",
+      section: "appearance",
+      label: "Animations",
+      description: "Use subtle surface and counter animations.",
+      control: "toggle",
+      defaultValue: true,
+      helper: "Reduced-motion preferences still disable motion.",
+      liveBehavior: "immediate"
+    },
+    {
+      id: "tau.customUiTheme",
+      owner: "tau",
+      section: "appearance",
+      label: "Custom UI theme",
+      description: "Theme for Pi extension custom UI terminal panels.",
+      control: "select",
+      options: customUiThemeOptions,
+      defaultValue: "default",
+      liveBehavior: "immediate"
+    },
+    {
+      id: "tau.allowRemoteImages",
+      owner: "tau",
+      section: "workspaceSafety",
+      label: "Remote images",
+      description: "Allow HTTPS images in chat markdown.",
+      control: "toggle",
+      defaultValue: true,
+      helper: "Turn this off to block external image requests while keeping local/workspace images available.",
+      liveBehavior: "immediate",
+      danger: true
+    },
+    {
+      id: "defaultProvider",
+      owner: "pi",
+      section: "runtime",
+      label: "Default provider",
+      description: "Provider Pi should prefer for new model defaults.",
+      control: "select",
+      defaultValue: "",
+      helper: "Provider-only changes are persisted for new sessions.",
+      liveBehavior: "reload"
+    },
+    {
+      id: "defaultModel",
+      owner: "pi",
+      section: "runtime",
+      label: "Default model",
+      description: "Model used by Pi for this session and future defaults.",
+      control: "select",
+      defaultValue: "",
+      liveBehavior: "immediate"
+    },
+    {
+      id: "defaultThinkingLevel",
+      owner: "pi",
+      section: "runtime",
+      label: "Thinking level",
+      description: "Default reasoning effort for models that support thinking.",
+      control: "select",
+      options: thinkingLevelOptions,
+      defaultValue: "off",
+      liveBehavior: "immediate"
+    },
+    {
+      id: "compaction.enabled",
+      owner: "pi",
+      section: "runtime",
+      label: "Auto-compaction",
+      description: "Let Pi summarize older context when the conversation grows too large.",
+      control: "toggle",
+      defaultValue: true,
+      liveBehavior: "immediate"
+    },
+    {
+      id: "retry.enabled",
+      owner: "pi",
+      section: "runtime",
+      label: "Auto-retry",
+      description: "Let Pi retry transient provider failures.",
+      control: "toggle",
+      defaultValue: true,
+      liveBehavior: "immediate"
+    },
+    {
+      id: "steeringMode",
+      owner: "pi",
+      section: "runtime",
+      label: "Steering delivery",
+      description: "How steering messages are delivered while Pi is running.",
+      control: "select",
+      options: deliveryModeOptions,
+      defaultValue: "one-at-a-time",
+      liveBehavior: "immediate"
+    },
+    {
+      id: "followUpMode",
+      owner: "pi",
+      section: "runtime",
+      label: "Follow-up delivery",
+      description: "How follow-up prompts are delivered after the current run.",
+      control: "select",
+      options: deliveryModeOptions,
+      defaultValue: "one-at-a-time",
+      liveBehavior: "immediate"
+    },
+    {
+      id: "tau.confirmSessionDeletion",
+      owner: "tau",
+      section: "workspaceSafety",
+      label: "Confirm deletion",
+      description: "Ask before moving Tau sessions to Trash.",
+      control: "toggle",
+      defaultValue: true,
+      liveBehavior: "immediate",
+      danger: true
+    },
+    {
+      id: "tau.rejectEditWriteOutsideWorkspace",
+      owner: "tau",
+      section: "workspaceSafety",
+      label: "Reject external edits",
+      description: "Reject Pi edit/write mutations outside the active workspace folder.",
+      control: "toggle",
+      defaultValue: false,
+      helper: "This guardrail does not restrict bash commands.",
+      liveBehavior: "immediate",
+      danger: true
+    },
+    {
+      id: "tau.readyScript",
+      owner: "tau",
+      section: "advanced",
+      label: "Ready script",
+      description: "Executable script Tau runs when Pi becomes ready.",
+      control: "text",
+      defaultValue: "",
+      helper: "Relative paths resolve from the workspace folder.",
+      liveBehavior: "immediate",
+      subtle: true
+    },
+    {
+      id: "tau.readyScriptEnabled",
+      owner: "tau",
+      section: "advanced",
+      label: "Run ready script",
+      description: "Temporarily enable or disable the ready script without clearing its path.",
+      control: "toggle",
+      defaultValue: true,
+      liveBehavior: "immediate",
+      subtle: true
+    },
+    {
+      id: "transport",
+      owner: "pi",
+      section: "advanced",
+      label: "Transport",
+      description: "Preferred provider transport when multiple transports are available.",
+      control: "select",
+      options: transportOptions,
+      defaultValue: "sse",
+      helper: "Persisted for Pi; takes effect after reload or a new session.",
+      liveBehavior: "reload",
+      subtle: true
+    },
+    {
+      id: "images.blockImages",
+      owner: "pi",
+      section: "advanced",
+      label: "Block LLM images",
+      description: "Prevent images from being sent to the model.",
+      control: "toggle",
+      defaultValue: false,
+      helper: "Persisted for Pi; takes effect after reload or a new session.",
+      liveBehavior: "reload",
+      subtle: true
+    },
+    {
+      id: "images.autoResize",
+      owner: "pi",
+      section: "advanced",
+      label: "Auto-resize images",
+      description: "Let Pi resize images before sending them to the model.",
+      control: "toggle",
+      defaultValue: true,
+      helper: "Persisted for Pi; takes effect after reload or a new session.",
+      liveBehavior: "reload",
+      subtle: true
+    },
+    {
+      id: "enabledModels",
+      owner: "pi",
+      section: "advanced",
+      label: "Enabled models",
+      description: "Model patterns Pi uses for model cycling.",
+      control: "readonlyList",
+      defaultValue: [],
+      helper: "Read-only in Tau for now to avoid saving malformed model patterns.",
+      liveBehavior: "reload",
+      readOnly: true,
+      subtle: true
+    },
+    {
+      id: "enableSkillCommands",
+      owner: "pi",
+      section: "advanced",
+      label: "Skill commands",
+      description: "Register loaded skills as slash commands.",
+      control: "toggle",
+      defaultValue: true,
+      helper: "Persisted for Pi; takes effect after reload or a new session.",
+      liveBehavior: "reload",
+      subtle: true
+    }
+  ];
+  function getSettingDefinition(id) {
+    return settingDefinitions.find((definition) => definition.id === id);
+  }
+  function getSettingsForSection(section) {
+    return settingDefinitions.filter((definition) => definition.section === section);
+  }
+  function isSettingId(value) {
+    return typeof value === "string" && Boolean(getSettingDefinition(value));
+  }
+  function normalizeSettingValue(id, value) {
+    const definition = getSettingDefinition(id);
+    if (!definition) {
+      return void 0;
+    }
+    if (definition.control === "toggle") {
+      return typeof value === "boolean" ? value : void 0;
+    }
+    if (definition.control === "readonlyList") {
+      return Array.isArray(value) && value.every((entry) => typeof entry === "string") ? value.map((entry) => entry.trim()).filter(Boolean) : void 0;
+    }
+    if (typeof value !== "string") {
+      return void 0;
+    }
+    const trimmed = definition.control === "text" ? value.trim() : value;
+    if (definition.options && !definition.options.some((option) => option.value === trimmed)) {
+      return void 0;
+    }
+    return trimmed;
+  }
+
   // src/webviewProtocol/values.ts
   var webviewCustomUiThemes = ["default", "modern", "crt", "amber", "matrix"];
   var webviewLanes = ["chat", "sessions", "tree"];
-  var webviewSettingsSections = ["providers", "models", "runtime", "appearance", "advanced"];
+  var webviewSettingsSections = settingsSections.map((section) => section.id);
   var webviewSessionItemCommands = ["rename", "showChanges", "fork", "clone", "compact", "export", "delete"];
   function parseWebviewCustomUiTheme(value, fallback = "default") {
     return includesValue(webviewCustomUiThemes, value) ? value : fallback;
@@ -5467,109 +5780,12 @@ ${after}`;
   }
 
   // src/webview/settings/settingsPane.ts
-  var settingsSections = [
-    {
-      id: "providers",
-      label: "Providers",
-      eyebrow: "Connectivity",
-      title: "Providers",
-      description: "A home for provider accounts, routing, and health. Login flows are intentionally not wired yet.",
-      cards: [
-        {
-          title: "Provider slots",
-          body: () => "Reserved for configured Pi engine providers and account status.",
-          status: () => "Placeholder"
-        },
-        {
-          title: "Authentication",
-          body: () => "Future provider sign-in controls will live here without leaving the chat surface.",
-          status: () => "Not implemented"
-        }
-      ]
-    },
-    {
-      id: "models",
-      label: "Models",
-      eyebrow: "Selection",
-      title: "Models",
-      description: "Model inventory and defaults will be managed here. The current composer picker remains the source of truth for now.",
-      cards: [
-        {
-          title: "Current model",
-          body: (state2) => formatModelSummary(state2),
-          status: (state2) => state2.modelLabel || "Waiting for Pi engine"
-        },
-        {
-          title: "Available models",
-          body: (state2) => `${state2.modelOptions.length} model${state2.modelOptions.length === 1 ? "" : "s"} reported by Pi engine metadata.`,
-          status: () => "Read-only"
-        }
-      ]
-    },
-    {
-      id: "runtime",
-      label: "Runtime",
-      eyebrow: "Session",
-      title: "Runtime",
-      description: "Runtime controls should make Pi engine and session state visible before they mutate anything.",
-      cards: [
-        {
-          title: "Session state",
-          body: (state2) => state2.busy ? "Pi engine is currently working in this session." : "Pi engine is idle for this session.",
-          status: (state2) => state2.busy ? "Running" : "Idle"
-        },
-        {
-          title: "Session binding",
-          body: (state2) => state2.currentSessionName || state2.currentSessionFile || "No persisted session file is selected yet.",
-          status: () => "Observed"
-        }
-      ]
-    },
-    {
-      id: "appearance",
-      label: "Appearance",
-      eyebrow: "Surface",
-      title: "Appearance",
-      description: "Visual controls should feel native to the sidebar while preserving VS Code theme integration.",
-      cards: [
-        {
-          title: "Theme alignment",
-          body: () => "Tau follows VS Code colors and typography. Future display preferences can be staged here.",
-          status: () => "VS Code native"
-        },
-        {
-          title: "Motion",
-          body: (state2) => state2.animationsEnabled ? "Subtle surface transitions are enabled." : "Tau animations are disabled.",
-          status: (state2) => state2.animationsEnabled ? "Enabled" : "Reduced"
-        }
-      ]
-    },
-    {
-      id: "advanced",
-      label: "Advanced",
-      eyebrow: "Diagnostics",
-      title: "Advanced",
-      description: "Advanced controls should stay explicit and inspectable, not hidden in JSON settings.",
-      cards: [
-        {
-          title: "Diagnostics",
-          body: () => "Reserved for transport diagnostics, logs, and reset actions.",
-          status: () => "Placeholder"
-        },
-        {
-          title: "Safety rails",
-          body: () => "Future dangerous actions should be grouped here with clear confirmation steps.",
-          status: () => "Planned"
-        }
-      ]
-    }
-  ];
   var SettingsPaneController = class {
     constructor(options) {
       this.options = options;
     }
     options;
-    renderedSection;
+    renderedSignature = "";
     wasVisible = false;
     attachEventListeners() {
       this.options.settingsBackButton.addEventListener("click", () => this.hideSettings({ focusPrompt: true }));
@@ -5583,6 +5799,7 @@ ${after}`;
           this.selectSection(section);
         }
       });
+      this.options.settingsElement.addEventListener("change", (event) => this.handleSettingChange(event));
       this.options.settingsElement.addEventListener("keydown", (event) => this.handleSettingsKeydown(event));
     }
     handleGlobalKeydown(event) {
@@ -5646,13 +5863,27 @@ ${after}`;
       this.selectSection(section.id);
       requestAnimationFrame(() => this.focusSectionButton(section.id));
     }
-    renderSection(sectionId) {
-      if (this.renderedSection === sectionId) {
-        this.updateDynamicCardText(sectionId);
+    handleSettingChange(event) {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement)) {
         return;
       }
+      const settingId = target.dataset.settingId;
+      const definition = settingDefinitions.find((item) => item.id === settingId);
+      if (!definition || definition.readOnly) {
+        return;
+      }
+      const value = target instanceof HTMLInputElement && target.type === "checkbox" ? target.checked : target.value;
+      this.options.postMessage({ type: "updateSetting", settingId: definition.id, value });
+    }
+    renderSection(sectionId) {
       const state2 = this.options.getState();
-      const section = getSettingsSection(sectionId);
+      const signature = createSettingsSignature(sectionId, state2);
+      if (this.renderedSignature === signature) {
+        this.syncNavState(sectionId);
+        return;
+      }
+      const section = settingsSections.find((item) => item.id === sectionId) ?? settingsSections[0];
       const nav = document.createElement("nav");
       nav.className = "settings-surface__nav";
       nav.setAttribute("aria-label", "Settings sections");
@@ -5681,46 +5912,103 @@ ${after}`;
       panel.append(intro);
       const cards = document.createElement("div");
       cards.className = "settings-surface__cards";
-      section.cards.forEach((card, index) => {
-        const cardElement = document.createElement("article");
-        cardElement.className = "settings-surface__card";
-        cardElement.dataset.cardIndex = String(index);
-        const titleRow = document.createElement("div");
-        titleRow.className = "settings-surface__card-title-row";
-        titleRow.append(createTextElement("h4", "settings-surface__card-title", card.title));
-        if (card.status) {
-          titleRow.append(createTextElement("span", "settings-surface__card-status", card.status(state2)));
-        }
-        cardElement.append(titleRow, createTextElement("p", "settings-surface__card-body", card.body(state2)));
-        cards.append(cardElement);
-      });
+      for (const definition of getSettingsForSection(section.id)) {
+        cards.append(this.createSettingCard(definition, state2));
+      }
       panel.append(cards);
       this.options.settingsBodyElement.replaceChildren(nav, panel);
-      this.renderedSection = sectionId;
+      this.renderedSignature = signature;
       this.syncNavState(sectionId);
       if (state2.chatFace === "settings") {
         requestAnimationFrame(() => this.focusSectionButton(sectionId));
       }
     }
-    updateDynamicCardText(sectionId) {
-      const state2 = this.options.getState();
-      const section = getSettingsSection(sectionId);
-      for (const cardElement of this.options.settingsBodyElement.querySelectorAll(".settings-surface__card")) {
-        const cardIndex = Number(cardElement.dataset.cardIndex);
-        const card = section.cards[cardIndex];
-        if (!card) {
-          continue;
+    createSettingCard(definition, state2) {
+      const value = getSettingValue(definition, state2);
+      const cardElement = document.createElement("article");
+      cardElement.className = "settings-surface__card";
+      cardElement.classList.toggle("settings-surface__card--danger", Boolean(definition.danger));
+      cardElement.classList.toggle("settings-surface__card--subtle", Boolean(definition.subtle));
+      const titleRow = document.createElement("div");
+      titleRow.className = "settings-surface__card-title-row";
+      titleRow.append(createTextElement("h4", "settings-surface__card-title", definition.label));
+      titleRow.append(createTextElement("span", `settings-surface__card-status settings-surface__card-status--${definition.owner}`, definition.owner === "tau" ? "Tau" : "Pi"));
+      const control = this.createControl(definition, value, state2);
+      const body = createTextElement("p", "settings-surface__card-body", definition.description);
+      const helperText = getHelperText(definition);
+      const helper = helperText ? createTextElement("p", "settings-surface__card-helper", helperText) : void 0;
+      const error = state2.settings.errors?.[definition.id] ? createTextElement("p", "settings-surface__card-error", state2.settings.errors[definition.id] ?? "") : void 0;
+      cardElement.append(titleRow, body, control);
+      if (helper) {
+        cardElement.append(helper);
+      }
+      if (error) {
+        cardElement.append(error);
+      }
+      return cardElement;
+    }
+    createControl(definition, value, state2) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "settings-surface__control";
+      if (definition.control === "toggle") {
+        const label = document.createElement("label");
+        label.className = "settings-surface__toggle";
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.dataset.settingId = definition.id;
+        input.checked = value === true;
+        input.disabled = definition.readOnly === true || state2.busy;
+        label.append(input, document.createElement("span"));
+        wrapper.append(label);
+        return wrapper;
+      }
+      if (definition.control === "select") {
+        const select = document.createElement("select");
+        select.className = "settings-surface__select";
+        select.dataset.settingId = definition.id;
+        select.disabled = definition.readOnly === true || state2.busy;
+        const options = getSettingOptions(definition, state2);
+        if (options.length === 0) {
+          const option = document.createElement("option");
+          option.value = "";
+          option.textContent = "Waiting for Pi\u2026";
+          select.append(option);
+          select.disabled = true;
         }
-        const body = cardElement.querySelector(".settings-surface__card-body");
-        if (body) {
-          body.textContent = card.body(state2);
+        for (const item of options) {
+          const option = document.createElement("option");
+          option.value = item.value;
+          option.textContent = item.label;
+          select.append(option);
         }
-        const status = cardElement.querySelector(".settings-surface__card-status");
-        if (status && card.status) {
-          status.textContent = card.status(state2);
+        select.value = typeof value === "string" ? value : "";
+        wrapper.append(select);
+        return wrapper;
+      }
+      if (definition.control === "text") {
+        const input = document.createElement("input");
+        input.className = "settings-surface__text";
+        input.type = "text";
+        input.dataset.settingId = definition.id;
+        input.value = typeof value === "string" ? value : "";
+        input.disabled = definition.readOnly === true;
+        wrapper.append(input);
+        return wrapper;
+      }
+      const list = document.createElement("div");
+      list.className = "settings-surface__readonly-list";
+      const values = Array.isArray(value) ? value : [];
+      if (values.length === 0) {
+        list.textContent = "No scoped model patterns configured.";
+      } else {
+        for (const entry of values) {
+          const item = document.createElement("code");
+          item.textContent = entry;
+          list.append(item);
         }
       }
-      this.syncNavState(sectionId);
+      wrapper.append(list);
+      return wrapper;
     }
     syncNavState(sectionId) {
       for (const button of this.options.settingsBodyElement.querySelectorAll("[data-settings-section]")) {
@@ -5737,22 +6025,38 @@ ${after}`;
       this.options.settingsBodyElement.querySelector(`[data-settings-section="${section}"]`)?.focus({ preventScroll: true });
     }
   };
-  function getSettingsSection(sectionId) {
-    return settingsSections.find((section) => section.id === sectionId) ?? settingsSections[0];
+  function getSettingValue(definition, state2) {
+    return state2.settings.values[definition.id] ?? definition.defaultValue;
+  }
+  function getSettingOptions(definition, state2) {
+    if (definition.id === "defaultProvider") {
+      const providers = Array.from(new Set(state2.modelOptions.map((model) => model.provider).filter(Boolean)));
+      return providers.map((provider) => ({ value: provider, label: provider }));
+    }
+    if (definition.id === "defaultModel") {
+      return state2.modelOptions.map((model) => ({
+        value: `${model.provider}/${model.id}`,
+        label: model.name || `${model.provider}/${model.id}`
+      }));
+    }
+    return definition.options ? [...definition.options] : [];
+  }
+  function getHelperText(definition) {
+    if (definition.helper) {
+      return definition.helper;
+    }
+    return definition.liveBehavior === "reload" ? "Saved for Pi; takes effect after reload or a new session." : "";
+  }
+  function createSettingsSignature(sectionId, state2) {
+    const values = getSettingsForSection(sectionId).map((definition) => [definition.id, state2.settings.values[definition.id]]);
+    const modelOptions = sectionId === "runtime" ? state2.modelOptions.map((model) => `${model.provider}/${model.id}:${model.name}`).join("|") : "";
+    return JSON.stringify([sectionId, values, modelOptions, state2.busy, state2.settings.errors]);
   }
   function createTextElement(tagName, className, text) {
     const element = document.createElement(tagName);
     element.className = className;
     element.textContent = text;
     return element;
-  }
-  function formatModelSummary(state2) {
-    if (!state2.modelLabel) {
-      return "Pi engine has not reported live model metadata yet.";
-    }
-    const provider = state2.modelProvider ? ` via ${state2.modelProvider}` : "";
-    const reasoning = state2.modelReasoning ? " Reasoning is available for this model." : "";
-    return `${state2.modelLabel}${provider}.${reasoning}`;
   }
 
   // src/webview/state.ts
@@ -5782,7 +6086,8 @@ ${after}`;
     composerTextRevision: 0,
     lane: "chat",
     chatFace: "main",
-    settingsSection: "providers",
+    settingsSection: "appearance",
+    settings: { values: {} },
     sessions: [],
     sessionsRefreshing: false,
     sessionsError: "",
@@ -5821,7 +6126,8 @@ ${after}`;
       composerTextRevision: typeof record.composerTextRevision === "number" ? record.composerTextRevision : 0,
       lane: parseWebviewLane(record.lane, "chat"),
       chatFace: parseChatFace(record.chatFace, parseWebviewLane(record.lane, "chat")),
-      settingsSection: parseWebviewSettingsSection(record.settingsSection, "providers"),
+      settingsSection: parseWebviewSettingsSection(record.settingsSection, "appearance"),
+      settings: parseSettingsState(record.settings),
       sessions: Array.isArray(record.sessions) ? record.sessions : [],
       sessionsRefreshing: Boolean(record.sessionsRefreshing),
       sessionsError: typeof record.sessionsError === "string" ? record.sessionsError : "",
@@ -5832,6 +6138,39 @@ ${after}`;
       treeError: typeof record.treeError === "string" ? record.treeError : "",
       sessionLoading: Boolean(record.sessionLoading)
     };
+  }
+  function parseSettingsState(value) {
+    if (!isRecord3(value)) {
+      return { values: {} };
+    }
+    const parsedValues = {};
+    const values = isRecord3(value.values) ? value.values : {};
+    for (const [settingId, settingValue] of Object.entries(values)) {
+      if (!isSettingId(settingId)) {
+        continue;
+      }
+      const normalizedValue = normalizeSettingValue(settingId, settingValue);
+      if (normalizedValue !== void 0) {
+        parsedValues[settingId] = normalizedValue;
+      }
+    }
+    return {
+      values: parsedValues,
+      pending: Array.isArray(value.pending) ? value.pending.filter(isSettingId) : void 0,
+      errors: parseSettingsErrors(value.errors)
+    };
+  }
+  function parseSettingsErrors(value) {
+    if (!isRecord3(value)) {
+      return void 0;
+    }
+    const parsedErrors = {};
+    for (const [settingId, error] of Object.entries(value)) {
+      if (isSettingId(settingId) && typeof error === "string") {
+        parsedErrors[settingId] = error;
+      }
+    }
+    return parsedErrors;
   }
   function parseChatFace(value, lane) {
     return lane === "chat" && value === "settings" ? "settings" : "main";

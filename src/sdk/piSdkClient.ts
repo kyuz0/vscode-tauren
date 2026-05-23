@@ -19,7 +19,8 @@ import type {
   PiSwitchSessionResult,
   PiEvent
 } from '../pi/types';
-import type { AgentSessionRuntime, SessionManager } from '@earendil-works/pi-coding-agent';
+import type { AgentSessionRuntime, SessionManager, SettingsManager } from '@earendil-works/pi-coding-agent';
+import type { PiSettingId, SettingValue } from '../settings/settingsRegistry';
 import { createSdkExtensionUiContext } from './extensionUiBridge';
 import { mapSdkExtensionErrorToPiEvent, mapSdkSessionEventToPiEvent } from './piSdkEventMapper';
 import { flattenPiSessionTree, type FlattenableSessionTreeNode } from '../sessions/piSessionTree';
@@ -39,6 +40,7 @@ export type PiSdkClientOptions = PiClientOptions & {
 
 export class PiSdkClient implements PiClient {
   private runtime: AgentSessionRuntime | undefined;
+  private settingsManager: SettingsManager | undefined;
   private runtimePromise: Promise<AgentSessionRuntime> | undefined;
   private unsubscribeSession: (() => void) | undefined;
   private disposed = false;
@@ -137,6 +139,8 @@ export class PiSdkClient implements PiClient {
       sessionId: session.sessionId,
       sessionName: session.sessionName,
       autoCompactionEnabled: session.autoCompactionEnabled,
+      autoRetryEnabled: session.autoRetryEnabled,
+      ...this.getRuntimeSettingsState(),
       messageCount: session.messages.length,
       pendingMessageCount: session.pendingMessageCount
     };
@@ -208,6 +212,82 @@ export class PiSdkClient implements PiClient {
   public async setThinkingLevel(level: string): Promise<void> {
     const { session } = await this.ensureRuntime();
     session.setThinkingLevel(level as Parameters<typeof session.setThinkingLevel>[0]);
+  }
+
+  public async updateRuntimeSetting(settingId: PiSettingId, value: SettingValue): Promise<{ applied: 'live' | 'reload'; message?: string }> {
+    const runtime = await this.ensureRuntime();
+    const { session } = runtime;
+
+    switch (settingId) {
+      case 'defaultProvider': {
+        const provider = this.requireString(value, settingId);
+        this.getSettingsManager().setDefaultProvider(provider);
+        await this.flushSettings();
+        return { applied: 'reload', message: 'Saved for new Pi sessions.' };
+      }
+      case 'defaultModel': {
+        const modelRef = this.parseModelReference(this.requireString(value, settingId));
+        const model = session.modelRegistry.getAvailable().find((candidate) => (
+          candidate.provider === modelRef.provider && candidate.id === modelRef.modelId
+        ));
+
+        if (!model) {
+          throw new Error(`Model not found: ${modelRef.provider}/${modelRef.modelId}`);
+        }
+
+        await session.setModel(model);
+        await this.flushSettings();
+        return { applied: 'live', message: 'Model updated for this session.' };
+      }
+      case 'defaultThinkingLevel': {
+        const level = this.requireString(value, settingId);
+        session.setThinkingLevel(level as Parameters<typeof session.setThinkingLevel>[0]);
+        await this.flushSettings();
+        return { applied: 'live', message: 'Thinking level updated for this session.' };
+      }
+      case 'compaction.enabled':
+        session.setAutoCompactionEnabled(this.requireBoolean(value, settingId));
+        await this.flushSettings();
+        return { applied: 'live', message: 'Auto-compaction updated.' };
+      case 'retry.enabled':
+        session.setAutoRetryEnabled(this.requireBoolean(value, settingId));
+        await this.flushSettings();
+        return { applied: 'live', message: 'Auto-retry updated.' };
+      case 'steeringMode': {
+        const mode = this.requireString(value, settingId);
+        session.setSteeringMode(mode as Parameters<typeof session.setSteeringMode>[0]);
+        await this.flushSettings();
+        return { applied: 'live', message: 'Steering delivery updated.' };
+      }
+      case 'followUpMode': {
+        const mode = this.requireString(value, settingId);
+        session.setFollowUpMode(mode as Parameters<typeof session.setFollowUpMode>[0]);
+        await this.flushSettings();
+        return { applied: 'live', message: 'Follow-up delivery updated.' };
+      }
+      case 'transport': {
+        const transport = this.requireString(value, settingId);
+        this.getSettingsManager().setTransport(transport as Parameters<SettingsManager['setTransport']>[0]);
+        await this.flushSettings();
+        return { applied: 'reload', message: 'Saved. Reload Pi or start a new session to apply.' };
+      }
+      case 'images.blockImages':
+        this.getSettingsManager().setBlockImages(this.requireBoolean(value, settingId));
+        await this.flushSettings();
+        return { applied: 'reload', message: 'Saved. Reload Pi or start a new session to apply.' };
+      case 'images.autoResize':
+        this.getSettingsManager().setImageAutoResize(this.requireBoolean(value, settingId));
+        await this.flushSettings();
+        return { applied: 'reload', message: 'Saved. Reload Pi or start a new session to apply.' };
+      case 'enableSkillCommands':
+        this.getSettingsManager().setEnableSkillCommands(this.requireBoolean(value, settingId));
+        await this.flushSettings();
+        return { applied: 'reload', message: 'Saved. Reload Pi or start a new session to apply.' };
+      case 'enabledModels':
+        throw new Error('Editing enabledModels from Tau is deferred to avoid saving malformed model patterns. Edit Pi settings JSON directly for now.');
+      default:
+        throw new Error(`Unsupported Pi setting: ${settingId}`);
+    }
   }
 
   public async setSessionName(name: string): Promise<void> {
@@ -334,11 +414,17 @@ export class PiSdkClient implements PiClient {
     sdk.initTheme?.('dark', false);
     const cwd = this.resolveWorkspaceCwd();
     const agentDir = sdk.getAgentDir();
-    const sessionManager = this.createSessionManager(sdk, cwd, agentDir);
+    const initialSettingsManager = sdk.SettingsManager.create(cwd, agentDir);
+    const sessionManager = this.createSessionManager(sdk, cwd, agentDir, initialSettingsManager);
     const runtime = await sdk.createAgentSessionRuntime(async (runtimeOptions) => {
+      const settingsManager = runtimeOptions.cwd === cwd
+        ? initialSettingsManager
+        : sdk.SettingsManager.create(runtimeOptions.cwd, runtimeOptions.agentDir);
+      this.settingsManager = settingsManager;
       const services = await sdk.createAgentSessionServices({
         cwd: runtimeOptions.cwd,
-        agentDir: runtimeOptions.agentDir
+        agentDir: runtimeOptions.agentDir,
+        settingsManager
       });
       const customTools = this.shouldRejectEditWriteOutsideWorkspace()
         ? createWorkspaceMutationGuardTools(sdk, {
@@ -378,8 +464,7 @@ export class PiSdkClient implements PiClient {
     return runtime;
   }
 
-  private createSessionManager(sdk: PiSdkModule, cwd: string, agentDir: string): SessionManager {
-    const settingsManager = sdk.SettingsManager.create(cwd, agentDir);
+  private createSessionManager(sdk: PiSdkModule, cwd: string, _agentDir: string, settingsManager: SettingsManager): SessionManager {
     const sessionDir = process.env[sessionDirEnvVar] || settingsManager.getSessionDir();
 
     if (this.options.sessionFile) {
@@ -402,6 +487,73 @@ export class PiSdkClient implements PiClient {
   private shouldRejectEditWriteOutsideWorkspace(): boolean {
     const setting = this.options.rejectEditWriteOutsideWorkspace;
     return typeof setting === 'function' ? setting() : Boolean(setting);
+  }
+
+  private getRuntimeSettingsState(): Partial<PiSessionState> {
+    const settingsManager = this.settingsManager;
+
+    if (!settingsManager) {
+      return {};
+    }
+
+    return {
+      defaultProvider: callOptionalSettingGetter<string>(settingsManager, 'getDefaultProvider'),
+      defaultModel: callOptionalSettingGetter<string>(settingsManager, 'getDefaultModel'),
+      defaultThinkingLevel: callOptionalSettingGetter<string>(settingsManager, 'getDefaultThinkingLevel'),
+      transport: callOptionalSettingGetter<string>(settingsManager, 'getTransport'),
+      blockImages: callOptionalSettingGetter<boolean>(settingsManager, 'getBlockImages'),
+      imageAutoResize: callOptionalSettingGetter<boolean>(settingsManager, 'getImageAutoResize'),
+      enabledModels: callOptionalSettingGetter<string[]>(settingsManager, 'getEnabledModels'),
+      enableSkillCommands: callOptionalSettingGetter<boolean>(settingsManager, 'getEnableSkillCommands')
+    };
+  }
+
+  private getSettingsManager(): SettingsManager {
+    if (!this.settingsManager) {
+      throw new Error('Pi settings are not available yet.');
+    }
+
+    return this.settingsManager;
+  }
+
+  private async flushSettings(): Promise<void> {
+    const settingsManager = this.getSettingsManager();
+    await settingsManager.flush();
+    const errors = settingsManager.drainErrors();
+
+    if (errors.length > 0) {
+      const details = errors.map(({ scope, error }) => `${scope}: ${error.message}`).join('; ');
+      throw new Error(`Pi settings were updated in memory but could not be fully saved: ${details}`);
+    }
+  }
+
+  private requireBoolean(value: SettingValue, settingId: PiSettingId): boolean {
+    if (typeof value !== 'boolean') {
+      throw new Error(`Expected boolean value for ${settingId}.`);
+    }
+
+    return value;
+  }
+
+  private requireString(value: SettingValue, settingId: PiSettingId): string {
+    if (typeof value !== 'string' || !value.trim()) {
+      throw new Error(`Expected non-empty string value for ${settingId}.`);
+    }
+
+    return value.trim();
+  }
+
+  private parseModelReference(value: string): { provider: string; modelId: string } {
+    const separatorIndex = value.indexOf('/');
+
+    if (separatorIndex <= 0 || separatorIndex === value.length - 1) {
+      throw new Error('Expected model value in provider/model format.');
+    }
+
+    return {
+      provider: value.slice(0, separatorIndex),
+      modelId: value.slice(separatorIndex + 1)
+    };
   }
 
   private async bindRuntime(runtime: AgentSessionRuntime): Promise<void> {
@@ -476,6 +628,12 @@ export class PiSdkClient implements PiClient {
       listener(message);
     }
   }
+}
+
+function callOptionalSettingGetter<T>(settingsManager: SettingsManager, methodName: string): T | undefined {
+  const candidate = settingsManager as unknown as Record<string, unknown>;
+  const method = candidate[methodName];
+  return typeof method === 'function' ? method.call(settingsManager) as T : undefined;
 }
 
 function getErrorMessage(error: unknown): string {

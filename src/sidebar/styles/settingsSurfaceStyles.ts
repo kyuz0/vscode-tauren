@@ -201,11 +201,135 @@ export const settingsSurfaceStyles = /* css */ `    .settings-surface {
       white-space: nowrap;
     }
 
-    .settings-surface__card-body {
+    .settings-surface__card--danger {
+      border-color: color-mix(in srgb, var(--vscode-errorForeground) 34%, transparent);
+      background: color-mix(in srgb, var(--vscode-errorForeground) 8%, var(--vscode-editorWidget-background, transparent));
+    }
+
+    .settings-surface__card--subtle {
+      opacity: 0.92;
+    }
+
+    .settings-surface__card-body,
+    .settings-surface__card-helper,
+    .settings-surface__card-error {
       margin: 7px 0 0;
       color: var(--vscode-descriptionForeground);
       font-size: 12px;
       line-height: 1.4;
+    }
+
+    .settings-surface__card-helper {
+      font-size: 11px;
+      color: color-mix(in srgb, var(--vscode-descriptionForeground) 88%, var(--vscode-foreground) 12%);
+    }
+
+    .settings-surface__card-error {
+      color: var(--vscode-errorForeground);
+    }
+
+    .settings-surface__card-status--pi {
+      background: color-mix(in srgb, var(--vscode-focusBorder) 20%, transparent);
+    }
+
+    .settings-surface__control {
+      margin-top: 9px;
+      min-width: 0;
+    }
+
+    .settings-surface__select,
+    .settings-surface__text {
+      width: 100%;
+      min-width: 0;
+      min-height: 28px;
+      padding: 4px 7px;
+      color: var(--vscode-input-foreground);
+      background: var(--vscode-input-background);
+      border: 1px solid var(--vscode-input-border, color-mix(in srgb, var(--vscode-foreground) 14%, transparent));
+      border-radius: 7px;
+      font: inherit;
+      font-size: 12px;
+    }
+
+    .settings-surface__select:focus-visible,
+    .settings-surface__text:focus-visible,
+    .settings-surface__toggle input:focus-visible + span {
+      border-color: var(--vscode-focusBorder);
+      outline: 1px solid var(--vscode-focusBorder);
+      outline-offset: 1px;
+    }
+
+    .settings-surface__toggle {
+      display: inline-flex;
+      align-items: center;
+      cursor: pointer;
+    }
+
+    .settings-surface__toggle input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .settings-surface__toggle span {
+      position: relative;
+      width: 34px;
+      height: 18px;
+      background: color-mix(in srgb, var(--vscode-foreground) 18%, transparent);
+      border: 1px solid color-mix(in srgb, var(--vscode-foreground) 18%, transparent);
+      border-radius: 999px;
+    }
+
+    .settings-surface__toggle span::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 12px;
+      height: 12px;
+      background: var(--vscode-foreground);
+      border-radius: 50%;
+      transition: transform 120ms ease;
+    }
+
+    .settings-surface__toggle input:checked + span {
+      background: color-mix(in srgb, var(--vscode-focusBorder) 55%, transparent);
+      border-color: color-mix(in srgb, var(--vscode-focusBorder) 80%, transparent);
+    }
+
+    .settings-surface__toggle input:checked + span::after {
+      transform: translateX(16px);
+    }
+
+    .tau-animations-disabled .settings-surface__toggle span::after {
+      transition: none;
+    }
+
+    .settings-surface__toggle input:disabled + span,
+    .settings-surface__select:disabled,
+    .settings-surface__text:disabled {
+      cursor: not-allowed;
+      opacity: 0.58;
+    }
+
+    .settings-surface__readonly-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      min-width: 0;
+      color: var(--vscode-descriptionForeground);
+      font-size: 12px;
+    }
+
+    .settings-surface__readonly-list code {
+      max-width: 100%;
+      padding: 2px 5px;
+      overflow: hidden;
+      color: var(--vscode-textCodeBlock-foreground, var(--vscode-foreground));
+      background: var(--vscode-textCodeBlock-background, color-mix(in srgb, var(--vscode-foreground) 8%, transparent));
+      border-radius: 5px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     @media (max-width: 270px) {

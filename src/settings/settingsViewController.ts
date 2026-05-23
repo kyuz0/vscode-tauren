@@ -1,10 +1,11 @@
 import type { NavigationController } from '../navigation/navigationController';
-import type { WebviewSettingsSection, WebviewSettingsViewState } from '../webviewProtocol/types';
+import type { WebviewSettingsSection, WebviewSettingsState, WebviewSettingsViewState } from '../webviewProtocol/types';
 
-const defaultSettingsSection: WebviewSettingsSection = 'providers';
+const defaultSettingsSection: WebviewSettingsSection = 'appearance';
 
 export class SettingsViewController {
   private activeSection: WebviewSettingsSection = defaultSettingsSection;
+  private settings: WebviewSettingsState = { values: {} };
 
   public constructor(
     private readonly navigation: NavigationController,
@@ -15,13 +16,18 @@ export class SettingsViewController {
     return this.navigation.isSettingsVisible;
   }
 
-  public getWebviewState(): WebviewSettingsViewState | undefined {
-    if (this.activeSection === defaultSettingsSection) {
-      return undefined;
-    }
-
+  public getWebviewState(): WebviewSettingsViewState {
     return {
-      activeSection: this.activeSection
+      ...(this.activeSection === defaultSettingsSection ? {} : { activeSection: this.activeSection }),
+      settings: this.settings
+    };
+  }
+
+  public setSettings(settings: WebviewSettingsState): void {
+    this.settings = {
+      values: { ...settings.values },
+      ...(settings.pending ? { pending: settings.pending.slice() } : {}),
+      ...(settings.errors ? { errors: { ...settings.errors } } : {})
     };
   }
 

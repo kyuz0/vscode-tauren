@@ -4,7 +4,8 @@ import type {
   TauChatContextUsage,
   TauChatModelMeta,
   TauChatSessionMetaSnapshot,
-  SessionMetadataWebviewState
+  SessionMetadataWebviewState,
+  PiRuntimeSettingsMeta
 } from './types';
 
 export type {
@@ -347,6 +348,7 @@ export class SessionMetadataState {
   private metadataRefreshing = false;
   private slashCommands: WebviewSlashCommand[] = [];
   private slashCommandsRefreshing = false;
+  private piSettings: PiRuntimeSettingsMeta = {};
 
   public constructor(private readonly options: SessionMetadataStateOptions = {}) {
     if (options.initialSessionMeta) {
@@ -371,7 +373,8 @@ export class SessionMetadataState {
       },
       metadataRefreshing: this.metadataRefreshing,
       slashCommands: this.slashCommands,
-      slashCommandsRefreshing: this.slashCommandsRefreshing
+      slashCommandsRefreshing: this.slashCommandsRefreshing,
+      piSettings: { ...this.piSettings }
     };
   }
 
@@ -380,7 +383,15 @@ export class SessionMetadataState {
   }
 
   public applyModelState(state: PiSessionState): boolean {
-    return this.applyModelMeta(getModelMeta(state));
+    const modelChanged = this.applyModelMeta(getModelMeta(state), { notify: false });
+    const runtimeChanged = this.applyPiSettings(getPiSettingsMeta(state));
+
+    if (modelChanged || runtimeChanged) {
+      this.notifyChange();
+      return true;
+    }
+
+    return false;
   }
 
   public applySessionStats(stats: PiSessionStats): boolean {
@@ -429,7 +440,7 @@ export class SessionMetadataState {
     this.slashCommandsRefreshing = false;
   }
 
-  private applyModelMeta(modelMeta: TauChatModelMeta): boolean {
+  private applyModelMeta(modelMeta: TauChatModelMeta, options: { notify?: boolean } = {}): boolean {
     if (
       modelMeta.label === this.modelLabel
       && modelMeta.provider === this.modelProvider
@@ -441,7 +452,9 @@ export class SessionMetadataState {
     }
 
     this.setModelMetaFields(modelMeta);
-    this.notifyChange();
+    if (options.notify !== false) {
+      this.notifyChange();
+    }
     return true;
   }
 
@@ -451,6 +464,15 @@ export class SessionMetadataState {
     this.modelId = modelMeta.id;
     this.modelReasoning = modelMeta.reasoning;
     this.thinkingLevel = modelMeta.thinkingLevel;
+  }
+
+  private applyPiSettings(settings: PiRuntimeSettingsMeta): boolean {
+    if (arePiSettingsEqual(settings, this.piSettings)) {
+      return false;
+    }
+
+    this.piSettings = { ...settings };
+    return true;
   }
 
   private applyContextUsage(contextUsage: TauChatContextUsage): boolean {
@@ -578,6 +600,55 @@ function getContextUsageLevel(percent: number): string {
   }
 
   return 'low';
+}
+
+function getPiSettingsMeta(state: PiSessionState): PiRuntimeSettingsMeta {
+  const currentModelValue = state.model?.provider && state.model?.id
+    ? `${state.model.provider}/${state.model.id}`
+    : state.defaultProvider && state.defaultModel
+      ? `${state.defaultProvider}/${state.defaultModel}`
+      : state.defaultModel ?? '';
+
+  return {
+    defaultProvider: state.defaultProvider ?? state.model?.provider ?? '',
+    defaultModel: currentModelValue,
+    defaultThinkingLevel: state.defaultThinkingLevel ?? state.thinkingLevel ?? '',
+    'compaction.enabled': state.autoCompactionEnabled ?? true,
+    'retry.enabled': state.autoRetryEnabled ?? true,
+    steeringMode: state.steeringMode ?? 'one-at-a-time',
+    followUpMode: state.followUpMode ?? 'one-at-a-time',
+    transport: state.transport ?? 'sse',
+    'images.blockImages': state.blockImages ?? false,
+    'images.autoResize': state.imageAutoResize ?? true,
+    enabledModels: state.enabledModels ?? [],
+    enableSkillCommands: state.enableSkillCommands ?? true
+  };
+}
+
+function arePiSettingsEqual(left: PiRuntimeSettingsMeta, right: PiRuntimeSettingsMeta): boolean {
+  const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+  for (const key of keys) {
+    const leftValue = left[key as keyof PiRuntimeSettingsMeta];
+    const rightValue = right[key as keyof PiRuntimeSettingsMeta];
+
+    if (Array.isArray(leftValue) || Array.isArray(rightValue)) {
+      if (!Array.isArray(leftValue) || !Array.isArray(rightValue) || leftValue.length !== rightValue.length) {
+        return false;
+      }
+
+      if (leftValue.some((entry, index) => entry !== rightValue[index])) {
+        return false;
+      }
+
+      continue;
+    }
+
+    if (leftValue !== rightValue) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function getModelMeta(state: PiSessionState): TauChatModelMeta {

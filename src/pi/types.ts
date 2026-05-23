@@ -95,6 +95,15 @@ export type PiSessionState = {
   sessionId?: string;
   sessionName?: string;
   autoCompactionEnabled?: boolean;
+  autoRetryEnabled?: boolean;
+  defaultProvider?: string;
+  defaultModel?: string;
+  defaultThinkingLevel?: string;
+  transport?: string;
+  imageAutoResize?: boolean;
+  blockImages?: boolean;
+  enabledModels?: string[];
+  enableSkillCommands?: boolean;
   messageCount?: number;
   pendingMessageCount?: number;
 };

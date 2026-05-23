@@ -8,7 +8,7 @@ suite('Webview state helpers', () => {
     assert.deepStrictEqual(initialWebviewState.workspaceDiffStats, { addedLines: 0, removedLines: 0 });
     assert.strictEqual(initialWebviewState.lane, 'chat');
     assert.strictEqual(initialWebviewState.chatFace, 'main');
-    assert.strictEqual(initialWebviewState.settingsSection, 'providers');
+    assert.strictEqual(initialWebviewState.settingsSection, 'appearance');
     assert.strictEqual(initialWebviewState.customUiTheme, 'default');
     assert.strictEqual(initialWebviewState.allowRemoteImages, true);
     assert.strictEqual(initialWebviewState.welcomeDismissed, false);
@@ -127,7 +127,7 @@ suite('Webview state helpers', () => {
     assert.strictEqual(parsed.composerTextRevision, 0);
     assert.strictEqual(parsed.lane, 'chat');
     assert.strictEqual(parsed.chatFace, 'main');
-    assert.strictEqual(parsed.settingsSection, 'providers');
+    assert.strictEqual(parsed.settingsSection, 'appearance');
     assert.strictEqual(parsed.customUiTheme, 'default');
     assert.strictEqual(parsed.allowRemoteImages, true);
     assert.strictEqual(parsed.welcomeDismissed, false);

@@ -1,4 +1,5 @@
 import { normalizeDiffLineCount } from '../diff/lineCount';
+import { isSettingId, normalizeSettingValue } from '../settings/settingsRegistry';
 import {
   parseWebviewChatFace,
   parseWebviewLane,
@@ -49,6 +50,16 @@ export function parseWebviewMessage(value: unknown): WebviewMessage {
       return section
         ? { type: 'setSettingsSection', section }
         : { type: 'unknown' };
+    }
+    case 'updateSetting': {
+      if (!isSettingId(value.settingId)) {
+        return { type: 'unknown' };
+      }
+
+      const settingValue = normalizeSettingValue(value.settingId, value.value);
+      return settingValue === undefined
+        ? { type: 'unknown' }
+        : { type: 'updateSetting', settingId: value.settingId, value: settingValue };
     }
     case 'refreshSessions':
       return { type: 'refreshSessions' };
@@ -276,6 +287,14 @@ export function createWebviewStateMessage({
     message.settingsSection = settingsView.activeSection;
   }
 
+  if (settingsView?.settings && hasSettingsPayload(settingsView.settings)) {
+    message.settings = {
+      values: { ...settingsView.settings.values },
+      ...(settingsView.settings.pending ? { pending: settingsView.settings.pending.slice() } : {}),
+      ...(settingsView.settings.errors ? { errors: { ...settingsView.settings.errors } } : {})
+    };
+  }
+
   if (sessionView) {
     message.sessions = sessionView.sessions ?? [];
     message.sessionsRefreshing = sessionView.refreshing ?? false;
@@ -486,6 +505,16 @@ function createInitialEmptyStateHtml(welcomeDismissed: boolean): string {
         </ul>
         <button class="empty-state__dismiss" type="button" data-dismiss-welcome>Don't show again</button>
       </div>`;
+}
+
+function hasSettingsPayload(settings: NonNullable<CreateWebviewStateMessageOptions['settingsView']>['settings']): boolean {
+  if (!settings) {
+    return false;
+  }
+
+  return Object.keys(settings.values).length > 0
+    || Boolean(settings.pending?.length)
+    || Boolean(settings.errors && Object.keys(settings.errors).length > 0);
 }
 
 function escapeHtmlAttribute(value: string): string {

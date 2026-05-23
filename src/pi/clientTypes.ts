@@ -1,3 +1,4 @@
+import type { PiSettingId, SettingValue } from '../settings/settingsRegistry';
 import type { WebviewTreeItem } from '../webviewProtocol/types';
 import type {
   PiAvailableCommands,
@@ -32,6 +33,7 @@ export type PiClient = {
   getCommands(): Promise<PiAvailableCommands>;
   setModel(provider: string, modelId: string): Promise<PiModel>;
   setThinkingLevel(level: string): Promise<void>;
+  updateRuntimeSetting?(settingId: PiSettingId, value: SettingValue): Promise<{ applied: 'live' | 'reload'; message?: string }>;
   setSessionName(name: string): Promise<void>;
   compact(customInstructions?: string): Promise<PiCompactResult>;
   exportHtml(outputPath?: string): Promise<PiExportHtmlResult>;
