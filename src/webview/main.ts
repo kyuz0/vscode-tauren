@@ -160,6 +160,7 @@ chatHelpButton.addEventListener('click', toggleChatHelpPopover);
 newSessionButton.addEventListener('click', startNewSession);
 diffSummaryElement.addEventListener('click', showCurrentChanges);
 messagesElement.addEventListener('click', (event) => messagesController.handleMessageClick(event));
+messagesElement.addEventListener('scroll', () => messagesController.handleMessagesScroll());
 
 window.addEventListener('message', (event) => {
   if (customUiController.handleHostMessage(event.data)) {
@@ -167,6 +168,7 @@ window.addEventListener('message', (event) => {
   }
 
   if (handleCodeHighlightMessage(event.data)) {
+    messagesController.scheduleMessagesToBottom();
     return;
   }
 
@@ -216,6 +218,7 @@ window.addEventListener('message', (event) => {
   }
 
   if (!wasListView && isListView) {
+    messagesController.rememberChatScrollPosition();
     sessionsController.disableSessionPointerHover();
   }
 
@@ -344,7 +347,7 @@ function scheduleRender(options: { returnToChat?: boolean } = {}): void {
     render();
 
     if (shouldHandleReturnToChat && state.viewMode === 'chat') {
-      messagesController.scheduleMessagesToBottom();
+      messagesController.restoreChatScrollAfterReturn();
       focusPromptInput();
     }
   });
@@ -405,7 +408,7 @@ function syncViewLaneClass(): void {
 
 function render(): void {
   const isListView = state.viewMode === 'sessions' || state.viewMode === 'tree';
-  const shouldStickToBottom = !isListView && messagesController.isMessagesAtBottom();
+  const shouldStickToBottom = !isListView && messagesController.shouldFollowOutput();
   const isOpeningTree = renderedViewMode !== 'tree' && state.viewMode === 'tree';
   const isClosingTree = renderedViewMode === 'tree' && state.viewMode !== 'tree';
 
@@ -457,7 +460,7 @@ function render(): void {
   }
   composerController.syncSlashMenu();
   if (shouldStickToBottom) {
-    messagesController.scrollMessagesToBottom();
+    messagesController.scheduleMessagesToBottom();
   }
 }
 

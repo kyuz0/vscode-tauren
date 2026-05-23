@@ -2784,6 +2784,39 @@ ${after}`;
     return "Info";
   }
 
+  // src/webview/messages/scrollFollow.ts
+  var scrollMovementTolerance = 1;
+  function createScrollFollowState() {
+    return {
+      followOutput: true,
+      lastScrollTop: 0,
+      lastScrollHeight: 0,
+      lastClientHeight: 0
+    };
+  }
+  function isScrollAtBottom(metrics, threshold) {
+    return getDistanceFromBottom(metrics) <= threshold;
+  }
+  function getDistanceFromBottom(metrics) {
+    return metrics.scrollHeight - metrics.scrollTop - metrics.clientHeight;
+  }
+  function recordScrollMetrics(state2, metrics) {
+    state2.lastScrollTop = metrics.scrollTop;
+    state2.lastScrollHeight = metrics.scrollHeight;
+    state2.lastClientHeight = metrics.clientHeight;
+  }
+  function updateScrollFollowStateForScroll(state2, metrics, threshold) {
+    if (isScrollAtBottom(metrics, threshold)) {
+      state2.followOutput = true;
+      recordScrollMetrics(state2, metrics);
+      return;
+    }
+    if (metrics.scrollTop < state2.lastScrollTop - scrollMovementTolerance) {
+      state2.followOutput = false;
+    }
+    recordScrollMetrics(state2, metrics);
+  }
+
   // src/webview/messages/messageList.ts
   var MessageListController = class {
     constructor(options) {
@@ -2791,6 +2824,9 @@ ${after}`;
     }
     options;
     renderedMessageViews = [];
+    scrollFollowState = createScrollFollowState();
+    savedChatScroll;
+    bottomScrollScheduled = false;
     renderMessageList() {
       const state2 = this.options.getState();
       if (state2.messages.length === 0) {
@@ -2848,23 +2884,70 @@ ${after}`;
       const direction = event.key === "PageUp" ? -1 : 1;
       const amount = event.ctrlKey ? this.getTranscriptLineScrollAmount() : Math.max(80, Math.floor(this.options.messagesElement.clientHeight * 0.85));
       this.options.messagesElement.scrollBy({ top: direction * amount, behavior: "auto" });
+      this.handleMessagesScroll();
       return true;
     }
+    handleMessagesScroll() {
+      updateScrollFollowStateForScroll(
+        this.scrollFollowState,
+        this.getScrollMetrics(),
+        messagesBottomThreshold
+      );
+    }
     isMessagesAtBottom() {
-      const distanceFromBottom = this.options.messagesElement.scrollHeight - this.options.messagesElement.scrollTop - this.options.messagesElement.clientHeight;
-      return distanceFromBottom <= messagesBottomThreshold;
+      return isScrollAtBottom(this.getScrollMetrics(), messagesBottomThreshold);
+    }
+    shouldFollowOutput() {
+      return this.scrollFollowState.followOutput || this.isMessagesAtBottom();
     }
     scrollMessagesToBottom() {
+      this.scrollFollowState.followOutput = true;
       this.options.messagesElement.scrollTop = this.options.messagesElement.scrollHeight;
+      recordScrollMetrics(this.scrollFollowState, this.getScrollMetrics());
     }
     scheduleMessagesToBottom() {
-      this.scrollMessagesToBottomIfChat();
+      this.scrollMessagesToBottomIfFollowingChat();
+      if (this.bottomScrollScheduled) {
+        return;
+      }
+      this.bottomScrollScheduled = true;
       requestAnimationFrame(() => {
-        this.scrollMessagesToBottomIfChat();
-        requestAnimationFrame(() => this.scrollMessagesToBottomIfChat());
+        this.scrollMessagesToBottomIfFollowingChat();
+        requestAnimationFrame(() => this.scrollMessagesToBottomIfFollowingChat());
       });
-      setTimeout(() => this.scrollMessagesToBottomIfChat(), 80);
-      setTimeout(() => this.scrollMessagesToBottomIfChat(), 220);
+      setTimeout(() => this.scrollMessagesToBottomIfFollowingChat(), 80);
+      setTimeout(() => {
+        this.scrollMessagesToBottomIfFollowingChat();
+        this.bottomScrollScheduled = false;
+      }, 220);
+    }
+    rememberChatScrollPosition() {
+      this.savedChatScroll = {
+        sessionKey: this.getSessionKey(),
+        scrollTop: this.options.messagesElement.scrollTop,
+        followOutput: this.shouldFollowOutput()
+      };
+    }
+    restoreChatScrollAfterReturn() {
+      const saved = this.savedChatScroll;
+      if (!saved || saved.sessionKey !== this.getSessionKey()) {
+        this.scrollFollowState.followOutput = true;
+        this.scheduleMessagesToBottom();
+        return;
+      }
+      if (saved.followOutput) {
+        this.scrollFollowState.followOutput = true;
+        this.scheduleMessagesToBottom();
+        return;
+      }
+      this.scrollFollowState.followOutput = false;
+      requestAnimationFrame(() => {
+        if (saved !== this.savedChatScroll || saved.sessionKey !== this.getSessionKey()) {
+          return;
+        }
+        this.options.messagesElement.scrollTop = saved.scrollTop;
+        recordScrollMetrics(this.scrollFollowState, this.getScrollMetrics());
+      });
     }
     handleMessageClick(event) {
       const state2 = this.options.getState();
@@ -3080,10 +3163,21 @@ ${after}`;
     getTranscriptLineScrollAmount() {
       return parseCssPixelValue2(getComputedStyle(this.options.messagesContentElement).lineHeight) || parseCssPixelValue2(getComputedStyle(this.options.messagesElement).lineHeight) || 20;
     }
-    scrollMessagesToBottomIfChat() {
-      if (this.options.getState().viewMode === "chat") {
+    scrollMessagesToBottomIfFollowingChat() {
+      if (this.options.getState().viewMode === "chat" && this.shouldFollowOutput()) {
         this.scrollMessagesToBottom();
       }
+    }
+    getScrollMetrics() {
+      return {
+        scrollTop: this.options.messagesElement.scrollTop,
+        scrollHeight: this.options.messagesElement.scrollHeight,
+        clientHeight: this.options.messagesElement.clientHeight
+      };
+    }
+    getSessionKey() {
+      const state2 = this.options.getState();
+      return state2.currentSessionFile || "__transient_chat__";
     }
   };
   function createPlainEmptyStateElement() {
@@ -5585,11 +5679,13 @@ ${after}`;
   newSessionButton.addEventListener("click", startNewSession);
   diffSummaryElement.addEventListener("click", showCurrentChanges);
   messagesElement.addEventListener("click", (event) => messagesController.handleMessageClick(event));
+  messagesElement.addEventListener("scroll", () => messagesController.handleMessagesScroll());
   window.addEventListener("message", (event) => {
     if (customUiController.handleHostMessage(event.data)) {
       return;
     }
     if (handleCodeHighlightMessage(event.data)) {
+      messagesController.scheduleMessagesToBottom();
       return;
     }
     if (event.data?.type === "focusInput") {
@@ -5630,6 +5726,7 @@ ${after}`;
       sessionsController.rememberSessionListScrollPosition();
     }
     if (!wasListView && isListView) {
+      messagesController.rememberChatScrollPosition();
       sessionsController.disableSessionPointerHover();
     }
     if (state.viewMode === "sessions" && (previousViewMode !== "sessions" || previousCurrentSessionFile !== state.currentSessionFile || previousSessionCount === 0)) {
@@ -5727,7 +5824,7 @@ ${after}`;
       pendingReturnToChatAfterRender = false;
       render();
       if (shouldHandleReturnToChat && state.viewMode === "chat") {
-        messagesController.scheduleMessagesToBottom();
+        messagesController.restoreChatScrollAfterReturn();
         focusPromptInput();
       }
     });
@@ -5773,7 +5870,7 @@ ${after}`;
   }
   function render() {
     const isListView = state.viewMode === "sessions" || state.viewMode === "tree";
-    const shouldStickToBottom = !isListView && messagesController.isMessagesAtBottom();
+    const shouldStickToBottom = !isListView && messagesController.shouldFollowOutput();
     const isOpeningTree = renderedViewMode !== "tree" && state.viewMode === "tree";
     const isClosingTree = renderedViewMode === "tree" && state.viewMode !== "tree";
     syncViewLaneClass();
@@ -5818,7 +5915,7 @@ ${after}`;
     }
     composerController.syncSlashMenu();
     if (shouldStickToBottom) {
-      messagesController.scrollMessagesToBottom();
+      messagesController.scheduleMessagesToBottom();
     }
   }
   function syncChatHelpForRender(isListView) {

@@ -1,6 +1,14 @@
 import { requestCodeHighlightsIn } from '../codeHighlighting';
 import { messagesBottomThreshold } from '../constants';
 import { createMessageElement, toggleActivityBodyExpansion, updateMessageBodyElement } from './renderMessages';
+import {
+  createScrollFollowState,
+  isScrollAtBottom,
+  recordScrollMetrics,
+  updateScrollFollowStateForScroll,
+  type ScrollFollowState,
+  type ScrollMetrics
+} from './scrollFollow';
 import type { Activity, ChatMessage, WebviewState } from '../types';
 
 type PostMessage = (message: unknown) => void;
@@ -24,6 +32,9 @@ export type MessageListControllerOptions = {
 
 export class MessageListController {
   private renderedMessageViews: RenderedMessageView[] = [];
+  private readonly scrollFollowState: ScrollFollowState = createScrollFollowState();
+  private savedChatScroll: { sessionKey: string; scrollTop: number; followOutput: boolean } | undefined;
+  private bottomScrollScheduled = false;
 
   public constructor(private readonly options: MessageListControllerOptions) {}
 
@@ -106,28 +117,83 @@ export class MessageListController {
       ? this.getTranscriptLineScrollAmount()
       : Math.max(80, Math.floor(this.options.messagesElement.clientHeight * 0.85));
     this.options.messagesElement.scrollBy({ top: direction * amount, behavior: 'auto' });
+    this.handleMessagesScroll();
     return true;
   }
 
+  public handleMessagesScroll(): void {
+    updateScrollFollowStateForScroll(
+      this.scrollFollowState,
+      this.getScrollMetrics(),
+      messagesBottomThreshold
+    );
+  }
+
   public isMessagesAtBottom(): boolean {
-    const distanceFromBottom = this.options.messagesElement.scrollHeight
-      - this.options.messagesElement.scrollTop
-      - this.options.messagesElement.clientHeight;
-    return distanceFromBottom <= messagesBottomThreshold;
+    return isScrollAtBottom(this.getScrollMetrics(), messagesBottomThreshold);
+  }
+
+  public shouldFollowOutput(): boolean {
+    return this.scrollFollowState.followOutput || this.isMessagesAtBottom();
   }
 
   public scrollMessagesToBottom(): void {
+    this.scrollFollowState.followOutput = true;
     this.options.messagesElement.scrollTop = this.options.messagesElement.scrollHeight;
+    recordScrollMetrics(this.scrollFollowState, this.getScrollMetrics());
   }
 
   public scheduleMessagesToBottom(): void {
-    this.scrollMessagesToBottomIfChat();
+    this.scrollMessagesToBottomIfFollowingChat();
+
+    if (this.bottomScrollScheduled) {
+      return;
+    }
+
+    this.bottomScrollScheduled = true;
     requestAnimationFrame(() => {
-      this.scrollMessagesToBottomIfChat();
-      requestAnimationFrame(() => this.scrollMessagesToBottomIfChat());
+      this.scrollMessagesToBottomIfFollowingChat();
+      requestAnimationFrame(() => this.scrollMessagesToBottomIfFollowingChat());
     });
-    setTimeout(() => this.scrollMessagesToBottomIfChat(), 80);
-    setTimeout(() => this.scrollMessagesToBottomIfChat(), 220);
+    setTimeout(() => this.scrollMessagesToBottomIfFollowingChat(), 80);
+    setTimeout(() => {
+      this.scrollMessagesToBottomIfFollowingChat();
+      this.bottomScrollScheduled = false;
+    }, 220);
+  }
+
+  public rememberChatScrollPosition(): void {
+    this.savedChatScroll = {
+      sessionKey: this.getSessionKey(),
+      scrollTop: this.options.messagesElement.scrollTop,
+      followOutput: this.shouldFollowOutput()
+    };
+  }
+
+  public restoreChatScrollAfterReturn(): void {
+    const saved = this.savedChatScroll;
+
+    if (!saved || saved.sessionKey !== this.getSessionKey()) {
+      this.scrollFollowState.followOutput = true;
+      this.scheduleMessagesToBottom();
+      return;
+    }
+
+    if (saved.followOutput) {
+      this.scrollFollowState.followOutput = true;
+      this.scheduleMessagesToBottom();
+      return;
+    }
+
+    this.scrollFollowState.followOutput = false;
+    requestAnimationFrame(() => {
+      if (saved !== this.savedChatScroll || saved.sessionKey !== this.getSessionKey()) {
+        return;
+      }
+
+      this.options.messagesElement.scrollTop = saved.scrollTop;
+      recordScrollMetrics(this.scrollFollowState, this.getScrollMetrics());
+    });
   }
 
   public handleMessageClick(event: MouseEvent): void {
@@ -424,10 +490,23 @@ export class MessageListController {
       || 20;
   }
 
-  private scrollMessagesToBottomIfChat(): void {
-    if (this.options.getState().viewMode === 'chat') {
+  private scrollMessagesToBottomIfFollowingChat(): void {
+    if (this.options.getState().viewMode === 'chat' && this.shouldFollowOutput()) {
       this.scrollMessagesToBottom();
     }
+  }
+
+  private getScrollMetrics(): ScrollMetrics {
+    return {
+      scrollTop: this.options.messagesElement.scrollTop,
+      scrollHeight: this.options.messagesElement.scrollHeight,
+      clientHeight: this.options.messagesElement.clientHeight
+    };
+  }
+
+  private getSessionKey(): string {
+    const state = this.options.getState();
+    return state.currentSessionFile || '__transient_chat__';
   }
 }
 

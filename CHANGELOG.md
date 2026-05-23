@@ -4,6 +4,7 @@ All notable changes to Tau will be documented in this file.
 
 ## Unreleased
 
+- Fixed chat autoscroll so delayed rendering does not stop output following, and preserved chat scroll when returning from session list/tree.
 - Added a New session icon to the session list toolbar.
 - Allowed clearing a session name from Tau's sidebar UI.
 - Fixed `tau.readyScript` so it waits for Pi auto-retry and compaction work before running.
