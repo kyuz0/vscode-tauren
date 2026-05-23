@@ -24,6 +24,8 @@ import { createSdkExtensionUiContext } from './extensionUiBridge';
 import { mapSdkExtensionErrorToPiEvent, mapSdkSessionEventToPiEvent } from './piSdkEventMapper';
 import { flattenPiSessionTree, type FlattenableSessionTreeNode } from '../sessions/piSessionTree';
 import { loadPiSdk, type PiSdkLoader, type PiSdkModule } from './piSdkLoader';
+import { assertSafeWorkspaceCwd } from '../workspace/cwdSafety';
+import { createWorkspaceMutationGuardTools } from './workspaceMutationGuard';
 
 const sdkDisposedMessage = 'Pi SDK client disposed.';
 const sessionDirEnvVar = 'PI_CODING_AGENT_SESSION_DIR';
@@ -32,6 +34,7 @@ export type PiSdkClientOptions = PiClientOptions & {
   extensionUi?: ExtensionUi;
   loadSdk?: PiSdkLoader;
   showNotification?: (message: string, notifyType: string) => void;
+  rejectEditWriteOutsideWorkspace?: boolean | (() => boolean);
 };
 
 export class PiSdkClient implements PiClient {
@@ -335,7 +338,7 @@ export class PiSdkClient implements PiClient {
   private async createRuntime(): Promise<AgentSessionRuntime> {
     const sdk = await this.loadSdk();
     sdk.initTheme?.('dark', false);
-    const cwd = this.options.cwd ?? process.cwd();
+    const cwd = this.resolveWorkspaceCwd();
     const agentDir = sdk.getAgentDir();
     const sessionManager = this.createSessionManager(sdk, cwd, agentDir);
     const runtime = await sdk.createAgentSessionRuntime(async (runtimeOptions) => {
@@ -343,10 +346,17 @@ export class PiSdkClient implements PiClient {
         cwd: runtimeOptions.cwd,
         agentDir: runtimeOptions.agentDir
       });
+      const customTools = this.shouldRejectEditWriteOutsideWorkspace()
+        ? createWorkspaceMutationGuardTools(sdk, {
+          workspaceRoot: runtimeOptions.cwd,
+          shouldReject: () => this.shouldRejectEditWriteOutsideWorkspace()
+        })
+        : undefined;
       const created = await sdk.createAgentSessionFromServices({
         services,
         sessionManager: runtimeOptions.sessionManager,
-        sessionStartEvent: runtimeOptions.sessionStartEvent
+        sessionStartEvent: runtimeOptions.sessionStartEvent,
+        customTools
       });
 
       return {
@@ -379,10 +389,25 @@ export class PiSdkClient implements PiClient {
     const sessionDir = process.env[sessionDirEnvVar] || settingsManager.getSessionDir();
 
     if (this.options.sessionFile) {
-      return sdk.SessionManager.open(this.options.sessionFile, sessionDir);
+      return sdk.SessionManager.open(this.options.sessionFile, sessionDir, cwd);
     }
 
     return sdk.SessionManager.create(cwd, sessionDir);
+  }
+
+  private resolveWorkspaceCwd(): string {
+    try {
+      return assertSafeWorkspaceCwd(this.options.cwd);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.options.showNotification?.(message, 'warning');
+      throw error;
+    }
+  }
+
+  private shouldRejectEditWriteOutsideWorkspace(): boolean {
+    const setting = this.options.rejectEditWriteOutsideWorkspace;
+    return typeof setting === 'function' ? setting() : Boolean(setting);
   }
 
   private async bindRuntime(runtime: AgentSessionRuntime): Promise<void> {

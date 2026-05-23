@@ -247,6 +247,11 @@
           "type": "boolean",
           "default": true,
           "description": "Enable running tau.readyScript when Pi becomes ready. Turn this off to temporarily disable the script without clearing its path."
+        },
+        "tau.rejectEditWriteOutsideWorkspace": {
+          "type": "boolean",
+          "default": false,
+          "description": "Reject Pi edit/write tool mutations outside the active workspace folder. This does not restrict bash commands."
         }
       }
     }

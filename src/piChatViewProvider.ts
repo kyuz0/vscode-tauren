@@ -1,3 +1,4 @@
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
@@ -21,6 +22,7 @@ import type { PiPromptContextInput, PiPromptTraceOriginLinkedCommit } from './pr
 import { findCurrentPathGitCommit, findTraceLinkedGitCommit } from './origin/gitOriginContext';
 import { traceOrigin, type TraceOriginInput, type TraceOriginMatch } from './origin/sessionOriginTracer';
 import { readCachedSessionMeta, writeCachedSessionMeta } from './metadata/cache';
+import { isSafeWorkspaceCwd, getUnsafeCwdReason } from './workspace/cwdSafety';
 
 export const chatViewType = 'tau.chatView';
 export type { PiClient } from './pi/clientTypes';
@@ -35,6 +37,7 @@ const sessionDiffStatsRefreshDelayMs = 250;
 type ConfiguredPiClientDependencies = {
   extensionUi: ExtensionUi;
   showNotification: (message: string, notifyType: string) => void;
+  getRejectEditWriteOutsideWorkspace: () => boolean;
 };
 
 function createConfiguredPiClient(
@@ -44,7 +47,8 @@ function createConfiguredPiClient(
   return new PiSdkClient({
     ...options,
     extensionUi: dependencies.extensionUi,
-    showNotification: dependencies.showNotification
+    showNotification: dependencies.showNotification,
+    rejectEditWriteOutsideWorkspace: dependencies.getRejectEditWriteOutsideWorkspace
   });
 }
 
@@ -70,7 +74,8 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
     private readonly extensionUri: vscode.Uri,
     createClient: PiClientFactory | undefined = undefined,
     private readonly workspaceState?: vscode.Memento,
-    private readonly globalState?: vscode.Memento
+    private readonly globalState?: vscode.Memento,
+    private readonly workspaceCwdProvider: () => string | undefined = () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
   ) {
     this.customUiHost = new ExtensionCustomUiHost({
       isAvailable: () => Boolean(this.webviewReady && this.webviewView),
@@ -94,12 +99,14 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
     };
     const configuredCreateClient = createClient ?? ((options: PiClientOptions) => createConfiguredPiClient(options, {
       extensionUi,
-      showNotification: (message, notifyType) => this.showNotification(message, notifyType)
+      showNotification: (message, notifyType) => this.showNotification(message, notifyType),
+      getRejectEditWriteOutsideWorkspace: () => getRejectEditWriteOutsideWorkspaceSetting()
     }));
+    const initialSessionFile = this.sanitizeInitialSessionFile(readCurrentSessionFile(this.workspaceState));
 
     this.controller = new TauSessionManager({
       createClient: configuredCreateClient,
-      getCwd: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+      getCwd: () => this.workspaceCwdProvider(),
       getOutputColors: () => getOutputColorsSetting(),
       getAnimationsEnabled: () => getAnimationsEnabledSetting(),
       getCustomUiTheme: () => getCustomUiThemeSetting(),
@@ -119,7 +126,7 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
       writeClipboard: (text) => vscode.env.clipboard.writeText(text),
       extensionUi,
       initialSessionMeta: readCachedSessionMeta(this.workspaceState),
-      initialSessionFile: readCurrentSessionFile(this.workspaceState),
+      initialSessionFile,
       onSessionMetaChange: (metadata) => writeCachedSessionMeta(this.workspaceState, metadata),
       onSessionFileChange: (sessionFile) => this.writeCurrentSessionFile(sessionFile),
       loadSessionDiffSnapshot: (sessionFile) => readSessionDiffSnapshot(this.workspaceState, sessionFile),
@@ -658,6 +665,31 @@ export class PiChatViewProvider implements vscode.WebviewViewProvider, vscode.Di
     }, contextUsagePollingIntervalMs);
   }
 
+  private sanitizeInitialSessionFile(sessionFile: string | undefined): string | undefined {
+    if (!sessionFile) {
+      return undefined;
+    }
+
+    const workspaceCwd = this.workspaceCwdProvider();
+
+    if (!isSafeWorkspaceCwd(workspaceCwd)) {
+      return sessionFile;
+    }
+
+    const sessionCwd = readSessionHeaderCwd(sessionFile);
+    const unsafeReason = getUnsafeCwdReason(sessionCwd);
+
+    if (!sessionCwd || !unsafeReason) {
+      return sessionFile;
+    }
+
+    const message = `Tau ignored persisted Pi session ${sessionFile} because ${unsafeReason}. Starting a new session in ${workspaceCwd}.`;
+    void this.workspaceState?.update(currentSessionFileStorageKey, undefined).then(undefined, () => undefined);
+    this.showNotification(message, 'warning');
+    this.pendingToastMessages.push({ message, kind: 'warning' });
+    return undefined;
+  }
+
   private stopContextUsagePolling(): void {
     if (!this.contextUsagePollTimer) {
       return;
@@ -773,6 +805,47 @@ function getReadyScriptSetting(): string | undefined {
 
 function getReadyScriptEnabledSetting(): boolean {
   return vscode.workspace.getConfiguration('tau').get<boolean>('readyScriptEnabled', true);
+}
+
+function getRejectEditWriteOutsideWorkspaceSetting(): boolean {
+  return vscode.workspace.getConfiguration('tau').get<boolean>('rejectEditWriteOutsideWorkspace', false);
+}
+
+function readSessionHeaderCwd(sessionFile: string): string | undefined {
+  let fd: number | undefined;
+
+  try {
+    fd = fs.openSync(sessionFile, 'r');
+    const buffer = Buffer.alloc(64 * 1024);
+    const bytesRead = fs.readSync(fd, buffer, 0, buffer.length, 0);
+    const firstLine = buffer.subarray(0, bytesRead).toString('utf8').split('\n', 1)[0]?.trim();
+
+    if (!firstLine) {
+      return undefined;
+    }
+
+    const record = JSON.parse(firstLine) as unknown;
+
+    if (isRecord(record) && record.type === 'session' && typeof record.cwd === 'string') {
+      return record.cwd;
+    }
+  } catch {
+    return undefined;
+  } finally {
+    if (fd !== undefined) {
+      try {
+        fs.closeSync(fd);
+      } catch {
+        // Ignore close failures for best-effort session header inspection.
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 function resolveWorkspaceFileUri(filePath: string): vscode.Uri | undefined {

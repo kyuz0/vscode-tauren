@@ -1,4 +1,7 @@
 import * as assert from 'assert';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { promises as fs } from 'node:fs';
 import * as vscode from 'vscode';
 import { PiChatViewProvider, type PiClient } from '../../piChatViewProvider';
 import type { WebviewStateMessage } from '../../webviewProtocol/types';
@@ -71,6 +74,47 @@ suite('PiChatViewProvider', () => {
     });
     assert.strictEqual(workspaceState.get<unknown>('tau.cachedModelMeta'), undefined);
     provider.dispose();
+  });
+
+  test('ignores unsafe persisted root-cwd session and starts fresh', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'tau-session-'));
+    const sessionFile = path.join(tempDir, 'root-session.jsonl');
+
+    try {
+      await fs.writeFile(sessionFile, JSON.stringify({ type: 'session', cwd: '/' }) + '\n', 'utf8');
+      const workspaceState = new FakeMemento({
+        'tau.currentSessionFile': sessionFile
+      });
+      const clientOptions: unknown[] = [];
+      const client = new FakePiClient({
+        state: {
+          model: { provider: 'openai', id: 'live-model', reasoning: false },
+          thinkingLevel: 'off',
+          sessionFile: '/sessions/new.jsonl'
+        },
+        messages: []
+      });
+      const provider = new PiChatViewProvider(
+        vscode.Uri.file('/extension'),
+        (options) => {
+          clientOptions.push(options);
+          return client;
+        },
+        workspaceState,
+        undefined,
+        () => '/workspace'
+      );
+      const view = new FakeWebviewView();
+
+      provider.resolveWebviewView(view.asWebviewView());
+      await flushPromises();
+
+      assert.deepStrictEqual(clientOptions, [{ cwd: '/workspace' }]);
+      assert.strictEqual(workspaceState.get<unknown>('tau.currentSessionFile'), '/sessions/new.jsonl');
+      provider.dispose();
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
   });
 
   test('restores and persists current session file through workspace state', async () => {

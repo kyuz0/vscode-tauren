@@ -79,8 +79,39 @@ suite('PiSdkClient', () => {
     assert.deepStrictEqual(harness.createdSessionManagers, [{
       type: 'open',
       path: '/sessions/resumed.jsonl',
-      sessionDir: '/configured-sessions'
+      sessionDir: '/configured-sessions',
+      cwdOverride: '/workspace'
     }]);
+    harness.client.dispose();
+  });
+
+  test('rejects startup without a safe workspace cwd', async () => {
+    const notifications: Array<{ message: string; notifyType: string }> = [];
+    const harness = createSdkHarness({ cwd: undefined, notifications });
+
+    await assert.rejects(harness.client.getState(), /no workspace folder is open/);
+
+    assert.strictEqual(harness.createdSessionManagers.length, 0);
+    assert.match(notifications[0]?.message ?? '', /no workspace folder is open/);
+    assert.strictEqual(notifications[0]?.notifyType, 'warning');
+    harness.client.dispose();
+  });
+
+  test('rejects startup with filesystem root cwd', async () => {
+    const harness = createSdkHarness({ cwd: '/' });
+
+    await assert.rejects(harness.client.getState(), /filesystem root/);
+
+    assert.strictEqual(harness.createdSessionManagers.length, 0);
+    harness.client.dispose();
+  });
+
+  test('passes guarded edit and write tools when workspace mutation guard is enabled', async () => {
+    const harness = createSdkHarness({ rejectEditWriteOutsideWorkspace: true });
+
+    await harness.client.getState();
+
+    assert.deepStrictEqual(harness.customToolNames, ['edit', 'write']);
     harness.client.dispose();
   });
 
@@ -229,12 +260,15 @@ type PromptOptions = {
 
 type SessionManagerCall =
   | { type: 'create'; cwd: string; sessionDir: string | undefined }
-  | { type: 'open'; path: string; sessionDir: string | undefined };
+  | { type: 'open'; path: string; sessionDir: string | undefined; cwdOverride: string | undefined };
 
 type HarnessOptions = {
+  cwd?: string;
   sessionFile?: string;
   replacementSession?: FakeSession;
   loadSdkFailures?: number;
+  rejectEditWriteOutsideWorkspace?: boolean;
+  notifications?: Array<{ message: string; notifyType: string }>;
 };
 
 class FakeSession {
@@ -410,10 +444,12 @@ function createSdkHarness(options: HarnessOptions = {}): {
   session: FakeSession;
   createdSessionManagers: SessionManagerCall[];
   initThemeCalls: Array<{ themeName: string | undefined; enableWatcher: boolean }>;
+  customToolNames: string[];
 } {
   const session = new FakeSession();
   const createdSessionManagers: SessionManagerCall[] = [];
   const initThemeCalls: Array<{ themeName: string | undefined; enableWatcher: boolean }> = [];
+  const customToolNames: string[] = [];
   let remainingLoadSdkFailures = options.loadSdkFailures ?? 0;
   const sdk = {
     initTheme: (themeName?: string, enableWatcher = false) => {
@@ -428,16 +464,21 @@ function createSdkHarness(options: HarnessOptions = {}): {
         createdSessionManagers.push({ type: 'create', cwd, sessionDir });
         return { getCwd: () => cwd };
       },
-      open: (path: string, sessionDir?: string) => {
-        createdSessionManagers.push({ type: 'open', path, sessionDir });
-        return { getCwd: () => '/workspace' };
+      open: (path: string, sessionDir?: string, cwdOverride?: string) => {
+        createdSessionManagers.push({ type: 'open', path, sessionDir, cwdOverride });
+        return { getCwd: () => cwdOverride ?? '/workspace' };
       }
     },
     createAgentSessionServices: async (serviceOptions: { cwd: string; agentDir: string }) => ({
       ...serviceOptions,
       diagnostics: []
     }),
-    createAgentSessionFromServices: async () => ({ session }),
+    createAgentSessionFromServices: async (createOptions: { customTools?: Array<{ name?: string }> }) => {
+      customToolNames.push(...(createOptions.customTools ?? []).map((tool) => tool.name ?? ''));
+      return { session };
+    },
+    createEditToolDefinition: () => ({ name: 'edit' }),
+    createWriteToolDefinition: () => ({ name: 'write' }),
     createAgentSessionRuntime: async (createRuntime: (runtimeOptions: unknown) => Promise<{ session: FakeSession }>, runtimeOptions: unknown) => {
       const created = await createRuntime(runtimeOptions);
       return new FakeRuntime(created.session, options.replacementSession);
@@ -447,8 +488,10 @@ function createSdkHarness(options: HarnessOptions = {}): {
   return {
     initThemeCalls,
     client: new PiSdkClient({
-      cwd: '/workspace',
+      cwd: options.cwd === undefined && Object.prototype.hasOwnProperty.call(options, 'cwd') ? undefined : options.cwd ?? '/workspace',
       sessionFile: options.sessionFile,
+      rejectEditWriteOutsideWorkspace: options.rejectEditWriteOutsideWorkspace,
+      showNotification: (message, notifyType) => options.notifications?.push({ message, notifyType }),
       loadSdk: async () => {
         if (remainingLoadSdkFailures > 0) {
           remainingLoadSdkFailures -= 1;
@@ -458,7 +501,8 @@ function createSdkHarness(options: HarnessOptions = {}): {
       }
     }),
     session,
-    createdSessionManagers
+    createdSessionManagers,
+    customToolNames
   };
 }
 
