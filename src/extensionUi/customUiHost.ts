@@ -39,6 +39,7 @@ export type ExtensionCustomUiHostOptions = {
 
 const defaultColumns = 80;
 const defaultRows = 12;
+const renderFrameMs = 16;
 
 export class ExtensionCustomUiHost {
   private active: ActiveCustomUi | undefined;
@@ -198,7 +199,7 @@ export class ExtensionCustomUiHost {
     active.renderTimer = setTimeout(() => {
       active.renderTimer = undefined;
       this.render(id);
-    }, 0);
+    }, renderFrameMs);
   }
 
   private render(id: string): void {

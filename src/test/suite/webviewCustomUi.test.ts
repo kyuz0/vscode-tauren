@@ -108,6 +108,52 @@ suite('Webview custom UI keyboard helpers', () => {
     assert.strictEqual(controller.handleHostMessage({ type: 'customUiHide', id: 'custom-2' }), true);
     assert.strictEqual(closeCount, 0);
   });
+
+  test('coalesces custom UI render messages to one animation frame', () => {
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+    const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
+    let requestCount = 0;
+    let canceledFrame: number | undefined;
+
+    try {
+      (globalThis as unknown as { requestAnimationFrame: typeof requestAnimationFrame }).requestAnimationFrame = (() => {
+        requestCount += 1;
+        return 7;
+      }) as typeof requestAnimationFrame;
+      (globalThis as unknown as { cancelAnimationFrame: typeof cancelAnimationFrame }).cancelAnimationFrame = ((handle: number) => {
+        canceledFrame = handle;
+      }) as typeof cancelAnimationFrame;
+
+      const controller = new CustomUiController({
+        vscode: { postMessage: () => undefined },
+        customUiElement: fakeElement(),
+        customUiOutputElement: fakeElement(),
+        customUiCloseButton: fakeElement() as HTMLButtonElement,
+        form: fakeElement() as HTMLFormElement
+      });
+
+      (controller as unknown as { activeId: string }).activeId = 'custom-1';
+
+      assert.strictEqual(controller.handleHostMessage({ type: 'customUiRender', id: 'custom-1', lines: ['first'] }), true);
+      assert.strictEqual(controller.handleHostMessage({ type: 'customUiRender', id: 'custom-1', lines: ['latest'], outputColors: false }), true);
+
+      const scheduled = controller as unknown as {
+        pendingRender?: { lines: string[]; outputColors: boolean };
+        renderFrame?: number;
+      };
+      assert.strictEqual(requestCount, 1);
+      assert.deepStrictEqual(scheduled.pendingRender, { id: 'custom-1', lines: ['latest'], outputColors: false });
+      assert.strictEqual(scheduled.renderFrame, 7);
+
+      assert.strictEqual(controller.handleHostMessage({ type: 'customUiHide', id: 'custom-1' }), true);
+      assert.strictEqual(canceledFrame, 7);
+      assert.strictEqual(scheduled.pendingRender, undefined);
+      assert.strictEqual(scheduled.renderFrame, undefined);
+    } finally {
+      (globalThis as unknown as { requestAnimationFrame: typeof requestAnimationFrame }).requestAnimationFrame = originalRequestAnimationFrame;
+      (globalThis as unknown as { cancelAnimationFrame: typeof cancelAnimationFrame }).cancelAnimationFrame = originalCancelAnimationFrame;
+    }
+  });
 });
 
 type KeyEventOptions = {

@@ -15,6 +15,12 @@ type CustomUiControllerOptions = {
   onClose?: () => void;
 };
 
+type PendingCustomUiRender = {
+  id: string;
+  lines: string[];
+  outputColors: boolean;
+};
+
 export type CustomUiCursorPosition = {
   row: number;
   column: number;
@@ -34,6 +40,8 @@ export class CustomUiController {
   private activeId: string | undefined;
   private lastDimensionSignature = '';
   private resizeFrame: number | undefined;
+  private renderFrame: number | undefined;
+  private pendingRender: PendingCustomUiRender | undefined;
   private inputCaptureElement: HTMLTextAreaElement | undefined;
   private cursorElement: HTMLElement | undefined;
   private isComposing = false;
@@ -78,7 +86,7 @@ export class CustomUiController {
     }
 
     if (message.type === 'customUiRender') {
-      this.render(message.id, message.lines, message.outputColors !== false);
+      this.scheduleRender(message.id, message.lines, message.outputColors !== false);
       return true;
     }
 
@@ -147,6 +155,7 @@ export class CustomUiController {
   }
 
   private show(id: string): void {
+    this.cancelPendingRender();
     this.activeId = id;
     this.lastDimensionSignature = '';
     this.options.customUiOutputElement.replaceChildren();
@@ -159,7 +168,31 @@ export class CustomUiController {
     this.scheduleDimensionsPost();
   }
 
-  private render(id: string, lines: string[], outputColors: boolean): void {
+  private scheduleRender(id: string, lines: string[], outputColors: boolean): void {
+    if (this.activeId !== id) {
+      return;
+    }
+
+    this.pendingRender = { id, lines, outputColors };
+
+    if (this.renderFrame !== undefined) {
+      return;
+    }
+
+    this.renderFrame = requestAnimationFrame(() => {
+      this.renderFrame = undefined;
+      const pending = this.pendingRender;
+      this.pendingRender = undefined;
+
+      if (!pending) {
+        return;
+      }
+
+      this.renderNow(pending.id, pending.lines, pending.outputColors);
+    });
+  }
+
+  private renderNow(id: string, lines: string[], outputColors: boolean): void {
     if (this.activeId !== id) {
       return;
     }
@@ -185,6 +218,7 @@ export class CustomUiController {
 
     this.activeId = undefined;
     this.lastDimensionSignature = '';
+    this.cancelPendingRender();
     this.isComposing = false;
     this.clearCompositionFallback();
     this.clearInputCaptureValue();
@@ -204,6 +238,15 @@ export class CustomUiController {
     }
 
     this.options.vscode.postMessage({ type: 'customUiCancel', id: this.activeId });
+  }
+
+  private cancelPendingRender(): void {
+    this.pendingRender = undefined;
+
+    if (this.renderFrame !== undefined) {
+      cancelAnimationFrame(this.renderFrame);
+      this.renderFrame = undefined;
+    }
   }
 
   private handlePaste(event: ClipboardEvent): void {

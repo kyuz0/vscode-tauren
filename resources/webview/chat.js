@@ -1936,6 +1936,8 @@
     activeId;
     lastDimensionSignature = "";
     resizeFrame;
+    renderFrame;
+    pendingRender;
     inputCaptureElement;
     cursorElement;
     isComposing = false;
@@ -1973,7 +1975,7 @@
         return true;
       }
       if (message.type === "customUiRender") {
-        this.render(message.id, message.lines, message.outputColors !== false);
+        this.scheduleRender(message.id, message.lines, message.outputColors !== false);
         return true;
       }
       this.hide(message.id);
@@ -2027,6 +2029,7 @@
       return true;
     }
     show(id) {
+      this.cancelPendingRender();
       this.activeId = id;
       this.lastDimensionSignature = "";
       this.options.customUiOutputElement.replaceChildren();
@@ -2038,7 +2041,25 @@
       this.focusInputCapture();
       this.scheduleDimensionsPost();
     }
-    render(id, lines, outputColors) {
+    scheduleRender(id, lines, outputColors) {
+      if (this.activeId !== id) {
+        return;
+      }
+      this.pendingRender = { id, lines, outputColors };
+      if (this.renderFrame !== void 0) {
+        return;
+      }
+      this.renderFrame = requestAnimationFrame(() => {
+        this.renderFrame = void 0;
+        const pending = this.pendingRender;
+        this.pendingRender = void 0;
+        if (!pending) {
+          return;
+        }
+        this.renderNow(pending.id, pending.lines, pending.outputColors);
+      });
+    }
+    renderNow(id, lines, outputColors) {
       if (this.activeId !== id) {
         return;
       }
@@ -2060,6 +2081,7 @@
       }
       this.activeId = void 0;
       this.lastDimensionSignature = "";
+      this.cancelPendingRender();
       this.isComposing = false;
       this.clearCompositionFallback();
       this.clearInputCaptureValue();
@@ -2077,6 +2099,13 @@
         return;
       }
       this.options.vscode.postMessage({ type: "customUiCancel", id: this.activeId });
+    }
+    cancelPendingRender() {
+      this.pendingRender = void 0;
+      if (this.renderFrame !== void 0) {
+        cancelAnimationFrame(this.renderFrame);
+        this.renderFrame = void 0;
+      }
     }
     handlePaste(event) {
       if (!this.activeId) {

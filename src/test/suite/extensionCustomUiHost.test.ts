@@ -71,13 +71,57 @@ suite('ExtensionCustomUiHost', () => {
     assert.ok(show);
 
     host.handleInput(show.id, 'x');
-    await new Promise((resolve) => setTimeout(resolve, 1));
+    await waitForRenderFrame();
 
     host.handleInput(show.id, '\x1b[120;1:3u');
-    await new Promise((resolve) => setTimeout(resolve, 1));
+    await waitForRenderFrame();
 
     assert.deepStrictEqual(inputs, ['x']);
     assert.ok(messages.some((message) => message.type === 'customUiRender' && message.lines[0] === 'x'));
+    host.cancel(show.id);
+    assert.strictEqual(await resultPromise, undefined);
+  });
+
+  test('coalesces repeated render invalidations to one frame', async () => {
+    const messages: CustomUiHostMessage[] = [];
+    let value = '';
+    const host = new ExtensionCustomUiHost({
+      isAvailable: () => true,
+      postMessage: (message) => {
+        messages.push(message);
+        return true;
+      },
+      getOutputColors: () => true,
+      notify: () => undefined
+    });
+
+    const resultPromise = host.custom<string>(() => ({
+      render: () => [value || '<empty>'],
+      handleInput: (data) => {
+        value += data;
+      },
+      invalidate: () => undefined
+    }));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const show = messages.find((message): message is { type: 'customUiShow'; id: string } => message.type === 'customUiShow');
+    assert.ok(show);
+
+    host.handleInput(show.id, 'a');
+    host.handleInput(show.id, 'b');
+    host.handleInput(show.id, 'c');
+    await waitForRenderFrame();
+
+    const renderMessages = messages.filter((message) => message.type === 'customUiRender');
+    assert.strictEqual(renderMessages.length, 2);
+    assert.deepStrictEqual(renderMessages[1], {
+      type: 'customUiRender',
+      id: show.id,
+      lines: ['abc'],
+      outputColors: true
+    });
+
     host.cancel(show.id);
     assert.strictEqual(await resultPromise, undefined);
   });
@@ -227,7 +271,7 @@ suite('ExtensionCustomUiHost', () => {
     assert.ok(show);
 
     host.updateDimensions(show.id, 100, 20);
-    await new Promise((resolve) => setTimeout(resolve, 1));
+    await waitForRenderFrame();
     host.cancel(show.id);
 
     assert.strictEqual(await resultPromise, undefined);
@@ -236,3 +280,7 @@ suite('ExtensionCustomUiHost', () => {
     assert.deepStrictEqual(messages[messages.length - 1], { type: 'customUiHide', id: show.id });
   });
 });
+
+function waitForRenderFrame(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 25));
+}
