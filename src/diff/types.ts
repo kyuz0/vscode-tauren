@@ -38,6 +38,7 @@ export type SessionDiffControllerOptions = {
   postState: () => void;
   loadSnapshot?: (sessionFile: string) => SessionDiffSnapshot | undefined;
   saveSnapshot?: (sessionFile: string, snapshot: SessionDiffSnapshot) => void;
+  restoreStatsFromSessionFile?: (sessionFile: string) => Promise<SessionDiffStats | undefined>;
 };
 
 export type SessionDiffDocumentContext = {

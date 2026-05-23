@@ -1,4 +1,4 @@
-import { emptySessionDiffStats, SessionDiffTracker } from './sessionDiffTracker';
+import { emptySessionDiffStats, parseSessionDiffStatsFromFile, SessionDiffTracker } from './sessionDiffTracker';
 import type {
   SessionDiffControllerOptions,
   SessionDiffSnapshot,
@@ -9,7 +9,8 @@ import type {
 export class SessionDiffController {
   private currentSessionFile: string | undefined;
   private stats = emptySessionDiffStats();
-  private refreshInFlight: Promise<void> | undefined;
+  private refreshInFlight: RefreshInFlight | undefined;
+  private refreshToken = 0;
   private readonly tracker: SessionDiffTracker;
 
   public constructor(private readonly options: SessionDiffControllerOptions) {
@@ -23,30 +24,36 @@ export class SessionDiffController {
   }
 
   public async refresh(): Promise<void> {
-    if (this.refreshInFlight) {
-      return this.refreshInFlight;
+    const identity = this.getRefreshIdentity();
+
+    if (this.refreshInFlight?.key === identity.key) {
+      return this.refreshInFlight.promise;
     }
 
-    const sessionGeneration = this.options.getSessionGeneration();
-    const refresh = this.tracker.restoreFromSessionFile(this.currentSessionFile)
+    const refresh = this.restoreStats(identity.sessionFile)
       .then((stats) => {
-        if (sessionGeneration !== this.options.getSessionGeneration()) {
+        if (!this.isCurrentRefresh(identity)) {
           return;
         }
 
-        this.applyStats(stats);
+        if (stats) {
+          this.tracker.restore({ stats });
+        }
+
+        this.applyStats(this.tracker.getStats());
       })
       .finally(() => {
-        if (this.refreshInFlight === refresh) {
+        if (this.refreshInFlight?.promise === refresh) {
           this.refreshInFlight = undefined;
         }
       });
 
-    this.refreshInFlight = refresh;
+    this.refreshInFlight = { key: identity.key, promise: refresh };
     return refresh;
   }
 
   public reset(sessionFile: string | undefined): void {
+    this.refreshToken += 1;
     this.currentSessionFile = sessionFile;
     this.tracker.restore(this.loadSnapshot(sessionFile));
     this.stats = this.tracker.getStats();
@@ -57,6 +64,10 @@ export class SessionDiffController {
     const previousSessionFile = this.currentSessionFile;
     const currentSnapshot = this.tracker.snapshot();
     this.currentSessionFile = sessionFile;
+
+    if (sessionFile !== previousSessionFile) {
+      this.refreshToken += 1;
+    }
 
     if (sessionFile && !previousSessionFile && hasSessionDiffStats(currentSnapshot.stats) && !this.loadSnapshot(sessionFile)) {
       this.saveSnapshot();
@@ -91,6 +102,33 @@ export class SessionDiffController {
     return sessionFile ? this.options.loadSnapshot?.(sessionFile) : undefined;
   }
 
+  private async restoreStats(sessionFile: string | undefined): Promise<SessionDiffStats | undefined> {
+    if (!sessionFile) {
+      return undefined;
+    }
+
+    return this.options.restoreStatsFromSessionFile?.(sessionFile) ?? parseSessionDiffStatsFromFile(sessionFile);
+  }
+
+  private getRefreshIdentity(): RefreshIdentity {
+    const sessionFile = this.currentSessionFile;
+    const sessionGeneration = this.options.getSessionGeneration();
+    const token = this.refreshToken;
+
+    return {
+      sessionFile,
+      sessionGeneration,
+      token,
+      key: JSON.stringify([sessionFile, sessionGeneration, token])
+    };
+  }
+
+  private isCurrentRefresh(identity: RefreshIdentity): boolean {
+    return identity.sessionFile === this.currentSessionFile
+      && identity.sessionGeneration === this.options.getSessionGeneration()
+      && identity.token === this.refreshToken;
+  }
+
   private saveSnapshot(): void {
     if (!this.currentSessionFile) {
       return;
@@ -99,6 +137,18 @@ export class SessionDiffController {
     this.options.saveSnapshot?.(this.currentSessionFile, this.tracker.snapshot());
   }
 }
+
+type RefreshIdentity = {
+  key: string;
+  sessionFile: string | undefined;
+  sessionGeneration: number;
+  token: number;
+};
+
+type RefreshInFlight = {
+  key: string;
+  promise: Promise<void>;
+};
 
 function normalizeDiffLineCount(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
