@@ -132,12 +132,12 @@ function processImageElement(image: HTMLImageElement, options: RenderMarkdownOpt
   }
 
   if (isHttpsImage(src)) {
-    if (options.allowRemoteImages === false) {
-      image.replaceWith(createImageFallback('Remote image blocked.'));
+    if (options.allowRemoteImages === true) {
+      markRenderableImage(image);
       return;
     }
 
-    markRenderableImage(image);
+    image.replaceWith(createImageFallback('Remote image blocked.'));
     return;
   }
 

@@ -157,7 +157,7 @@ export class TauChatViewProvider implements vscode.WebviewViewProvider, vscode.D
 
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration((event) => {
-        const affectsRemoteImages = event.affectsConfiguration('tau.allowRemoteImages');
+        const affectsRemoteImages = event.affectsConfiguration('tau.blockHttpsImages');
 
         if (affectsRemoteImages) {
           this.refreshWebviewHtml();
@@ -994,8 +994,12 @@ function getCustomUiThemeSetting(): WebviewCustomUiTheme {
   return parseWebviewCustomUiTheme(value);
 }
 
+function getBlockHttpsImagesSetting(): boolean {
+  return vscode.workspace.getConfiguration('tau').get<boolean>('blockHttpsImages', true);
+}
+
 function getAllowRemoteImagesSetting(): boolean {
-  return vscode.workspace.getConfiguration('tau').get<boolean>('allowRemoteImages', true);
+  return !getBlockHttpsImagesSetting();
 }
 
 function getReadyScriptSetting(): string | undefined {
@@ -1016,7 +1020,7 @@ function getTauSettingValues(): Partial<Record<TauSettingId, SettingValue>> {
     'tau.outputColors': getOutputColorsSetting(),
     'tau.animationsEnabled': getAnimationsEnabledSetting(),
     'tau.customUiTheme': getCustomUiThemeSetting(),
-    'tau.allowRemoteImages': getAllowRemoteImagesSetting(),
+    'tau.blockHttpsImages': getBlockHttpsImagesSetting(),
     'tau.confirmSessionDeletion': getConfirmSessionDeletionSetting(),
     'tau.rejectEditWriteOutsideWorkspace': getRejectEditWriteOutsideWorkspaceSetting(),
     'tau.readyScript': getReadyScriptSetting() ?? '',

@@ -58,7 +58,7 @@ suite('Chat webview helpers', () => {
         outputColors: true,
         animationsEnabled: true,
         customUiTheme: 'default',
-        allowRemoteImages: true
+        allowRemoteImages: false
       }
     );
   });
@@ -86,7 +86,7 @@ suite('Chat webview helpers', () => {
         outputColors: true,
         animationsEnabled: true,
         customUiTheme: 'default',
-        allowRemoteImages: true
+        allowRemoteImages: false
       }
     );
   });
@@ -373,17 +373,28 @@ suite('Chat webview helpers', () => {
     assert.ok(!dismissedHtml.includes('Don\'t show again'));
   });
 
-  test('createWebviewHtml omits HTTPS images from CSP when remote images are disabled', () => {
+  test('createWebviewHtml omits HTTPS images from CSP by default', () => {
+    const html = createWebviewHtml({
+      markdownItScriptUri: 'vscode-resource://markdown-it.js',
+      domPurifyScriptUri: 'vscode-resource://dompurify.js',
+      webviewScriptUri: 'vscode-resource://chat.js',
+      cspSource: 'vscode-webview-resource:'
+    });
+
+    assert.ok(html.includes('img-src data: vscode-webview-resource:;'));
+    assert.ok(!html.includes('img-src data: https: vscode-webview-resource:;'));
+  });
+
+  test('createWebviewHtml allows HTTPS images in CSP when explicitly enabled', () => {
     const html = createWebviewHtml({
       markdownItScriptUri: 'vscode-resource://markdown-it.js',
       domPurifyScriptUri: 'vscode-resource://dompurify.js',
       webviewScriptUri: 'vscode-resource://chat.js',
       cspSource: 'vscode-webview-resource:'
     }, {
-      allowRemoteImages: false
+      allowRemoteImages: true
     });
 
-    assert.ok(html.includes('img-src data: vscode-webview-resource:;'));
-    assert.ok(!html.includes('img-src data: https: vscode-webview-resource:;'));
+    assert.ok(html.includes('img-src data: https: vscode-webview-resource:;'));
   });
 });

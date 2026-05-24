@@ -352,11 +352,11 @@
       return;
     }
     if (isHttpsImage(src)) {
-      if (options.allowRemoteImages === false) {
-        image.replaceWith(createImageFallback("Remote image blocked."));
+      if (options.allowRemoteImages === true) {
+        markRenderableImage(image);
         return;
       }
-      markRenderableImage(image);
+      image.replaceWith(createImageFallback("Remote image blocked."));
       return;
     }
     if (isLocalImageReference(src)) {
@@ -3725,14 +3725,14 @@ ${after}`;
       liveBehavior: "immediate"
     },
     {
-      id: "tau.allowRemoteImages",
+      id: "tau.blockHttpsImages",
       owner: "tau",
       section: "workspaceSafety",
-      label: "Remote images",
-      description: "Allow HTTPS images in chat markdown.",
+      label: "Block HTTPS images",
+      description: "Block remote HTTPS images in chat markdown.",
       control: "toggle",
       defaultValue: true,
-      helper: "Turn this off to block external image requests while keeping local/workspace images available.",
+      helper: "Turn this off to allow external HTTPS image requests while keeping local/workspace images available.",
       liveBehavior: "immediate",
       danger: true
     },
@@ -6284,7 +6284,7 @@ ${after}`;
     outputColors: true,
     animationsEnabled: true,
     customUiTheme: "default",
-    allowRemoteImages: true,
+    allowRemoteImages: false,
     welcomeDismissed: false,
     promptContext: [],
     composerText: "",
@@ -6325,7 +6325,7 @@ ${after}`;
       outputColors: typeof record.outputColors === "boolean" ? record.outputColors : true,
       animationsEnabled: typeof record.animationsEnabled === "boolean" ? record.animationsEnabled : true,
       customUiTheme: parseWebviewCustomUiTheme(record.customUiTheme),
-      allowRemoteImages: typeof record.allowRemoteImages === "boolean" ? record.allowRemoteImages : true,
+      allowRemoteImages: typeof record.allowRemoteImages === "boolean" ? record.allowRemoteImages : false,
       welcomeDismissed: Boolean(record.welcomeDismissed),
       promptContext: Array.isArray(record.promptContext) ? record.promptContext : [],
       composerText: typeof record.composerText === "string" ? record.composerText : "",

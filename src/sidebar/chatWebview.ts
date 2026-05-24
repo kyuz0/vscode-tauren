@@ -234,7 +234,7 @@ export function createWebviewStateMessage({
   outputColors = true,
   animationsEnabled = true,
   customUiTheme = 'default',
-  allowRemoteImages = true,
+  allowRemoteImages = false,
   welcomeDismissed,
   promptContext = [],
   composer,
@@ -346,9 +346,9 @@ export function createWebviewStateMessage({
 export function createWebviewHtml(scriptUris: WebviewScriptUris, options: CreateWebviewHtmlOptions = {}): string {
   const nonce = createNonce();
   const cspSource = escapeHtmlAttribute(scriptUris.cspSource ?? 'vscode-resource:');
-  const imageSources = options.allowRemoteImages === false
-    ? `data: ${cspSource}`
-    : `data: https: ${cspSource}`;
+  const imageSources = options.allowRemoteImages === true
+    ? `data: https: ${cspSource}`
+    : `data: ${cspSource}`;
 
   return /* html */ `<!DOCTYPE html>
 <html lang="en">

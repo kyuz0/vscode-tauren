@@ -2,7 +2,7 @@ export type TauSettingId =
   | 'tau.outputColors'
   | 'tau.animationsEnabled'
   | 'tau.customUiTheme'
-  | 'tau.allowRemoteImages'
+  | 'tau.blockHttpsImages'
   | 'tau.confirmSessionDeletion'
   | 'tau.rejectEditWriteOutsideWorkspace'
   | 'tau.readyScript'
@@ -149,14 +149,14 @@ export const settingDefinitions = [
     liveBehavior: 'immediate'
   },
   {
-    id: 'tau.allowRemoteImages',
+    id: 'tau.blockHttpsImages',
     owner: 'tau',
     section: 'workspaceSafety',
-    label: 'Remote images',
-    description: 'Allow HTTPS images in chat markdown.',
+    label: 'Block HTTPS images',
+    description: 'Block remote HTTPS images in chat markdown.',
     control: 'toggle',
     defaultValue: true,
-    helper: 'Turn this off to block external image requests while keeping local/workspace images available.',
+    helper: 'Turn this off to allow external HTTPS image requests while keeping local/workspace images available.',
     liveBehavior: 'immediate',
     danger: true
   },

@@ -10,7 +10,7 @@ All notable changes to Tau will be documented in this file.
 - Aligned user-facing naming so Tau refers to the product/UI and Pi refers to the backend engine/runtime.
 - Exposed the session-list `showChanges` command in the webview menu and removed the stale file-backed session tree entrypoint.
 - Pruned stale webview render state during long chat sessions to reduce sidebar memory growth.
-- Tightened remote image blocking so disabling `tau.allowRemoteImages` also removes HTTPS image sources from the webview CSP.
+- Replaced the remote image setting with `tau.blockHttpsImages`, which defaults on and blocks HTTPS images unless disabled.
 - Reduced Pi custom UI render churn by coalescing repeated updates to frame-paced rendering.
 - Improved long chat performance by sending incremental message updates to the webview and pruning stale render caches.
 - Fixed custom UI free-text answers so delayed prompt focus cannot steal typing from the active questionnaire.

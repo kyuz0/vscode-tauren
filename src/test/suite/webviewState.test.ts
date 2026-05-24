@@ -10,7 +10,7 @@ suite('Webview state helpers', () => {
     assert.strictEqual(initialWebviewState.chatFace, 'main');
     assert.strictEqual(initialWebviewState.settingsSection, 'appearance');
     assert.strictEqual(initialWebviewState.customUiTheme, 'default');
-    assert.strictEqual(initialWebviewState.allowRemoteImages, true);
+    assert.strictEqual(initialWebviewState.allowRemoteImages, false);
     assert.strictEqual(initialWebviewState.welcomeDismissed, false);
     assert.deepStrictEqual(initialWebviewState.auth, { providers: [] });
     assert.deepStrictEqual(initialWebviewState.sessions, []);
@@ -151,7 +151,7 @@ suite('Webview state helpers', () => {
     assert.strictEqual(parsed.chatFace, 'main');
     assert.strictEqual(parsed.settingsSection, 'appearance');
     assert.strictEqual(parsed.customUiTheme, 'default');
-    assert.strictEqual(parsed.allowRemoteImages, true);
+    assert.strictEqual(parsed.allowRemoteImages, false);
     assert.strictEqual(parsed.welcomeDismissed, false);
     assert.deepStrictEqual(parsed.sessions, []);
   });

@@ -13,7 +13,7 @@ suite('Settings registry', () => {
     );
     assert.deepStrictEqual(
       getSettingsForSection('workspaceSafety').map((setting) => setting.id),
-      ['tau.allowRemoteImages', 'tau.confirmSessionDeletion', 'tau.rejectEditWriteOutsideWorkspace']
+      ['tau.blockHttpsImages', 'tau.confirmSessionDeletion', 'tau.rejectEditWriteOutsideWorkspace']
     );
   });
 
