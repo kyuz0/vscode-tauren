@@ -2,6 +2,7 @@ import * as assert from 'assert';
 import * as os from 'node:os';
 import { PiSdkClient } from '../../sdk/piSdkClient';
 import { createSdkExtensionUiContext } from '../../sdk/extensionUiBridge';
+import type { ExtensionUi } from '../../extensionUi/types';
 import { loadPiSdk, resetPiSdkLoaderForTests, type PiSdkModule } from '../../sdk/piSdkLoader';
 import type { PiEvent } from '../../pi/types';
 
@@ -249,6 +250,29 @@ suite('PiSdkClient', () => {
     harness.client.dispose();
   });
 
+  test('clears extension UI state before SDK reload rebinds extensions', async () => {
+    let clearStatusesCount = 0;
+    let clearWidgetsCount = 0;
+    const harness = createSdkHarness({
+      extensionUi: {
+        notify: () => undefined,
+        select: async () => undefined,
+        confirm: async () => undefined,
+        input: async () => undefined,
+        clearStatuses: () => { clearStatusesCount += 1; },
+        clearWidgets: () => { clearWidgetsCount += 1; }
+      }
+    });
+
+    await harness.client.reload();
+
+    assert.strictEqual(clearStatusesCount, 1);
+    assert.strictEqual(clearWidgetsCount, 1);
+    assert.strictEqual(harness.session.reloadCount, 1);
+    assert.strictEqual(harness.session.bindCount, 1);
+    harness.client.dispose();
+  });
+
   test('updates live and persisted runtime settings through SDK APIs', async () => {
     const harness = createSdkHarness();
 
@@ -333,6 +357,7 @@ type HarnessOptions = {
   loadSdkFailures?: number;
   rejectEditWriteOutsideWorkspace?: boolean;
   notifications?: Array<{ message: string; notifyType: string }>;
+  extensionUi?: ExtensionUi;
 };
 
 class FakeSession {
@@ -348,6 +373,7 @@ class FakeSession {
   public autoCompactionEnabled = true;
   public pendingMessageCount = 0;
   public bindCount = 0;
+  public reloadCount = 0;
   public readonly labelChanges: Array<{ entryId: string; label: string | undefined }> = [];
   public readonly messages = [{ role: 'assistant', content: 'last answer' }];
   public readonly availableModels = [this.model];
@@ -433,7 +459,9 @@ class FakeSession {
 
   public async abort(): Promise<void> {}
 
-  public async reload(): Promise<void> {}
+  public async reload(): Promise<void> {
+    this.reloadCount += 1;
+  }
 
   public async setModel(model: unknown): Promise<void> {
     this.selectedModel = model;
@@ -666,6 +694,7 @@ function createSdkHarness(options: HarnessOptions = {}): {
       sessionFile: options.sessionFile,
       rejectEditWriteOutsideWorkspace: options.rejectEditWriteOutsideWorkspace,
       showNotification: (message, notifyType) => options.notifications?.push({ message, notifyType }),
+      extensionUi: options.extensionUi,
       loadSdk: async () => {
         if (remainingLoadSdkFailures > 0) {
           remainingLoadSdkFailures -= 1;

@@ -127,9 +127,7 @@ export class PiSdkClient implements PiClient {
 
   public async reload(): Promise<void> {
     const runtime = await this.ensureRuntime();
-    this.options.extensionUi?.clearStatuses?.();
-    await runtime.session.reload();
-    await this.bindRuntime(runtime);
+    await this.reloadRuntime(runtime);
   }
 
   public async getState(): Promise<PiSessionState> {
@@ -678,6 +676,12 @@ export class PiSdkClient implements PiClient {
     return value.trim();
   }
 
+  private async reloadRuntime(runtime: AgentSessionRuntime): Promise<void> {
+    this.options.extensionUi?.clearStatuses?.();
+    this.options.extensionUi?.clearWidgets?.();
+    await runtime.session.reload();
+  }
+
   private parseModelReference(value: string): { provider: string; modelId: string } {
     const separatorIndex = value.indexOf('/');
 
@@ -711,8 +715,7 @@ export class PiSdkClient implements PiClient {
         }),
         switchSession: (sessionPath, options) => runtime.switchSession(sessionPath, options),
         reload: async () => {
-          await session.reload();
-          await this.bindRuntime(runtime);
+          await this.reloadRuntime(runtime);
         }
       },
       onError: (error) => {
