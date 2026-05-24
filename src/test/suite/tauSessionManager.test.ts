@@ -208,6 +208,38 @@ suite('TauSessionManager', () => {
     harness.manager.dispose();
   });
 
+  test('reinitializes above widgets after clearing extension UI state', async () => {
+    const harness = createManagerHarness([new FakePiClient()]);
+
+    await harness.manager.handleWebviewMessage({ type: 'submit', text: 'hello' });
+
+    const extensionUi = harness.clientOptions[0].extensionUi;
+    assert.ok(extensionUi);
+
+    let disposed = false;
+    extensionUi.setWidget?.('above', () => ({
+      render: () => ['before reload'],
+      invalidate: () => undefined,
+      dispose: () => { disposed = true; }
+    }));
+    await flushPromises();
+
+    extensionUi.clearWidgets?.();
+    assert.strictEqual(disposed, true);
+    assert.deepStrictEqual(lastState(harness).extensionWidgets, []);
+
+    extensionUi.setWidget?.('above', () => ({
+      render: () => ['after reload'],
+      invalidate: () => undefined
+    }));
+    await flushPromises();
+
+    assert.deepStrictEqual(lastState(harness).extensionWidgets, [
+      { key: 'above', placement: 'aboveEditor', lines: ['after reload'] }
+    ]);
+    harness.manager.dispose();
+  });
+
   test('disposes replaced widget before mounting the replacement', async () => {
     const harness = createManagerHarness([new FakePiClient()]);
 

@@ -506,7 +506,7 @@ function render(): void {
 function syncExtensionWidgets(hiddenBySurface: boolean): void {
   const aboveWidgets = hiddenBySurface ? [] : state.extensionWidgets.filter((widget) => widget.placement === 'aboveEditor');
   const belowWidgets = hiddenBySurface ? [] : state.extensionWidgets.filter((widget) => widget.placement === 'belowEditor');
-  const busyAboveWidgets = state.busy && aboveWidgets.length > 0;
+  const placeBusySubmitOnTopWidget = !hiddenBySurface && aboveWidgets.length > 0;
 
   const activeKeys = new Set([...aboveWidgets, ...belowWidgets].map((widget) => widget.key));
   for (const key of widgetDimensionSignatures.keys()) {
@@ -515,23 +515,29 @@ function syncExtensionWidgets(hiddenBySurface: boolean): void {
     }
   }
 
-  renderExtensionWidgetContainer(extensionWidgetsAboveElement, aboveWidgets);
+  renderExtensionWidgetContainer(extensionWidgetsAboveElement, aboveWidgets, placeBusySubmitOnTopWidget ? busySubmitElement : undefined);
   renderExtensionWidgetContainer(extensionWidgetsBelowElement, belowWidgets);
-  syncBusySubmitPlacement(busyAboveWidgets && !hiddenBySurface);
+  syncBusySubmitPlacement(placeBusySubmitOnTopWidget);
+  extensionWidgetsAboveElement.classList.toggle('extension-widgets--with-busy', placeBusySubmitOnTopWidget);
   viewElement.classList.toggle('tau-view--has-extension-widgets-above', aboveWidgets.length > 0);
   viewElement.classList.toggle('tau-view--has-extension-widgets-below', belowWidgets.length > 0);
 }
 
-function renderExtensionWidgetContainer(container: HTMLElement, widgets: WebviewState['extensionWidgets']): void {
-  container.hidden = widgets.length === 0;
-  container.setAttribute('aria-hidden', widgets.length === 0 ? 'true' : 'false');
+function renderExtensionWidgetContainer(container: HTMLElement, widgets: WebviewState['extensionWidgets'], leadingElement?: HTMLElement): void {
+  const hasContent = widgets.length > 0 || Boolean(leadingElement);
+  container.hidden = !hasContent;
+  container.setAttribute('aria-hidden', hasContent ? 'false' : 'true');
 
-  if (widgets.length === 0) {
+  if (!hasContent) {
     container.replaceChildren();
     return;
   }
 
   const fragment = document.createDocumentFragment();
+
+  if (leadingElement) {
+    fragment.append(leadingElement);
+  }
 
   for (const widget of widgets) {
     const element = document.createElement('article');
@@ -563,11 +569,6 @@ function syncBusySubmitPlacement(aboveWidgets: boolean): void {
   widgetBusySlotElement.hidden = true;
 
   if (aboveWidgets) {
-    if (busySubmitElement.parentElement !== extensionWidgetsAboveElement) {
-      extensionWidgetsAboveElement.insertBefore(busySubmitElement, extensionWidgetsAboveElement.firstChild);
-    } else if (extensionWidgetsAboveElement.firstChild !== busySubmitElement) {
-      extensionWidgetsAboveElement.insertBefore(busySubmitElement, extensionWidgetsAboveElement.firstChild);
-    }
     return;
   }
 

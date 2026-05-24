@@ -7082,27 +7082,32 @@ ${after}`;
   function syncExtensionWidgets(hiddenBySurface) {
     const aboveWidgets = hiddenBySurface ? [] : state.extensionWidgets.filter((widget) => widget.placement === "aboveEditor");
     const belowWidgets = hiddenBySurface ? [] : state.extensionWidgets.filter((widget) => widget.placement === "belowEditor");
-    const busyAboveWidgets = state.busy && aboveWidgets.length > 0;
+    const placeBusySubmitOnTopWidget = !hiddenBySurface && aboveWidgets.length > 0;
     const activeKeys = new Set([...aboveWidgets, ...belowWidgets].map((widget) => widget.key));
     for (const key of widgetDimensionSignatures.keys()) {
       if (!activeKeys.has(key)) {
         widgetDimensionSignatures.delete(key);
       }
     }
-    renderExtensionWidgetContainer(extensionWidgetsAboveElement, aboveWidgets);
+    renderExtensionWidgetContainer(extensionWidgetsAboveElement, aboveWidgets, placeBusySubmitOnTopWidget ? busySubmitElement : void 0);
     renderExtensionWidgetContainer(extensionWidgetsBelowElement, belowWidgets);
-    syncBusySubmitPlacement(busyAboveWidgets && !hiddenBySurface);
+    syncBusySubmitPlacement(placeBusySubmitOnTopWidget);
+    extensionWidgetsAboveElement.classList.toggle("extension-widgets--with-busy", placeBusySubmitOnTopWidget);
     viewElement.classList.toggle("tau-view--has-extension-widgets-above", aboveWidgets.length > 0);
     viewElement.classList.toggle("tau-view--has-extension-widgets-below", belowWidgets.length > 0);
   }
-  function renderExtensionWidgetContainer(container, widgets) {
-    container.hidden = widgets.length === 0;
-    container.setAttribute("aria-hidden", widgets.length === 0 ? "true" : "false");
-    if (widgets.length === 0) {
+  function renderExtensionWidgetContainer(container, widgets, leadingElement) {
+    const hasContent = widgets.length > 0 || Boolean(leadingElement);
+    container.hidden = !hasContent;
+    container.setAttribute("aria-hidden", hasContent ? "false" : "true");
+    if (!hasContent) {
       container.replaceChildren();
       return;
     }
     const fragment = document.createDocumentFragment();
+    if (leadingElement) {
+      fragment.append(leadingElement);
+    }
     for (const widget of widgets) {
       const element = document.createElement("article");
       element.className = "extension-widget";
@@ -7128,11 +7133,6 @@ ${after}`;
   function syncBusySubmitPlacement(aboveWidgets) {
     widgetBusySlotElement.hidden = true;
     if (aboveWidgets) {
-      if (busySubmitElement.parentElement !== extensionWidgetsAboveElement) {
-        extensionWidgetsAboveElement.insertBefore(busySubmitElement, extensionWidgetsAboveElement.firstChild);
-      } else if (extensionWidgetsAboveElement.firstChild !== busySubmitElement) {
-        extensionWidgetsAboveElement.insertBefore(busySubmitElement, extensionWidgetsAboveElement.firstChild);
-      }
       return;
     }
     if (busySubmitElement.parentElement !== form) {

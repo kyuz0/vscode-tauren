@@ -26,6 +26,7 @@ export const composerStyles = /* css */ `    .tau-view--has-extension-status {
       border-color: var(--vscode-input-border, transparent);
       border-radius: 14px;
       box-shadow: inset 0 1px 0 color-mix(in srgb, var(--vscode-foreground) 8%, transparent);
+      z-index: auto;
     }
 
     .extension-widgets {
