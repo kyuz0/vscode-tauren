@@ -28,6 +28,7 @@ export type ExtensionUi = {
   clearStatuses?(): void;
   setWidget?(key: string, content: ExtensionWidgetContent | undefined, options?: ExtensionWidgetSetOptions): void;
   clearWidgets?(): void;
+  setEditorText?(text: string): void;
 };
 
 export function createCancellingExtensionUi(

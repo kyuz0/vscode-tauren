@@ -115,6 +115,50 @@ suite('TauSessionManager', () => {
     harness.manager.dispose();
   });
 
+  test('sets composer text from the active session extension UI', async () => {
+    const harness = createManagerHarness([new FakePiClient()]);
+
+    await harness.manager.handleWebviewMessage({ type: 'submit', text: 'hello' });
+
+    const extensionUi = harness.clientOptions[0].extensionUi;
+    assert.ok(extensionUi);
+
+    extensionUi.setEditorText?.('prefilled by extension');
+
+    assert.strictEqual(lastState(harness).composerText, 'prefilled by extension');
+    assert.strictEqual(lastState(harness).composerTextRevision, 1);
+    harness.manager.dispose();
+  });
+
+  test('activates source session when background extension UI sets composer text', async () => {
+    const firstClient = new FakePiClient({ state: { sessionFile: '/sessions/one.jsonl' } });
+    const secondClient = new FakePiClient({ state: { sessionFile: '/sessions/two.jsonl' } });
+    const sessionFiles: Array<string | undefined> = [];
+    const harness = createManagerHarness([firstClient, secondClient], {
+      initialSessionFile: '/sessions/one.jsonl',
+      onSessionFileChange: (sessionFile) => sessionFiles.push(sessionFile),
+      listSessions: async (_cwd, currentSessionFile) => createSessionItems(currentSessionFile)
+    });
+
+    await harness.manager.handleWebviewMessage({ type: 'submit', text: 'run in the background' });
+    await harness.manager.handleWebviewMessage({ type: 'newSession' });
+    await flushPromises();
+
+    const backgroundExtensionUi = harness.clientOptions[0].extensionUi;
+    assert.ok(backgroundExtensionUi);
+
+    backgroundExtensionUi.setEditorText?.('source session draft');
+
+    const state = lastState(harness);
+    assert.strictEqual(state.currentSessionFile, '/sessions/one.jsonl');
+    assert.strictEqual(state.composerText, 'source session draft');
+    assert.strictEqual(state.composerTextRevision, 1);
+    assert.strictEqual(state.lane, undefined);
+    assert.strictEqual(state.chatFace, undefined);
+    assert.strictEqual(sessionFiles.at(-1), '/sessions/one.jsonl');
+    harness.manager.dispose();
+  });
+
   test('renders component widgets and updates dimensions', async () => {
     const harness = createManagerHarness([new FakePiClient()]);
 

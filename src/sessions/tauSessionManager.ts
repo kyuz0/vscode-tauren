@@ -354,8 +354,25 @@ export class TauSessionManager {
       setStatus: (key, text) => this.setExtensionStatus(id, key, text),
       clearStatuses: () => this.clearExtensionStatuses(id),
       setWidget: (key, content, options) => extensionWidgetHost.setWidget(key, content, options),
-      clearWidgets: () => extensionWidgetHost.clearWidgets()
+      clearWidgets: () => extensionWidgetHost.clearWidgets(),
+      setEditorText: (text) => this.setEditorTextForSession(id, text)
     };
+  }
+
+  private setEditorTextForSession(id: string, text: string): void {
+    const session = this.sessions.find((entry) => entry.id === id);
+
+    if (!session) {
+      return;
+    }
+
+    if (id !== this.activeSessionId) {
+      this.activateSession(id);
+    } else {
+      session.controller.showChat();
+    }
+
+    session.controller.setComposerText(text);
   }
 
   private setExtensionStatus(id: string, key: string, text: string | undefined): void {

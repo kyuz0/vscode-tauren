@@ -39,7 +39,9 @@ export function createSdkExtensionUiContext(ui?: ExtensionUi): ExtensionUIContex
     pasteToEditor(text) {
       this.setEditorText(text);
     },
-    setEditorText() {},
+    setEditorText(text) {
+      resolvedUi.setEditorText?.(text);
+    },
     getEditorText() {
       return '';
     },
