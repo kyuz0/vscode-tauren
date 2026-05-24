@@ -1,4 +1,10 @@
-export const composerStyles = /* css */ `    .composer {
+export const composerStyles = /* css */ `    .tau-view--has-extension-status {
+      --tau-composer-status-gap: 6px;
+      --tau-composer-status-height: 28px;
+      --tau-custom-ui-bottom-offset: calc(var(--tau-composer-bottom-margin) + var(--tau-composer-status-height) + var(--tau-composer-status-gap) + var(--tau-composer-min-height) + var(--tau-composer-custom-ui-clearance));
+    }
+
+    .composer {
       position: relative;
       grid-row: 2;
       grid-column: 1;
@@ -28,6 +34,10 @@ export const composerStyles = /* css */ `    .composer {
       will-change: opacity, transform, max-height;
     }
 
+    .tau-view--has-extension-status .composer {
+      margin-bottom: var(--tau-composer-status-gap);
+    }
+
     .composer--list-hidden {
       opacity: 0;
       pointer-events: none;
@@ -41,6 +51,37 @@ export const composerStyles = /* css */ `    .composer {
 
     .composer--has-context {
       grid-template-rows: auto minmax(22px, auto) 36px;
+    }
+
+    .composer-status {
+      grid-row: 3;
+      grid-column: 1;
+      display: flex;
+      align-items: center;
+      min-width: 0;
+      height: var(--tau-composer-status-height, 28px);
+      margin: 0 var(--tau-chat-inline-padding) var(--tau-composer-bottom-margin);
+      padding: 0 10px;
+      overflow: hidden;
+      color: var(--vscode-descriptionForeground);
+      background: var(--vscode-input-background);
+      border: 1px solid var(--vscode-input-border, transparent);
+      border-radius: 14px;
+      box-shadow: inset 0 1px 0 color-mix(in srgb, var(--vscode-foreground) 8%, transparent);
+      box-sizing: border-box;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .composer-status[hidden] {
+      display: none;
+    }
+
+    .composer-status__text {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .composer__slash-menu {

@@ -20,7 +20,9 @@ export function createSdkExtensionUiContext(ui?: ExtensionUi): ExtensionUIContex
     onTerminalInput() {
       return () => {};
     },
-    setStatus() {},
+    setStatus(key, text) {
+      resolvedUi.setStatus?.(key, text);
+    },
     setWorkingMessage() {},
     setWorkingVisible() {},
     setWorkingIndicator() {},

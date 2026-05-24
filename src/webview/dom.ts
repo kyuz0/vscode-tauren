@@ -20,6 +20,8 @@ export type WebviewDom = {
   customUiCloseButton: HTMLButtonElement;
   form: HTMLFormElement;
   textarea: HTMLTextAreaElement;
+  composerStatusElement: HTMLElement;
+  composerStatusTextElement: HTMLElement;
   slashMenuElement: HTMLElement;
   contextBadgesElement: HTMLElement;
   busySubmitElement: HTMLElement;
@@ -61,6 +63,8 @@ export function getWebviewDom(): WebviewDom {
     customUiCloseButton: queryRequired<HTMLButtonElement>('.custom-ui__close'),
     form: queryRequired<HTMLFormElement>('.composer'),
     textarea: queryRequired<HTMLTextAreaElement>('textarea'),
+    composerStatusElement: queryRequired<HTMLElement>('.composer-status'),
+    composerStatusTextElement: queryRequired<HTMLElement>('.composer-status__text'),
     slashMenuElement: queryRequired<HTMLElement>('.composer__slash-menu'),
     contextBadgesElement: queryRequired<HTMLElement>('.composer__context-badges'),
     busySubmitElement: queryRequired<HTMLElement>('.composer__busy-submit'),

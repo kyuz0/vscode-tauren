@@ -10,6 +10,7 @@ suite('Webview state helpers', () => {
     assert.strictEqual(initialWebviewState.chatFace, 'main');
     assert.strictEqual(initialWebviewState.settingsSection, 'appearance');
     assert.strictEqual(initialWebviewState.customUiTheme, 'default');
+    assert.deepStrictEqual(initialWebviewState.extensionStatus, []);
     assert.strictEqual(initialWebviewState.allowRemoteImages, false);
     assert.strictEqual(initialWebviewState.welcomeDismissed, false);
     assert.deepStrictEqual(initialWebviewState.auth, { providers: [] });
@@ -34,6 +35,7 @@ suite('Webview state helpers', () => {
       slashCommands: [{ name: 'test', description: '', source: 'prompt' }],
       slashCommandsRefreshing: true,
       customUiTheme: 'modern',
+      extensionStatus: [{ key: 'plan-mode', text: 'Planning', extra: 'ignored' }],
       allowRemoteImages: false,
       welcomeDismissed: true,
       promptContext: [{ id: 'context-1', kind: 'file', label: 'file.ts', title: 'src/file.ts' }],
@@ -72,6 +74,7 @@ suite('Webview state helpers', () => {
     assert.strictEqual(parsed.chatFace, 'main');
     assert.strictEqual(parsed.settingsSection, 'runtime');
     assert.strictEqual(parsed.customUiTheme, 'modern');
+    assert.deepStrictEqual(parsed.extensionStatus, [{ key: 'plan-mode', text: 'Planning' }]);
     assert.strictEqual(parsed.allowRemoteImages, false);
     assert.strictEqual(parsed.welcomeDismissed, true);
     assert.deepStrictEqual(parsed.auth.providers[0], {
@@ -151,6 +154,7 @@ suite('Webview state helpers', () => {
     assert.strictEqual(parsed.chatFace, 'main');
     assert.strictEqual(parsed.settingsSection, 'appearance');
     assert.strictEqual(parsed.customUiTheme, 'default');
+    assert.deepStrictEqual(parsed.extensionStatus, []);
     assert.strictEqual(parsed.allowRemoteImages, false);
     assert.strictEqual(parsed.welcomeDismissed, false);
     assert.deepStrictEqual(parsed.sessions, []);

@@ -36,6 +36,8 @@ const {
   customUiCloseButton,
   form,
   textarea,
+  composerStatusElement,
+  composerStatusTextElement,
   slashMenuElement,
   contextBadgesElement,
   busySubmitElement,
@@ -442,6 +444,7 @@ function render(): void {
   form.classList.toggle('composer--list-hidden', isSessionLane);
   form.setAttribute('aria-hidden', isSessionLane || isSettingsFaceVisible ? 'true' : 'false');
   form.inert = isSessionLane || isSettingsFaceVisible;
+  syncExtensionStatus(isSessionLane || isSettingsFaceVisible);
 
   sessionsController.syncForRender(isSessionLane);
   settingsController.syncForRender(isSessionLane);
@@ -484,6 +487,19 @@ function render(): void {
   if (shouldStickToBottom) {
     messagesController.scheduleMessagesToBottom();
   }
+}
+
+function syncExtensionStatus(hiddenBySurface: boolean): void {
+  const text = state.extensionStatus
+    .map((entry) => entry.text.trim())
+    .filter(Boolean)
+    .join('  •  ');
+  const hidden = hiddenBySurface || text.length === 0;
+
+  composerStatusTextElement.textContent = text;
+  composerStatusElement.hidden = hidden;
+  composerStatusElement.setAttribute('aria-hidden', hidden ? 'true' : 'false');
+  viewElement.classList.toggle('tau-view--has-extension-status', !hidden);
 }
 
 function toggleHelpOverlay(): void {

@@ -234,6 +234,7 @@ export function createWebviewStateMessage({
   outputColors = true,
   animationsEnabled = true,
   customUiTheme = 'default',
+  extensionStatus = [],
   allowRemoteImages = false,
   welcomeDismissed,
   promptContext = [],
@@ -268,6 +269,7 @@ export function createWebviewStateMessage({
     outputColors,
     animationsEnabled,
     customUiTheme,
+    extensionStatus: extensionStatus.map((entry) => ({ ...entry })),
     allowRemoteImages: Boolean(allowRemoteImages)
   };
 
@@ -493,6 +495,9 @@ ${createInitialEmptyStateHtml(Boolean(options.welcomeDismissed))}
         <span class="tau-icon-action-tooltip">Send message</span>
       </button>
         </form>
+        <section class="composer-status" aria-label="Pi extension status" role="status" aria-live="polite" hidden>
+          <span class="composer-status__text"></span>
+        </section>
       </div>
       <section class="settings-surface tau-chat-surface__face tau-chat-surface__settings" aria-label="Tau settings" tabindex="-1" aria-hidden="true">
         <div class="settings-surface__chrome" aria-hidden="true"></div>

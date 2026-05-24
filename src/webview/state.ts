@@ -22,6 +22,7 @@ export const initialWebviewState: WebviewState = {
   outputColors: true,
   animationsEnabled: true,
   customUiTheme: 'default',
+  extensionStatus: [],
   allowRemoteImages: false,
   welcomeDismissed: false,
   promptContext: [],
@@ -65,6 +66,7 @@ export function parseWebviewStateMessage(data: unknown, previousState?: WebviewS
     outputColors: typeof record.outputColors === 'boolean' ? record.outputColors : true,
     animationsEnabled: typeof record.animationsEnabled === 'boolean' ? record.animationsEnabled : true,
     customUiTheme: parseWebviewCustomUiTheme(record.customUiTheme),
+    extensionStatus: parseExtensionStatus(record.extensionStatus),
     allowRemoteImages: typeof record.allowRemoteImages === 'boolean' ? record.allowRemoteImages : false,
     welcomeDismissed: Boolean(record.welcomeDismissed),
     promptContext: Array.isArray(record.promptContext) ? record.promptContext : [],
@@ -85,6 +87,23 @@ export function parseWebviewStateMessage(data: unknown, previousState?: WebviewS
     treeError: typeof record.treeError === 'string' ? record.treeError : '',
     sessionLoading: Boolean(record.sessionLoading)
   };
+}
+
+function parseExtensionStatus(value: unknown): WebviewState['extensionStatus'] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter(isExtensionStatusEntry).map((entry) => ({
+    key: entry.key,
+    text: entry.text
+  }));
+}
+
+function isExtensionStatusEntry(value: unknown): value is WebviewState['extensionStatus'][number] {
+  return isRecord(value)
+    && typeof value.key === 'string'
+    && typeof value.text === 'string';
 }
 
 function parseAuthState(value: unknown): WebviewState['auth'] {

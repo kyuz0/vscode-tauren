@@ -279,11 +279,13 @@ suite('PiSdkClient', () => {
 
   test('maps extension UI bridge methods to Tau UI callbacks', async () => {
     const notifications: Array<{ message: string; notifyType: string }> = [];
+    const statuses: Array<{ key: string; text: string | undefined }> = [];
     const ui = createSdkExtensionUiContext({
       notify: (message, notifyType) => notifications.push({ message, notifyType }),
       select: async (_title, options) => options[1],
       confirm: async () => true,
-      input: async (_title, placeholder) => placeholder
+      input: async (_title, placeholder) => placeholder,
+      setStatus: (key, text) => statuses.push({ key, text })
     });
 
     assert.strictEqual(await ui.select('Pick', ['A', 'B']), 'B');
@@ -291,8 +293,14 @@ suite('PiSdkClient', () => {
     assert.strictEqual(await ui.input('Input', 'value'), 'value');
 
     ui.notify('Saved', 'info');
+    ui.setStatus('plan-mode', 'Planning');
+    ui.setStatus('plan-mode', undefined);
 
     assert.deepStrictEqual(notifications, [{ message: 'Saved', notifyType: 'info' }]);
+    assert.deepStrictEqual(statuses, [
+      { key: 'plan-mode', text: 'Planning' },
+      { key: 'plan-mode', text: undefined }
+    ]);
   });
 });
 

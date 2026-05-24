@@ -2528,6 +2528,8 @@
       customUiCloseButton: queryRequired(".custom-ui__close"),
       form: queryRequired(".composer"),
       textarea: queryRequired("textarea"),
+      composerStatusElement: queryRequired(".composer-status"),
+      composerStatusTextElement: queryRequired(".composer-status__text"),
       slashMenuElement: queryRequired(".composer__slash-menu"),
       contextBadgesElement: queryRequired(".composer__context-badges"),
       busySubmitElement: queryRequired(".composer__busy-submit"),
@@ -6294,6 +6296,7 @@ ${after}`;
     outputColors: true,
     animationsEnabled: true,
     customUiTheme: "default",
+    extensionStatus: [],
     allowRemoteImages: false,
     welcomeDismissed: false,
     promptContext: [],
@@ -6335,6 +6338,7 @@ ${after}`;
       outputColors: typeof record.outputColors === "boolean" ? record.outputColors : true,
       animationsEnabled: typeof record.animationsEnabled === "boolean" ? record.animationsEnabled : true,
       customUiTheme: parseWebviewCustomUiTheme(record.customUiTheme),
+      extensionStatus: parseExtensionStatus(record.extensionStatus),
       allowRemoteImages: typeof record.allowRemoteImages === "boolean" ? record.allowRemoteImages : false,
       welcomeDismissed: Boolean(record.welcomeDismissed),
       promptContext: Array.isArray(record.promptContext) ? record.promptContext : [],
@@ -6355,6 +6359,18 @@ ${after}`;
       treeError: typeof record.treeError === "string" ? record.treeError : "",
       sessionLoading: Boolean(record.sessionLoading)
     };
+  }
+  function parseExtensionStatus(value) {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.filter(isExtensionStatusEntry).map((entry) => ({
+      key: entry.key,
+      text: entry.text
+    }));
+  }
+  function isExtensionStatusEntry(value) {
+    return isRecord3(value) && typeof value.key === "string" && typeof value.text === "string";
   }
   function parseAuthState(value) {
     if (!isRecord3(value)) {
@@ -6527,6 +6543,8 @@ ${after}`;
     customUiCloseButton,
     form,
     textarea,
+    composerStatusElement,
+    composerStatusTextElement,
     slashMenuElement,
     contextBadgesElement,
     busySubmitElement,
@@ -6869,6 +6887,7 @@ ${after}`;
     form.classList.toggle("composer--list-hidden", isSessionLane);
     form.setAttribute("aria-hidden", isSessionLane || isSettingsFaceVisible ? "true" : "false");
     form.inert = isSessionLane || isSettingsFaceVisible;
+    syncExtensionStatus(isSessionLane || isSettingsFaceVisible);
     sessionsController.syncForRender(isSessionLane);
     settingsController.syncForRender(isSessionLane);
     customUiController.syncForRender(isSessionLane || isSettingsFaceVisible);
@@ -6904,6 +6923,14 @@ ${after}`;
     if (shouldStickToBottom) {
       messagesController.scheduleMessagesToBottom();
     }
+  }
+  function syncExtensionStatus(hiddenBySurface) {
+    const text = state.extensionStatus.map((entry) => entry.text.trim()).filter(Boolean).join("  \u2022  ");
+    const hidden = hiddenBySurface || text.length === 0;
+    composerStatusTextElement.textContent = text;
+    composerStatusElement.hidden = hidden;
+    composerStatusElement.setAttribute("aria-hidden", hidden ? "true" : "false");
+    viewElement.classList.toggle("tau-view--has-extension-status", !hidden);
   }
   function toggleHelpOverlay() {
     if (hasHelpOverlayOpen()) {

@@ -19,6 +19,8 @@ export type ExtensionUi = {
   confirm(title: string, message: string | undefined): MaybePromise<boolean | undefined>;
   input(title: string, placeholder: string | undefined): MaybePromise<string | undefined>;
   custom?<T>(factory: ExtensionCustomUiFactory<T>, options?: ExtensionCustomUiOptions): MaybePromise<T | undefined>;
+  setStatus?(key: string, text: string | undefined): void;
+  clearStatuses?(): void;
 };
 
 export function createCancellingExtensionUi(

@@ -159,6 +159,11 @@ export type WebviewWorkspaceDiffStats = {
   removedLines: number;
 };
 
+export type WebviewExtensionStatusEntry = {
+  key: string;
+  text: string;
+};
+
 export type WebviewMessagePatch = {
   upserts?: Array<{ index: number; message: ChatSnapshotMessage }>;
   deleteFrom?: number;
@@ -184,6 +189,7 @@ export type WebviewStateMessage = Omit<ChatState, 'messages'> & {
   outputColors: boolean;
   animationsEnabled: boolean;
   customUiTheme: WebviewCustomUiTheme;
+  extensionStatus: WebviewExtensionStatusEntry[];
   allowRemoteImages?: boolean;
   welcomeDismissed?: boolean;
   promptContext?: WebviewPromptContextAttachment[];
@@ -229,6 +235,7 @@ export type CreateWebviewStateMessageOptions = {
   outputColors?: boolean;
   animationsEnabled?: boolean;
   customUiTheme?: WebviewCustomUiTheme;
+  extensionStatus?: WebviewExtensionStatusEntry[];
   allowRemoteImages?: boolean;
   welcomeDismissed?: boolean;
   promptContext?: WebviewPromptContextAttachment[];

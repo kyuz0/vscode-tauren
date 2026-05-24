@@ -127,6 +127,7 @@ export class PiSdkClient implements PiClient {
 
   public async reload(): Promise<void> {
     const runtime = await this.ensureRuntime();
+    this.options.extensionUi?.clearStatuses?.();
     await runtime.session.reload();
     await this.bindRuntime(runtime);
   }

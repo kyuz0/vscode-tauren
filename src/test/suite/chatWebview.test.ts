@@ -58,6 +58,7 @@ suite('Chat webview helpers', () => {
         outputColors: true,
         animationsEnabled: true,
         customUiTheme: 'default',
+        extensionStatus: [],
         allowRemoteImages: false
       }
     );
@@ -86,8 +87,25 @@ suite('Chat webview helpers', () => {
         outputColors: true,
         animationsEnabled: true,
         customUiTheme: 'default',
+        extensionStatus: [],
         allowRemoteImages: false
       }
+    );
+  });
+
+  test('createWebviewStateMessage includes extension status entries when present', () => {
+    assert.deepStrictEqual(
+      createWebviewStateMessage({
+        state: { messages: [], busy: false },
+        extensionStatus: [
+          { key: 'plan-mode', text: 'Planning' },
+          { key: 'review', text: 'Reviewing' }
+        ]
+      }).extensionStatus,
+      [
+        { key: 'plan-mode', text: 'Planning' },
+        { key: 'review', text: 'Reviewing' }
+      ]
     );
   });
 

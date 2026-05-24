@@ -57,6 +57,35 @@ suite('TauSessionManager', () => {
     harness.manager.dispose();
   });
 
+  test('surfaces extension status entries for the active session', async () => {
+    const harness = createManagerHarness([new FakePiClient()]);
+
+    await harness.manager.handleWebviewMessage({ type: 'submit', text: 'hello' });
+
+    const extensionUi = harness.clientOptions[0].extensionUi;
+    assert.ok(extensionUi);
+
+    extensionUi.setStatus?.('plan-mode', 'Planning');
+    assert.deepStrictEqual(lastState(harness).extensionStatus, [
+      { key: 'plan-mode', text: 'Planning' }
+    ]);
+
+    extensionUi.setStatus?.('review', 'Reviewing');
+    assert.deepStrictEqual(lastState(harness).extensionStatus, [
+      { key: 'plan-mode', text: 'Planning' },
+      { key: 'review', text: 'Reviewing' }
+    ]);
+
+    extensionUi.setStatus?.('plan-mode', undefined);
+    assert.deepStrictEqual(lastState(harness).extensionStatus, [
+      { key: 'review', text: 'Reviewing' }
+    ]);
+
+    extensionUi.clearStatuses?.();
+    assert.deepStrictEqual(lastState(harness).extensionStatus, []);
+    harness.manager.dispose();
+  });
+
   test('keeps background custom UI hidden until its session is selected', async () => {
     const firstClient = new FakePiClient({ state: { sessionFile: '/sessions/one.jsonl' } });
     const secondClient = new FakePiClient();

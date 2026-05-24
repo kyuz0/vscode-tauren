@@ -29,6 +29,7 @@ type OpenSession = {
   title: string;
   customUiOpen: boolean;
   customUiHost: ExtensionCustomUiHost | undefined;
+  extensionStatuses: Map<string, string>;
   inactiveSince: number | undefined;
   inactiveDisposeTimer: ReturnType<typeof setTimeout> | undefined;
   outboundStateMessage: WebviewStateMessage | undefined;
@@ -204,6 +205,7 @@ export class TauSessionManager {
     active.status = 'idle';
     active.customUiHost?.cancelActive();
     active.customUiOpen = false;
+    active.extensionStatuses.clear();
     active.inactiveSince = undefined;
     active.controller.restartForWorkspaceChange(cwd, sessionFile);
   }
@@ -213,7 +215,7 @@ export class TauSessionManager {
     const id = `open-${++this.sessionSequence}`;
     const initialSessionFile = options.initial ? this.options.initialSessionFile : options.sessionFile;
     const customUiHost = this.createCustomUiHost(id);
-    const extensionUi = this.createSessionExtensionUi(customUiHost);
+    const extensionUi = this.createSessionExtensionUi(id, customUiHost);
     const session: OpenSession = {
       id,
       controller: new TauChatController({
@@ -234,6 +236,7 @@ export class TauSessionManager {
       title: options.initial ? 'Current session' : options.sessionFile ? 'Loading session' : 'New session',
       customUiOpen: false,
       customUiHost,
+      extensionStatuses: new Map(),
       inactiveSince: undefined,
       inactiveDisposeTimer: undefined,
       outboundStateMessage: undefined,
@@ -311,12 +314,8 @@ export class TauSessionManager {
     return host;
   }
 
-  private createSessionExtensionUi(customUiHost: ExtensionCustomUiHost | undefined): ExtensionUi | undefined {
+  private createSessionExtensionUi(id: string, customUiHost: ExtensionCustomUiHost | undefined): ExtensionUi {
     const baseUi = this.options.extensionUi;
-
-    if (!customUiHost) {
-      return baseUi;
-    }
 
     return {
       ...baseUi,
@@ -324,8 +323,47 @@ export class TauSessionManager {
       select: baseUi?.select ?? (async () => undefined),
       confirm: baseUi?.confirm ?? (async () => undefined),
       input: baseUi?.input ?? (async () => undefined),
-      custom: (factory, options) => customUiHost.custom(factory, options)
+      ...(customUiHost
+        ? { custom: (factory, options) => customUiHost.custom(factory, options) }
+        : baseUi?.custom
+          ? { custom: baseUi.custom }
+          : {}),
+      setStatus: (key, text) => this.setExtensionStatus(id, key, text),
+      clearStatuses: () => this.clearExtensionStatuses(id)
     };
+  }
+
+  private setExtensionStatus(id: string, key: string, text: string | undefined): void {
+    const session = this.sessions.find((entry) => entry.id === id);
+    const normalizedKey = key.trim();
+
+    if (!session || !normalizedKey) {
+      return;
+    }
+
+    if (text === undefined) {
+      session.extensionStatuses.delete(normalizedKey);
+    } else {
+      session.extensionStatuses.set(normalizedKey, text);
+    }
+
+    if (id === this.activeSessionId) {
+      this.postState();
+    }
+  }
+
+  private clearExtensionStatuses(id: string): void {
+    const session = this.sessions.find((entry) => entry.id === id);
+
+    if (!session || session.extensionStatuses.size === 0) {
+      return;
+    }
+
+    session.extensionStatuses.clear();
+
+    if (id === this.activeSessionId) {
+      this.postState();
+    }
   }
 
   private syncCustomUiAttachment(): void {
@@ -442,6 +480,7 @@ export class TauSessionManager {
       ...outboundState,
       sessions: augmentSessions(sessions ?? [], this.sessions, this.activeSessionId),
       currentSessionName: state.currentSessionName || active.title,
+      extensionStatus: formatExtensionStatuses(active.extensionStatuses),
       outputColors: this.options.getOutputColors?.() ?? true,
       animationsEnabled: this.options.getAnimationsEnabled?.() ?? true,
       customUiTheme: this.options.getCustomUiTheme?.() ?? 'default'
@@ -680,6 +719,7 @@ function createEmptyState(): WebviewStateMessage {
     workspaceDiffStats: { addedLines: 0, removedLines: 0 },
     slashCommands: [],
     slashCommandsRefreshing: false,
+    extensionStatus: [],
     outputColors: true,
     animationsEnabled: true,
     customUiTheme: 'default',
@@ -694,6 +734,10 @@ function createEmptyState(): WebviewStateMessage {
     treeRefreshing: false,
     treeError: ''
   };
+}
+
+function formatExtensionStatuses(statuses: ReadonlyMap<string, string>): WebviewStateMessage['extensionStatus'] {
+  return Array.from(statuses, ([key, text]) => ({ key, text }));
 }
 
 function getStatus(message: WebviewStateMessage, previous: OpenSessionStatus): OpenSessionStatus {
