@@ -79,18 +79,18 @@ export const customUiThemeOptions = [
 
 export const settingsSections = [
   {
-    id: 'appearance',
-    label: 'Appearance',
-    eyebrow: 'Tau host',
-    title: 'Appearance',
-    description: 'Tau-owned presentation controls for the sidebar and Pi extension UI.'
-  },
-  {
     id: 'login',
     label: 'Login',
     eyebrow: 'Pi auth',
     title: 'Login',
     description: 'Configure built-in Pi provider authentication. Credentials are stored in Pi auth.json.'
+  },
+  {
+    id: 'appearance',
+    label: 'Appearance',
+    eyebrow: 'Tau host',
+    title: 'Appearance',
+    description: 'Tau-owned presentation controls for the sidebar and Pi extension UI.'
   },
   {
     id: 'runtime',
