@@ -17,6 +17,31 @@ type AnsiStyle = {
   strikethrough?: boolean;
 };
 
+export function getAnsiLineBackground(value: string, outputColors: boolean): string | undefined {
+  if (!outputColors) {
+    return undefined;
+  }
+
+  const csiPattern = /\x1b\[([0-?]*)([ -/]*)?([@-~])/g;
+  let style: AnsiStyle = {};
+  let index = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = csiPattern.exec(value)) !== null) {
+    if (hasVisibleText(value.slice(index, match.index))) {
+      return effectiveBackground(style);
+    }
+
+    if (match[3] === 'm') {
+      style = applyAnsiSgr(match[1], style);
+    }
+
+    index = match.index + match[0].length;
+  }
+
+  return hasVisibleText(value.slice(index)) ? effectiveBackground(style) : undefined;
+}
+
 export function renderAnsiTextInto(element: HTMLElement, value: string, outputColors: boolean): void {
   element.replaceChildren();
 
@@ -155,8 +180,8 @@ function parseAnsiCodes(parameters: string): number[] {
 }
 
 function applyAnsiStyle(element: HTMLElement, style: AnsiStyle): void {
-  const foreground = style.inverse ? style.background : style.foreground;
-  const background = style.inverse ? style.foreground : style.background;
+  const foreground = effectiveForeground(style);
+  const background = effectiveBackground(style);
 
   if (foreground) {
     element.style.color = foreground;
@@ -190,6 +215,18 @@ function applyAnsiStyle(element: HTMLElement, style: AnsiStyle): void {
   if (textDecoration) {
     element.style.textDecoration = textDecoration;
   }
+}
+
+function effectiveForeground(style: AnsiStyle): string | undefined {
+  return style.inverse ? style.background : style.foreground;
+}
+
+function effectiveBackground(style: AnsiStyle): string | undefined {
+  return style.inverse ? style.foreground : style.background;
+}
+
+function hasVisibleText(value: string): boolean {
+  return stripAnsiSequences(value).length > 0;
 }
 
 function isEmptyAnsiStyle(style: AnsiStyle): boolean {

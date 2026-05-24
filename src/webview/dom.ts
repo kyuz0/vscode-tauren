@@ -18,6 +18,9 @@ export type WebviewDom = {
   customUiElement: HTMLElement;
   customUiOutputElement: HTMLElement;
   customUiCloseButton: HTMLButtonElement;
+  widgetBusySlotElement: HTMLElement;
+  extensionWidgetsAboveElement: HTMLElement;
+  extensionWidgetsBelowElement: HTMLElement;
   form: HTMLFormElement;
   textarea: HTMLTextAreaElement;
   composerStatusElement: HTMLElement;
@@ -61,6 +64,9 @@ export function getWebviewDom(): WebviewDom {
     customUiElement: queryRequired<HTMLElement>('.custom-ui'),
     customUiOutputElement: queryRequired<HTMLElement>('.custom-ui__output'),
     customUiCloseButton: queryRequired<HTMLButtonElement>('.custom-ui__close'),
+    widgetBusySlotElement: queryRequired<HTMLElement>('.composer__widget-busy-slot'),
+    extensionWidgetsAboveElement: queryRequired<HTMLElement>('.extension-widgets--above'),
+    extensionWidgetsBelowElement: queryRequired<HTMLElement>('.extension-widgets--below'),
     form: queryRequired<HTMLFormElement>('.composer'),
     textarea: queryRequired<HTMLTextAreaElement>('textarea'),
     composerStatusElement: queryRequired<HTMLElement>('.composer-status'),

@@ -1,4 +1,4 @@
-import type { ExtensionUIContext } from '@earendil-works/pi-coding-agent';
+import type { ExtensionUIContext, ExtensionWidgetOptions } from '@earendil-works/pi-coding-agent';
 
 export type MaybePromise<T> = T | PromiseLike<T>;
 
@@ -12,6 +12,11 @@ export type ExtensionCustomUiFactory<T> = (
   done: (result: T) => void
 ) => ReturnType<SdkExtensionCustomUiFactory>;
 export type ExtensionCustomUiOptions = Parameters<ExtensionUIContext['custom']>[1];
+export type ExtensionWidgetPlacement = NonNullable<ExtensionWidgetOptions['placement']>;
+export type ExtensionWidgetContent =
+  | string[]
+  | ((tui: SdkExtensionCustomUiFactoryArgs[0], theme: SdkExtensionCustomUiFactoryArgs[1]) => { render(width: number): string[]; invalidate(): void; dispose?(): void; focused?: boolean });
+export type ExtensionWidgetSetOptions = Pick<ExtensionWidgetOptions, 'placement'>;
 
 export type ExtensionUi = {
   notify(message: string, notifyType: string): void;
@@ -21,6 +26,8 @@ export type ExtensionUi = {
   custom?<T>(factory: ExtensionCustomUiFactory<T>, options?: ExtensionCustomUiOptions): MaybePromise<T | undefined>;
   setStatus?(key: string, text: string | undefined): void;
   clearStatuses?(): void;
+  setWidget?(key: string, content: ExtensionWidgetContent | undefined, options?: ExtensionWidgetSetOptions): void;
+  clearWidgets?(): void;
 };
 
 export function createCancellingExtensionUi(

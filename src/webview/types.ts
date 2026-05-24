@@ -3,6 +3,7 @@ import type {
   WebviewChatFace,
   WebviewCustomUiTheme,
   WebviewExtensionStatusEntry,
+  WebviewExtensionWidgetEntry,
   WebviewLane,
   WebviewModelOption,
   WebviewPromptContextAttachment,
@@ -72,6 +73,7 @@ export type MessagePatch = {
 
 export type WorkspaceDiffStats = WebviewWorkspaceDiffStats;
 export type ExtensionStatusEntry = WebviewExtensionStatusEntry;
+export type ExtensionWidgetEntry = WebviewExtensionWidgetEntry;
 
 export type WebviewState = {
   messages: ChatMessage[];
@@ -93,6 +95,7 @@ export type WebviewState = {
   animationsEnabled: boolean;
   customUiTheme: CustomUiTheme;
   extensionStatus: ExtensionStatusEntry[];
+  extensionWidgets: ExtensionWidgetEntry[];
   allowRemoteImages: boolean;
   welcomeDismissed: boolean;
   promptContext: PromptContextAttachment[];

@@ -237,6 +237,914 @@
     return typeof value === "object" && value !== null;
   }
 
+  // src/webview/messages/ansi.ts
+  function containsAnsiEscape(value) {
+    return /\x1b\[[0-?]*(?:[ -/][0-?]*)?[@-~]/.test(value);
+  }
+  function stripAnsiSequences(value) {
+    return value.replace(/\x1b\[[0-?]*(?:[ -/][0-?]*)?[@-~]/g, "");
+  }
+  function getAnsiLineBackground(value, outputColors) {
+    if (!outputColors) {
+      return void 0;
+    }
+    const csiPattern = /\x1b\[([0-?]*)([ -/]*)?([@-~])/g;
+    let style = {};
+    let index = 0;
+    let match;
+    while ((match = csiPattern.exec(value)) !== null) {
+      if (hasVisibleText(value.slice(index, match.index))) {
+        return effectiveBackground(style);
+      }
+      if (match[3] === "m") {
+        style = applyAnsiSgr(match[1], style);
+      }
+      index = match.index + match[0].length;
+    }
+    return hasVisibleText(value.slice(index)) ? effectiveBackground(style) : void 0;
+  }
+  function renderAnsiTextInto(element, value, outputColors) {
+    element.replaceChildren();
+    if (!outputColors) {
+      element.textContent = stripAnsiSequences(value);
+      return;
+    }
+    const csiPattern = /\x1b\[([0-?]*)([ -/]*)?([@-~])/g;
+    let style = {};
+    let index = 0;
+    let match;
+    while ((match = csiPattern.exec(value)) !== null) {
+      appendAnsiText(element, value.slice(index, match.index), style);
+      if (match[3] === "m") {
+        style = applyAnsiSgr(match[1], style);
+      }
+      index = match.index + match[0].length;
+    }
+    appendAnsiText(element, value.slice(index), style);
+  }
+  function appendAnsiText(element, value, style) {
+    if (!value) {
+      return;
+    }
+    if (isEmptyAnsiStyle(style)) {
+      element.append(document.createTextNode(value));
+      return;
+    }
+    const span = document.createElement("span");
+    span.textContent = value;
+    applyAnsiStyle(span, style);
+    element.append(span);
+  }
+  function applyAnsiSgr(parameters, current) {
+    const codes = parseAnsiCodes(parameters);
+    let next = { ...current };
+    for (let index = 0; index < codes.length; index += 1) {
+      const code = codes[index];
+      if (code === 0) {
+        next = {};
+      } else if (code === 1) {
+        next.bold = true;
+        next.dim = false;
+      } else if (code === 2) {
+        next.dim = true;
+        next.bold = false;
+      } else if (code === 22) {
+        delete next.bold;
+        delete next.dim;
+      } else if (code === 3) {
+        next.italic = true;
+      } else if (code === 23) {
+        delete next.italic;
+      } else if (code === 4) {
+        next.underline = true;
+      } else if (code === 24) {
+        delete next.underline;
+      } else if (code === 7) {
+        next.inverse = true;
+      } else if (code === 27) {
+        delete next.inverse;
+      } else if (code === 9) {
+        next.strikethrough = true;
+      } else if (code === 29) {
+        delete next.strikethrough;
+      } else if (code === 39) {
+        delete next.foreground;
+      } else if (code === 49) {
+        delete next.background;
+      } else if (isBasicAnsiForeground(code)) {
+        next.foreground = ansiBasicColor(code - 30, false);
+      } else if (isBrightAnsiForeground(code)) {
+        next.foreground = ansiBasicColor(code - 90, true);
+      } else if (isBasicAnsiBackground(code)) {
+        next.background = ansiBasicColor(code - 40, false);
+      } else if (isBrightAnsiBackground(code)) {
+        next.background = ansiBasicColor(code - 100, true);
+      } else if ((code === 38 || code === 48) && codes[index + 1] === 5 && codes[index + 2] !== void 0) {
+        const color = ansi256Color(codes[index + 2]);
+        if (color) {
+          if (code === 38) {
+            next.foreground = color;
+          } else {
+            next.background = color;
+          }
+        }
+        index += 2;
+      } else if ((code === 38 || code === 48) && codes[index + 1] === 2 && codes[index + 2] !== void 0 && codes[index + 3] !== void 0 && codes[index + 4] !== void 0) {
+        const color = ansiRgbColor(
+          clampColor(codes[index + 2]),
+          clampColor(codes[index + 3]),
+          clampColor(codes[index + 4])
+        );
+        if (code === 38) {
+          next.foreground = color;
+        } else {
+          next.background = color;
+        }
+        index += 4;
+      }
+    }
+    return next;
+  }
+  function parseAnsiCodes(parameters) {
+    if (!parameters || parameters === "?") {
+      return [0];
+    }
+    return parameters.split(";").map((part) => part === "" ? 0 : Number(part)).filter((part) => Number.isInteger(part));
+  }
+  function applyAnsiStyle(element, style) {
+    const foreground = effectiveForeground(style);
+    const background = effectiveBackground(style);
+    if (foreground) {
+      element.style.color = foreground;
+    } else if (style.inverse && background) {
+      element.style.color = "var(--tau-code-background, var(--vscode-sideBar-background))";
+    }
+    if (background) {
+      element.style.backgroundColor = background;
+    } else if (style.inverse && foreground) {
+      element.style.backgroundColor = foreground;
+    }
+    if (style.bold) {
+      element.style.fontWeight = "700";
+    }
+    if (style.dim) {
+      element.style.opacity = "0.72";
+    }
+    if (style.italic) {
+      element.style.fontStyle = "italic";
+    }
+    const textDecoration = [
+      style.underline ? "underline" : "",
+      style.strikethrough ? "line-through" : ""
+    ].filter(Boolean).join(" ");
+    if (textDecoration) {
+      element.style.textDecoration = textDecoration;
+    }
+  }
+  function effectiveForeground(style) {
+    return style.inverse ? style.background : style.foreground;
+  }
+  function effectiveBackground(style) {
+    return style.inverse ? style.foreground : style.background;
+  }
+  function hasVisibleText(value) {
+    return stripAnsiSequences(value).length > 0;
+  }
+  function isEmptyAnsiStyle(style) {
+    return !style.foreground && !style.background && !style.bold && !style.dim && !style.italic && !style.underline && !style.inverse && !style.strikethrough;
+  }
+  function isBasicAnsiForeground(code) {
+    return code >= 30 && code <= 37;
+  }
+  function isBrightAnsiForeground(code) {
+    return code >= 90 && code <= 97;
+  }
+  function isBasicAnsiBackground(code) {
+    return code >= 40 && code <= 47;
+  }
+  function isBrightAnsiBackground(code) {
+    return code >= 100 && code <= 107;
+  }
+  var ANSI_COLOR_NAMES = ["Black", "Red", "Green", "Yellow", "Blue", "Magenta", "Cyan", "White"];
+  var ANSI_BRIGHT_COLOR_NAMES = ["BrightBlack", "BrightRed", "BrightGreen", "BrightYellow", "BrightBlue", "BrightMagenta", "BrightCyan", "BrightWhite"];
+  var ANSI_COLOR_FALLBACK_VARIABLES = [
+    "--tau-ansi-black-fallback",
+    "--tau-ansi-red-fallback",
+    "--tau-ansi-green-fallback",
+    "--tau-ansi-yellow-fallback",
+    "--tau-ansi-blue-fallback",
+    "--tau-ansi-magenta-fallback",
+    "--tau-ansi-cyan-fallback",
+    "--tau-ansi-white-fallback"
+  ];
+  var ANSI_BRIGHT_COLOR_FALLBACK_VARIABLES = [
+    "--tau-ansi-bright-black-fallback",
+    "--tau-ansi-bright-red-fallback",
+    "--tau-ansi-bright-green-fallback",
+    "--tau-ansi-bright-yellow-fallback",
+    "--tau-ansi-bright-blue-fallback",
+    "--tau-ansi-bright-magenta-fallback",
+    "--tau-ansi-bright-cyan-fallback",
+    "--tau-ansi-bright-white-fallback"
+  ];
+  var ANSI_COLOR_FALLBACKS = ["#000000", "#cd3131", "#0dbc79", "#e5e510", "#2472c8", "#bc3fbc", "#11a8cd", "#e5e5e5"];
+  var ANSI_BRIGHT_COLOR_FALLBACKS = ["#666666", "#f14c4c", "#23d18b", "#f5f543", "#3b8eea", "#d670d6", "#29b8db", "#e5e5e5"];
+  function ansiBasicColor(index, bright) {
+    const names = bright ? ANSI_BRIGHT_COLOR_NAMES : ANSI_COLOR_NAMES;
+    const fallbackVariables = bright ? ANSI_BRIGHT_COLOR_FALLBACK_VARIABLES : ANSI_COLOR_FALLBACK_VARIABLES;
+    const fallbacks = bright ? ANSI_BRIGHT_COLOR_FALLBACKS : ANSI_COLOR_FALLBACKS;
+    const fallbackVariable = fallbackVariables[index] ?? "--tau-ansi-white-fallback";
+    const fallback = fallbacks[index] ?? "#e5e5e5";
+    return `var(--vscode-terminal-ansi${names[index] ?? "White"}, var(${fallbackVariable}, ${fallback}))`;
+  }
+  function ansi256Color(value) {
+    if (value < 0 || value > 255) {
+      return void 0;
+    }
+    if (value < 8) {
+      return ansiBasicColor(value, false);
+    }
+    if (value < 16) {
+      return ansiBasicColor(value - 8, true);
+    }
+    if (value >= 232) {
+      const level = 8 + (value - 232) * 10;
+      return `rgb(${level}, ${level}, ${level})`;
+    }
+    const offset = value - 16;
+    const red = Math.floor(offset / 36);
+    const green = Math.floor(offset % 36 / 6);
+    const blue = offset % 6;
+    const terminalColor = ansiCubeTerminalColor(red, green, blue);
+    if (terminalColor) {
+      return terminalColor;
+    }
+    return `rgb(${ansi256Channel(red)}, ${ansi256Channel(green)}, ${ansi256Channel(blue)})`;
+  }
+  function ansiCubeTerminalColor(red, green, blue) {
+    if (red === 0 && green === 0 && blue === 0) {
+      return ansiBasicColor(0, false);
+    }
+    if (red > 0 && green === 0 && blue === 0) {
+      return ansiBasicColor(1, red >= 5);
+    }
+    if (red === 0 && green > 0 && blue === 0) {
+      return ansiBasicColor(2, green >= 5);
+    }
+    if (red > 0 && green > 0 && blue === 0 && Math.abs(red - green) <= 1) {
+      return ansiBasicColor(3, red >= 5 || green >= 5);
+    }
+    if (red === 0 && green === 0 && blue > 0) {
+      return ansiBasicColor(4, blue >= 5);
+    }
+    if (red > 0 && green === 0 && blue > 0 && Math.abs(red - blue) <= 1) {
+      return ansiBasicColor(5, red >= 5 || blue >= 5);
+    }
+    if (red === 0 && green > 0 && blue > 0 && Math.abs(green - blue) <= 1) {
+      return ansiBasicColor(6, green >= 5 || blue >= 5);
+    }
+    if (red === green && green === blue) {
+      if (red >= 5) {
+        return ansiBasicColor(7, true);
+      }
+      if (red >= 3) {
+        return ansiBasicColor(7, false);
+      }
+      return ansiBasicColor(0, true);
+    }
+    return void 0;
+  }
+  function ansi256Channel(value) {
+    return value === 0 ? 0 : 55 + value * 40;
+  }
+  function ansiRgbColor(red, green, blue) {
+    const terminalColor = ansiRgbTerminalColor(red, green, blue);
+    if (terminalColor) {
+      return terminalColor;
+    }
+    return `rgb(${red}, ${green}, ${blue})`;
+  }
+  function ansiRgbTerminalColor(red, green, blue) {
+    const low = 32;
+    const high = 128;
+    const bright = 220;
+    if (red <= low && green <= low && blue <= low) {
+      return ansiBasicColor(0, false);
+    }
+    if (red >= high && green <= low && blue <= low) {
+      return ansiBasicColor(1, red >= bright);
+    }
+    if (red <= low && green >= high && blue <= low) {
+      return ansiBasicColor(2, green >= bright);
+    }
+    if (red >= high && green >= high && blue <= low && Math.abs(red - green) <= 80) {
+      return ansiBasicColor(3, red >= bright || green >= bright);
+    }
+    if (red <= low && green <= low && blue >= high) {
+      return ansiBasicColor(4, blue >= bright);
+    }
+    if (red >= high && green <= low && blue >= high && Math.abs(red - blue) <= 80) {
+      return ansiBasicColor(5, red >= bright || blue >= bright);
+    }
+    if (red <= low && green >= high && blue >= high && Math.abs(green - blue) <= 80) {
+      return ansiBasicColor(6, green >= bright || blue >= bright);
+    }
+    if (Math.abs(red - green) <= 16 && Math.abs(green - blue) <= 16) {
+      if (red >= 220) {
+        return ansiBasicColor(7, true);
+      }
+      if (red >= 160) {
+        return ansiBasicColor(7, false);
+      }
+      if (red >= 80) {
+        return ansiBasicColor(0, true);
+      }
+    }
+    return void 0;
+  }
+  function clampColor(value) {
+    return Math.max(0, Math.min(255, value));
+  }
+
+  // src/webview/customUI/customUi.ts
+  var cursorMarker = "\x1B_pi:c\x07";
+  var cursorMarkerPattern = /\x1b_pi:c\x07/g;
+  var csiEscapePattern = /\x1b\[[0-?]*(?:[ -/][0-?]*)?[@-~]/g;
+  var nonCsiEscapePattern = /\x1b(?:\][^\x07]*(?:\x07|\x1b\\)|_[^\x07]*(?:\x07|\x1b\\)|\^[^\x07]*(?:\x07|\x1b\\)|P[^\x1b]*(?:\x1b\\)?)/g;
+  var CustomUiController = class {
+    constructor(options) {
+      this.options = options;
+    }
+    options;
+    activeId;
+    lastDimensionSignature = "";
+    resizeFrame;
+    renderFrame;
+    pendingRender;
+    inputCaptureElement;
+    cursorElement;
+    isComposing = false;
+    lastTextInputValue = "";
+    lastTextInputTime = 0;
+    compositionFallbackTimer;
+    attachEventListeners() {
+      const inputCaptureElement = this.ensureInputCaptureElement();
+      this.options.customUiCloseButton.addEventListener("click", () => this.cancel());
+      this.options.customUiElement.addEventListener("keydown", (event) => {
+        this.handleKeydown(event);
+      });
+      this.options.customUiElement.addEventListener("keyup", (event) => {
+        this.handleKeyup(event);
+      });
+      this.options.customUiElement.addEventListener("paste", (event) => {
+        this.handlePaste(event);
+      });
+      inputCaptureElement.addEventListener("beforeinput", (event) => {
+        this.handleBeforeInput(event);
+      });
+      inputCaptureElement.addEventListener("compositionstart", () => {
+        this.handleCompositionStart();
+      });
+      inputCaptureElement.addEventListener("compositionend", (event) => {
+        this.handleCompositionEnd(event);
+      });
+    }
+    handleHostMessage(message) {
+      if (!isCustomUiHostMessage(message)) {
+        return false;
+      }
+      if (message.type === "customUiShow") {
+        this.show(message.id);
+        return true;
+      }
+      if (message.type === "customUiRender") {
+        this.scheduleRender(message.id, message.lines, message.outputColors !== false);
+        return true;
+      }
+      this.hide(message.id);
+      return true;
+    }
+    handleGlobalKeydown(event) {
+      if (!this.activeId) {
+        return false;
+      }
+      if (event.target === this.options.customUiCloseButton) {
+        return false;
+      }
+      this.handleKeydown(event);
+      return true;
+    }
+    handleGlobalKeyup(event) {
+      if (!this.activeId) {
+        return false;
+      }
+      if (event.target === this.options.customUiCloseButton) {
+        return false;
+      }
+      this.handleKeyup(event);
+      return true;
+    }
+    syncForRender(isSessionLane) {
+      const active = Boolean(this.activeId) && !isSessionLane;
+      this.options.customUiElement.hidden = !active;
+      this.options.customUiElement.inert = !active;
+      this.options.form.classList.toggle("composer--custom-hidden", Boolean(this.activeId));
+      if (this.activeId) {
+        this.options.form.setAttribute("aria-hidden", "true");
+        this.options.form.inert = true;
+        this.scheduleDimensionsPost();
+      }
+    }
+    handleResize() {
+      if (!this.activeId) {
+        return;
+      }
+      this.scheduleDimensionsPost();
+    }
+    isActive() {
+      return Boolean(this.activeId);
+    }
+    focusInput() {
+      if (!this.activeId || this.options.customUiElement.hidden || this.options.customUiElement.inert) {
+        return false;
+      }
+      this.focusInputCapture();
+      return true;
+    }
+    show(id) {
+      this.cancelPendingRender();
+      this.activeId = id;
+      this.lastDimensionSignature = "";
+      this.options.customUiOutputElement.replaceChildren();
+      this.options.customUiElement.hidden = false;
+      this.options.customUiElement.inert = false;
+      this.options.form.classList.add("composer--custom-hidden");
+      this.options.form.setAttribute("aria-hidden", "true");
+      this.options.form.inert = true;
+      this.focusInputCapture();
+      this.scheduleDimensionsPost();
+    }
+    scheduleRender(id, lines, outputColors) {
+      if (this.activeId !== id) {
+        return;
+      }
+      this.pendingRender = { id, lines, outputColors };
+      if (this.renderFrame !== void 0) {
+        return;
+      }
+      this.renderFrame = requestAnimationFrame(() => {
+        this.renderFrame = void 0;
+        const pending = this.pendingRender;
+        this.pendingRender = void 0;
+        if (!pending) {
+          return;
+        }
+        this.renderNow(pending.id, pending.lines, pending.outputColors);
+      });
+    }
+    renderNow(id, lines, outputColors) {
+      if (this.activeId !== id) {
+        return;
+      }
+      const prepared = prepareCustomUiLines(lines);
+      const fragment = document.createDocumentFragment();
+      for (const line of prepared.lines) {
+        const lineElement = document.createElement("div");
+        lineElement.className = "custom-ui__line";
+        renderAnsiTextInto(lineElement, line, outputColors);
+        fragment.append(lineElement);
+      }
+      this.options.customUiOutputElement.replaceChildren(fragment);
+      this.updateCursor(prepared.cursor);
+      this.scheduleDimensionsPost();
+    }
+    hide(id) {
+      if (this.activeId !== id) {
+        return;
+      }
+      this.activeId = void 0;
+      this.lastDimensionSignature = "";
+      this.cancelPendingRender();
+      this.isComposing = false;
+      this.clearCompositionFallback();
+      this.clearInputCaptureValue();
+      this.options.customUiElement.hidden = true;
+      this.options.customUiElement.inert = true;
+      this.updateCursor(void 0);
+      this.options.customUiOutputElement.replaceChildren();
+      this.options.form.classList.remove("composer--custom-hidden");
+      this.options.form.removeAttribute("aria-hidden");
+      this.options.form.inert = false;
+      this.options.onClose?.();
+    }
+    cancel() {
+      if (!this.activeId) {
+        return;
+      }
+      this.options.vscode.postMessage({ type: "customUiCancel", id: this.activeId });
+    }
+    cancelPendingRender() {
+      this.pendingRender = void 0;
+      if (this.renderFrame !== void 0) {
+        cancelAnimationFrame(this.renderFrame);
+        this.renderFrame = void 0;
+      }
+    }
+    handlePaste(event) {
+      if (!this.activeId) {
+        return;
+      }
+      const text = event.clipboardData?.getData("text/plain") ?? "";
+      if (!text) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      this.postInput(text);
+    }
+    handleBeforeInput(event) {
+      if (!this.activeId) {
+        return;
+      }
+      if (!isTextInsertionInput(event)) {
+        return;
+      }
+      if (event.isComposing || this.isComposing || event.inputType === "insertCompositionText") {
+        return;
+      }
+      const data = event.data ?? "";
+      if (!data) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      this.postTextInput(data);
+    }
+    handleCompositionStart() {
+      this.isComposing = true;
+    }
+    handleCompositionEnd(event) {
+      this.isComposing = false;
+      this.clearInputCaptureValue();
+      const data = event.data ?? "";
+      if (!data || this.isRecentTextInput(data)) {
+        return;
+      }
+      this.clearCompositionFallback();
+      this.compositionFallbackTimer = window.setTimeout(() => {
+        this.compositionFallbackTimer = void 0;
+        if (!this.activeId || this.isRecentTextInput(data)) {
+          return;
+        }
+        this.postTextInput(data);
+      }, 0);
+    }
+    handleKeydown(event) {
+      if (!this.activeId) {
+        return;
+      }
+      if (event.target === this.options.customUiCloseButton) {
+        return;
+      }
+      if (event.isComposing || this.isComposing || event.key === "Process" || event.key === "Dead") {
+        return;
+      }
+      if (isTextInputKeyboardEvent(event)) {
+        this.focusInputCapture();
+        return;
+      }
+      const data = terminalDataForKeyboardEvent(event, event.repeat ? "repeat" : "press");
+      if (data === void 0) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      this.postInput(data);
+    }
+    handleKeyup(event) {
+      if (!this.activeId) {
+        return;
+      }
+      if (event.target === this.options.customUiCloseButton) {
+        return;
+      }
+      if (event.isComposing || this.isComposing || event.key === "Process" || event.key === "Dead") {
+        return;
+      }
+      const data = terminalDataForKeyboardEvent(event, "release");
+      if (data === void 0) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      this.postInput(data);
+    }
+    ensureInputCaptureElement() {
+      if (this.inputCaptureElement) {
+        return this.inputCaptureElement;
+      }
+      const element = document.createElement("textarea");
+      element.className = "custom-ui__input-capture";
+      element.setAttribute("aria-label", "Extension UI keyboard input");
+      element.autocapitalize = "off";
+      element.autocomplete = "off";
+      element.spellcheck = false;
+      element.rows = 1;
+      element.tabIndex = -1;
+      this.options.customUiElement.append(element);
+      this.inputCaptureElement = element;
+      return element;
+    }
+    focusInputCapture() {
+      const element = this.ensureInputCaptureElement();
+      element.value = "";
+      element.focus({ preventScroll: true });
+    }
+    ensureCursorElement() {
+      if (this.cursorElement) {
+        return this.cursorElement;
+      }
+      const element = document.createElement("span");
+      element.className = "custom-ui__cursor";
+      element.setAttribute("aria-hidden", "true");
+      this.cursorElement = element;
+      return element;
+    }
+    updateCursor(cursor) {
+      if (!cursor) {
+        if (this.cursorElement) {
+          this.cursorElement.hidden = true;
+        }
+        this.positionInputCapture(void 0);
+        return;
+      }
+      const element = this.ensureCursorElement();
+      const metrics = measureTerminalMetrics(this.options.customUiOutputElement);
+      element.hidden = false;
+      element.style.left = `${metrics.paddingLeft + cursor.column * metrics.charWidth}px`;
+      element.style.top = `${metrics.paddingTop + cursor.row * metrics.lineHeight}px`;
+      element.style.width = `${metrics.charWidth}px`;
+      element.style.height = `${metrics.lineHeight}px`;
+      this.options.customUiOutputElement.append(element);
+      this.positionInputCapture(element);
+    }
+    positionInputCapture(cursorElement) {
+      if (!cursorElement && !this.inputCaptureElement) {
+        return;
+      }
+      const input = this.ensureInputCaptureElement();
+      if (!cursorElement || cursorElement.hidden) {
+        input.style.left = "0px";
+        input.style.top = "0px";
+        input.style.height = "1px";
+        return;
+      }
+      const cursorRect = cursorElement.getBoundingClientRect();
+      const containerRect = this.options.customUiElement.getBoundingClientRect();
+      input.style.left = `${Math.max(0, cursorRect.left - containerRect.left)}px`;
+      input.style.top = `${Math.max(0, cursorRect.top - containerRect.top)}px`;
+      input.style.height = `${Math.max(1, cursorRect.height)}px`;
+    }
+    clearInputCaptureValue() {
+      if (this.inputCaptureElement) {
+        this.inputCaptureElement.value = "";
+      }
+    }
+    clearCompositionFallback() {
+      if (this.compositionFallbackTimer !== void 0) {
+        window.clearTimeout(this.compositionFallbackTimer);
+        this.compositionFallbackTimer = void 0;
+      }
+    }
+    postTextInput(data) {
+      this.clearCompositionFallback();
+      this.lastTextInputValue = data;
+      this.lastTextInputTime = Date.now();
+      this.clearInputCaptureValue();
+      this.postInput(data);
+    }
+    isRecentTextInput(data) {
+      return this.lastTextInputValue === data && Date.now() - this.lastTextInputTime < 100;
+    }
+    postInput(data) {
+      if (!this.activeId) {
+        return;
+      }
+      this.options.vscode.postMessage({ type: "customUiInput", id: this.activeId, data });
+    }
+    scheduleDimensionsPost() {
+      if (this.resizeFrame !== void 0) {
+        return;
+      }
+      this.resizeFrame = requestAnimationFrame(() => {
+        this.resizeFrame = void 0;
+        this.postDimensions();
+      });
+    }
+    postDimensions() {
+      if (!this.activeId || this.options.customUiElement.hidden) {
+        return;
+      }
+      const dimensions = measureTerminalDimensions(this.options.customUiOutputElement);
+      const signature = `${dimensions.columns}x${dimensions.rows}`;
+      if (signature === this.lastDimensionSignature) {
+        return;
+      }
+      this.lastDimensionSignature = signature;
+      this.options.vscode.postMessage({
+        type: "customUiDimensions",
+        id: this.activeId,
+        columns: dimensions.columns,
+        rows: dimensions.rows
+      });
+    }
+  };
+  function prepareCustomUiLines(lines) {
+    let cursor;
+    const preparedLines = lines.map((line, row) => {
+      const markerIndex = cursor ? -1 : line.indexOf(cursorMarker);
+      if (markerIndex !== -1) {
+        cursor = {
+          row,
+          column: visibleColumn(line.slice(0, markerIndex))
+        };
+      }
+      return sanitizeTuiLine(line);
+    });
+    return {
+      lines: preparedLines,
+      cursor
+    };
+  }
+  function sanitizeTuiLine(value) {
+    return value.replace(cursorMarkerPattern, "").replace(nonCsiEscapePattern, "");
+  }
+  function visibleColumn(value) {
+    const text = value.replace(cursorMarkerPattern, "").replace(nonCsiEscapePattern, "").replace(csiEscapePattern, "");
+    let column = 0;
+    for (const character of Array.from(text)) {
+      if (character === "	") {
+        column += Math.max(1, 2 - column % 2);
+        continue;
+      }
+      column += characterCellWidth(character);
+    }
+    return column;
+  }
+  function characterCellWidth(character) {
+    const codePoint = character.codePointAt(0);
+    if (codePoint === void 0 || codePoint === 0 || codePoint < 32 || codePoint >= 127 && codePoint < 160) {
+      return 0;
+    }
+    if (isCombiningCodePoint(codePoint)) {
+      return 0;
+    }
+    return isWideCodePoint(codePoint) ? 2 : 1;
+  }
+  function isCombiningCodePoint(codePoint) {
+    return codePoint >= 768 && codePoint <= 879 || codePoint >= 6832 && codePoint <= 6911 || codePoint >= 7616 && codePoint <= 7679 || codePoint >= 8400 && codePoint <= 8447 || codePoint >= 65056 && codePoint <= 65071;
+  }
+  function isWideCodePoint(codePoint) {
+    return codePoint >= 4352 && (codePoint <= 4447 || codePoint === 9001 || codePoint === 9002 || codePoint >= 11904 && codePoint <= 42191 && codePoint !== 12351 || codePoint >= 44032 && codePoint <= 55203 || codePoint >= 63744 && codePoint <= 64255 || codePoint >= 65040 && codePoint <= 65049 || codePoint >= 65072 && codePoint <= 65135 || codePoint >= 65280 && codePoint <= 65376 || codePoint >= 65504 && codePoint <= 65510 || codePoint >= 127744 && codePoint <= 128591 || codePoint >= 129280 && codePoint <= 129535);
+  }
+  var measurementCanvas;
+  function measureTerminalMetrics(element) {
+    const style = window.getComputedStyle(element);
+    const font = `${style.fontStyle} ${style.fontVariant} ${style.fontWeight} ${style.fontSize} / ${style.lineHeight} ${style.fontFamily}`;
+    const canvas = measurementCanvas ?? document.createElement("canvas");
+    measurementCanvas = canvas;
+    const context = canvas.getContext("2d");
+    let charWidth = 8;
+    if (context) {
+      context.font = font;
+      charWidth = Math.max(1, context.measureText("M").width);
+    }
+    const fontSize = Number.parseFloat(style.fontSize) || 12;
+    const lineHeight = Number.parseFloat(style.lineHeight) || fontSize * 1.35 || 18;
+    return {
+      charWidth,
+      lineHeight,
+      paddingLeft: Number.parseFloat(style.paddingLeft) || 0,
+      paddingTop: Number.parseFloat(style.paddingTop) || 0
+    };
+  }
+  function measureTerminalDimensions(element) {
+    const metrics = measureTerminalMetrics(element);
+    const rect = element.getBoundingClientRect();
+    const columns = Math.max(20, Math.floor(rect.width / metrics.charWidth));
+    const targetHeight = Math.max(rect.height, Math.min(window.innerHeight * 0.7, window.innerHeight - 140));
+    const rows = Math.max(4, Math.min(80, Math.floor(Math.max(120, targetHeight) / metrics.lineHeight)));
+    return { columns, rows };
+  }
+  function isTextInputKeyboardEvent(event) {
+    return !event.metaKey && !event.ctrlKey && !event.altKey && isSingleCodePoint(event.key);
+  }
+  function terminalDataForKeyboardEvent(event, eventType = "press") {
+    if (event.metaKey) {
+      return void 0;
+    }
+    if (eventType !== "press") {
+      return kittyDataForKeyboardEvent(event, eventType);
+    }
+    if (event.ctrlKey && !event.altKey && event.key.length === 1) {
+      const lower = event.key.toLowerCase();
+      if (lower >= "a" && lower <= "z") {
+        return String.fromCharCode(lower.charCodeAt(0) - 96);
+      }
+    }
+    const special = specialKeyData(event);
+    if (special !== void 0) {
+      return event.altKey && special.length > 0 && !special.startsWith("\x1B") ? `\x1B${special}` : special;
+    }
+    if (isSingleCodePoint(event.key) && !event.ctrlKey) {
+      return event.altKey ? `\x1B${event.key}` : event.key;
+    }
+    return void 0;
+  }
+  function kittyDataForKeyboardEvent(event, eventType) {
+    const modifier = kittyModifierForEvent(event);
+    const eventCode = eventType === "repeat" ? 2 : 3;
+    const special = kittySpecialKeyData(event, modifier, eventCode);
+    if (special !== void 0) {
+      return special;
+    }
+    if (!isSingleCodePoint(event.key)) {
+      return void 0;
+    }
+    const codepoint = event.key.codePointAt(0);
+    return codepoint === void 0 ? void 0 : `\x1B[${codepoint};${modifier}:${eventCode}u`;
+  }
+  function kittyModifierForEvent(event) {
+    return 1 + (event.shiftKey ? 1 : 0) + (event.altKey ? 2 : 0) + (event.ctrlKey ? 4 : 0);
+  }
+  function kittySpecialKeyData(event, modifier, eventCode) {
+    const arrowCode = arrowKittyCode(event.key);
+    if (arrowCode !== void 0) {
+      return `\x1B[1;${modifier}:${eventCode}${arrowCode}`;
+    }
+    if (event.key === "Home") return `\x1B[1;${modifier}:${eventCode}H`;
+    if (event.key === "End") return `\x1B[1;${modifier}:${eventCode}F`;
+    const functional = functionalKittyCode(event.key);
+    if (functional !== void 0) {
+      return `\x1B[${functional};${modifier}:${eventCode}~`;
+    }
+    const codepoint = csiUCodepoint(event.key);
+    return codepoint === void 0 ? void 0 : `\x1B[${codepoint};${modifier}:${eventCode}u`;
+  }
+  function arrowKittyCode(key) {
+    if (key === "ArrowUp") return "A";
+    if (key === "ArrowDown") return "B";
+    if (key === "ArrowRight") return "C";
+    if (key === "ArrowLeft") return "D";
+    return void 0;
+  }
+  function functionalKittyCode(key) {
+    if (key === "Insert") return 2;
+    if (key === "Delete") return 3;
+    if (key === "PageUp") return 5;
+    if (key === "PageDown") return 6;
+    return void 0;
+  }
+  function csiUCodepoint(key) {
+    if (key === "Escape") return 27;
+    if (key === "Tab") return 9;
+    if (key === "Enter") return 13;
+    if (key === "Backspace") return 127;
+    return void 0;
+  }
+  function specialKeyData(event) {
+    if (event.key === "Escape") return "\x1B";
+    if (event.key === "Enter") return event.shiftKey ? "\x1B\r" : "\r";
+    if (event.key === "Tab") return event.shiftKey ? "\x1B[Z" : "	";
+    if (event.key === "Backspace") return event.altKey ? "\x1B\x7F" : "\x7F";
+    if (event.key === "Delete") return "\x1B[3~";
+    if (event.key === "Home") return "\x1B[H";
+    if (event.key === "End") return "\x1B[F";
+    if (event.key === "PageUp") return "\x1B[5~";
+    if (event.key === "PageDown") return "\x1B[6~";
+    if (event.key === "ArrowUp") return event.shiftKey ? "\x1B[a" : event.ctrlKey ? "\x1BOa" : "\x1B[A";
+    if (event.key === "ArrowDown") return event.shiftKey ? "\x1B[b" : event.ctrlKey ? "\x1BOb" : "\x1B[B";
+    if (event.key === "ArrowRight") return event.shiftKey ? "\x1B[c" : event.ctrlKey ? "\x1BOc" : "\x1B[C";
+    if (event.key === "ArrowLeft") return event.shiftKey ? "\x1B[d" : event.ctrlKey ? "\x1BOd" : "\x1B[D";
+    return void 0;
+  }
+  function isTextInsertionInput(event) {
+    return event.inputType === "insertText" || event.inputType === "insertCompositionText" || event.inputType === "insertFromComposition";
+  }
+  function isSingleCodePoint(value) {
+    return Array.from(value).length === 1;
+  }
+  function isCustomUiHostMessage(value) {
+    if (!value || typeof value !== "object" || !("type" in value)) {
+      return false;
+    }
+    const message = value;
+    if (message.type === "customUiShow" || message.type === "customUiHide") {
+      return typeof message.id === "string" && message.id.length > 0;
+    }
+    return message.type === "customUiRender" && typeof message.id === "string" && message.id.length > 0 && Array.isArray(message.lines) && message.lines.every((line) => typeof line === "string");
+  }
+
   // src/webview/messages/actionButtons.ts
   var copyIconSvg = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path fill="currentColor" d="M5 1.75A1.75 1.75 0 0 1 6.75 0h6.5A1.75 1.75 0 0 1 15 1.75v6.5A1.75 1.75 0 0 1 13.25 10h-1.5v1.25A1.75 1.75 0 0 1 10 13H3.75A1.75 1.75 0 0 1 2 11.25v-6.5A1.75 1.75 0 0 1 3.75 3H5V1.75Zm1.75-.25a.25.25 0 0 0-.25.25V3H10a1.75 1.75 0 0 1 1.75 1.75V8.5h1.5a.25.25 0 0 0 .25-.25v-6.5a.25.25 0 0 0-.25-.25h-6.5ZM3.75 4.5a.25.25 0 0 0-.25.25v6.5c0 .138.112.25.25.25H10a.25.25 0 0 0 .25-.25v-6.5A.25.25 0 0 0 10 4.5H3.75Z"/></svg>';
   function createIconActionButton(className, label) {
@@ -1624,886 +2532,6 @@
     return event.target instanceof Element ? event.target : null;
   }
 
-  // src/webview/messages/ansi.ts
-  function containsAnsiEscape(value) {
-    return /\x1b\[[0-?]*(?:[ -/][0-?]*)?[@-~]/.test(value);
-  }
-  function stripAnsiSequences(value) {
-    return value.replace(/\x1b\[[0-?]*(?:[ -/][0-?]*)?[@-~]/g, "");
-  }
-  function renderAnsiTextInto(element, value, outputColors) {
-    element.replaceChildren();
-    if (!outputColors) {
-      element.textContent = stripAnsiSequences(value);
-      return;
-    }
-    const csiPattern = /\x1b\[([0-?]*)([ -/]*)?([@-~])/g;
-    let style = {};
-    let index = 0;
-    let match;
-    while ((match = csiPattern.exec(value)) !== null) {
-      appendAnsiText(element, value.slice(index, match.index), style);
-      if (match[3] === "m") {
-        style = applyAnsiSgr(match[1], style);
-      }
-      index = match.index + match[0].length;
-    }
-    appendAnsiText(element, value.slice(index), style);
-  }
-  function appendAnsiText(element, value, style) {
-    if (!value) {
-      return;
-    }
-    if (isEmptyAnsiStyle(style)) {
-      element.append(document.createTextNode(value));
-      return;
-    }
-    const span = document.createElement("span");
-    span.textContent = value;
-    applyAnsiStyle(span, style);
-    element.append(span);
-  }
-  function applyAnsiSgr(parameters, current) {
-    const codes = parseAnsiCodes(parameters);
-    let next = { ...current };
-    for (let index = 0; index < codes.length; index += 1) {
-      const code = codes[index];
-      if (code === 0) {
-        next = {};
-      } else if (code === 1) {
-        next.bold = true;
-        next.dim = false;
-      } else if (code === 2) {
-        next.dim = true;
-        next.bold = false;
-      } else if (code === 22) {
-        delete next.bold;
-        delete next.dim;
-      } else if (code === 3) {
-        next.italic = true;
-      } else if (code === 23) {
-        delete next.italic;
-      } else if (code === 4) {
-        next.underline = true;
-      } else if (code === 24) {
-        delete next.underline;
-      } else if (code === 7) {
-        next.inverse = true;
-      } else if (code === 27) {
-        delete next.inverse;
-      } else if (code === 9) {
-        next.strikethrough = true;
-      } else if (code === 29) {
-        delete next.strikethrough;
-      } else if (code === 39) {
-        delete next.foreground;
-      } else if (code === 49) {
-        delete next.background;
-      } else if (isBasicAnsiForeground(code)) {
-        next.foreground = ansiBasicColor(code - 30, false);
-      } else if (isBrightAnsiForeground(code)) {
-        next.foreground = ansiBasicColor(code - 90, true);
-      } else if (isBasicAnsiBackground(code)) {
-        next.background = ansiBasicColor(code - 40, false);
-      } else if (isBrightAnsiBackground(code)) {
-        next.background = ansiBasicColor(code - 100, true);
-      } else if ((code === 38 || code === 48) && codes[index + 1] === 5 && codes[index + 2] !== void 0) {
-        const color = ansi256Color(codes[index + 2]);
-        if (color) {
-          if (code === 38) {
-            next.foreground = color;
-          } else {
-            next.background = color;
-          }
-        }
-        index += 2;
-      } else if ((code === 38 || code === 48) && codes[index + 1] === 2 && codes[index + 2] !== void 0 && codes[index + 3] !== void 0 && codes[index + 4] !== void 0) {
-        const color = ansiRgbColor(
-          clampColor(codes[index + 2]),
-          clampColor(codes[index + 3]),
-          clampColor(codes[index + 4])
-        );
-        if (code === 38) {
-          next.foreground = color;
-        } else {
-          next.background = color;
-        }
-        index += 4;
-      }
-    }
-    return next;
-  }
-  function parseAnsiCodes(parameters) {
-    if (!parameters || parameters === "?") {
-      return [0];
-    }
-    return parameters.split(";").map((part) => part === "" ? 0 : Number(part)).filter((part) => Number.isInteger(part));
-  }
-  function applyAnsiStyle(element, style) {
-    const foreground = style.inverse ? style.background : style.foreground;
-    const background = style.inverse ? style.foreground : style.background;
-    if (foreground) {
-      element.style.color = foreground;
-    } else if (style.inverse && background) {
-      element.style.color = "var(--tau-code-background, var(--vscode-sideBar-background))";
-    }
-    if (background) {
-      element.style.backgroundColor = background;
-    } else if (style.inverse && foreground) {
-      element.style.backgroundColor = foreground;
-    }
-    if (style.bold) {
-      element.style.fontWeight = "700";
-    }
-    if (style.dim) {
-      element.style.opacity = "0.72";
-    }
-    if (style.italic) {
-      element.style.fontStyle = "italic";
-    }
-    const textDecoration = [
-      style.underline ? "underline" : "",
-      style.strikethrough ? "line-through" : ""
-    ].filter(Boolean).join(" ");
-    if (textDecoration) {
-      element.style.textDecoration = textDecoration;
-    }
-  }
-  function isEmptyAnsiStyle(style) {
-    return !style.foreground && !style.background && !style.bold && !style.dim && !style.italic && !style.underline && !style.inverse && !style.strikethrough;
-  }
-  function isBasicAnsiForeground(code) {
-    return code >= 30 && code <= 37;
-  }
-  function isBrightAnsiForeground(code) {
-    return code >= 90 && code <= 97;
-  }
-  function isBasicAnsiBackground(code) {
-    return code >= 40 && code <= 47;
-  }
-  function isBrightAnsiBackground(code) {
-    return code >= 100 && code <= 107;
-  }
-  var ANSI_COLOR_NAMES = ["Black", "Red", "Green", "Yellow", "Blue", "Magenta", "Cyan", "White"];
-  var ANSI_BRIGHT_COLOR_NAMES = ["BrightBlack", "BrightRed", "BrightGreen", "BrightYellow", "BrightBlue", "BrightMagenta", "BrightCyan", "BrightWhite"];
-  var ANSI_COLOR_FALLBACK_VARIABLES = [
-    "--tau-ansi-black-fallback",
-    "--tau-ansi-red-fallback",
-    "--tau-ansi-green-fallback",
-    "--tau-ansi-yellow-fallback",
-    "--tau-ansi-blue-fallback",
-    "--tau-ansi-magenta-fallback",
-    "--tau-ansi-cyan-fallback",
-    "--tau-ansi-white-fallback"
-  ];
-  var ANSI_BRIGHT_COLOR_FALLBACK_VARIABLES = [
-    "--tau-ansi-bright-black-fallback",
-    "--tau-ansi-bright-red-fallback",
-    "--tau-ansi-bright-green-fallback",
-    "--tau-ansi-bright-yellow-fallback",
-    "--tau-ansi-bright-blue-fallback",
-    "--tau-ansi-bright-magenta-fallback",
-    "--tau-ansi-bright-cyan-fallback",
-    "--tau-ansi-bright-white-fallback"
-  ];
-  var ANSI_COLOR_FALLBACKS = ["#000000", "#cd3131", "#0dbc79", "#e5e510", "#2472c8", "#bc3fbc", "#11a8cd", "#e5e5e5"];
-  var ANSI_BRIGHT_COLOR_FALLBACKS = ["#666666", "#f14c4c", "#23d18b", "#f5f543", "#3b8eea", "#d670d6", "#29b8db", "#e5e5e5"];
-  function ansiBasicColor(index, bright) {
-    const names = bright ? ANSI_BRIGHT_COLOR_NAMES : ANSI_COLOR_NAMES;
-    const fallbackVariables = bright ? ANSI_BRIGHT_COLOR_FALLBACK_VARIABLES : ANSI_COLOR_FALLBACK_VARIABLES;
-    const fallbacks = bright ? ANSI_BRIGHT_COLOR_FALLBACKS : ANSI_COLOR_FALLBACKS;
-    const fallbackVariable = fallbackVariables[index] ?? "--tau-ansi-white-fallback";
-    const fallback = fallbacks[index] ?? "#e5e5e5";
-    return `var(--vscode-terminal-ansi${names[index] ?? "White"}, var(${fallbackVariable}, ${fallback}))`;
-  }
-  function ansi256Color(value) {
-    if (value < 0 || value > 255) {
-      return void 0;
-    }
-    if (value < 8) {
-      return ansiBasicColor(value, false);
-    }
-    if (value < 16) {
-      return ansiBasicColor(value - 8, true);
-    }
-    if (value >= 232) {
-      const level = 8 + (value - 232) * 10;
-      return `rgb(${level}, ${level}, ${level})`;
-    }
-    const offset = value - 16;
-    const red = Math.floor(offset / 36);
-    const green = Math.floor(offset % 36 / 6);
-    const blue = offset % 6;
-    const terminalColor = ansiCubeTerminalColor(red, green, blue);
-    if (terminalColor) {
-      return terminalColor;
-    }
-    return `rgb(${ansi256Channel(red)}, ${ansi256Channel(green)}, ${ansi256Channel(blue)})`;
-  }
-  function ansiCubeTerminalColor(red, green, blue) {
-    if (red === 0 && green === 0 && blue === 0) {
-      return ansiBasicColor(0, false);
-    }
-    if (red > 0 && green === 0 && blue === 0) {
-      return ansiBasicColor(1, red >= 5);
-    }
-    if (red === 0 && green > 0 && blue === 0) {
-      return ansiBasicColor(2, green >= 5);
-    }
-    if (red > 0 && green > 0 && blue === 0 && Math.abs(red - green) <= 1) {
-      return ansiBasicColor(3, red >= 5 || green >= 5);
-    }
-    if (red === 0 && green === 0 && blue > 0) {
-      return ansiBasicColor(4, blue >= 5);
-    }
-    if (red > 0 && green === 0 && blue > 0 && Math.abs(red - blue) <= 1) {
-      return ansiBasicColor(5, red >= 5 || blue >= 5);
-    }
-    if (red === 0 && green > 0 && blue > 0 && Math.abs(green - blue) <= 1) {
-      return ansiBasicColor(6, green >= 5 || blue >= 5);
-    }
-    if (red === green && green === blue) {
-      if (red >= 5) {
-        return ansiBasicColor(7, true);
-      }
-      if (red >= 3) {
-        return ansiBasicColor(7, false);
-      }
-      return ansiBasicColor(0, true);
-    }
-    return void 0;
-  }
-  function ansi256Channel(value) {
-    return value === 0 ? 0 : 55 + value * 40;
-  }
-  function ansiRgbColor(red, green, blue) {
-    const terminalColor = ansiRgbTerminalColor(red, green, blue);
-    if (terminalColor) {
-      return terminalColor;
-    }
-    return `rgb(${red}, ${green}, ${blue})`;
-  }
-  function ansiRgbTerminalColor(red, green, blue) {
-    const low = 32;
-    const high = 128;
-    const bright = 220;
-    if (red <= low && green <= low && blue <= low) {
-      return ansiBasicColor(0, false);
-    }
-    if (red >= high && green <= low && blue <= low) {
-      return ansiBasicColor(1, red >= bright);
-    }
-    if (red <= low && green >= high && blue <= low) {
-      return ansiBasicColor(2, green >= bright);
-    }
-    if (red >= high && green >= high && blue <= low && Math.abs(red - green) <= 80) {
-      return ansiBasicColor(3, red >= bright || green >= bright);
-    }
-    if (red <= low && green <= low && blue >= high) {
-      return ansiBasicColor(4, blue >= bright);
-    }
-    if (red >= high && green <= low && blue >= high && Math.abs(red - blue) <= 80) {
-      return ansiBasicColor(5, red >= bright || blue >= bright);
-    }
-    if (red <= low && green >= high && blue >= high && Math.abs(green - blue) <= 80) {
-      return ansiBasicColor(6, green >= bright || blue >= bright);
-    }
-    if (Math.abs(red - green) <= 16 && Math.abs(green - blue) <= 16) {
-      if (red >= 220) {
-        return ansiBasicColor(7, true);
-      }
-      if (red >= 160) {
-        return ansiBasicColor(7, false);
-      }
-      if (red >= 80) {
-        return ansiBasicColor(0, true);
-      }
-    }
-    return void 0;
-  }
-  function clampColor(value) {
-    return Math.max(0, Math.min(255, value));
-  }
-
-  // src/webview/customUI/customUi.ts
-  var cursorMarker = "\x1B_pi:c\x07";
-  var cursorMarkerPattern = /\x1b_pi:c\x07/g;
-  var csiEscapePattern = /\x1b\[[0-?]*(?:[ -/][0-?]*)?[@-~]/g;
-  var nonCsiEscapePattern = /\x1b(?:\][^\x07]*(?:\x07|\x1b\\)|_[^\x07]*(?:\x07|\x1b\\)|\^[^\x07]*(?:\x07|\x1b\\)|P[^\x1b]*(?:\x1b\\)?)/g;
-  var CustomUiController = class {
-    constructor(options) {
-      this.options = options;
-    }
-    options;
-    activeId;
-    lastDimensionSignature = "";
-    resizeFrame;
-    renderFrame;
-    pendingRender;
-    inputCaptureElement;
-    cursorElement;
-    isComposing = false;
-    lastTextInputValue = "";
-    lastTextInputTime = 0;
-    compositionFallbackTimer;
-    attachEventListeners() {
-      const inputCaptureElement = this.ensureInputCaptureElement();
-      this.options.customUiCloseButton.addEventListener("click", () => this.cancel());
-      this.options.customUiElement.addEventListener("keydown", (event) => {
-        this.handleKeydown(event);
-      });
-      this.options.customUiElement.addEventListener("keyup", (event) => {
-        this.handleKeyup(event);
-      });
-      this.options.customUiElement.addEventListener("paste", (event) => {
-        this.handlePaste(event);
-      });
-      inputCaptureElement.addEventListener("beforeinput", (event) => {
-        this.handleBeforeInput(event);
-      });
-      inputCaptureElement.addEventListener("compositionstart", () => {
-        this.handleCompositionStart();
-      });
-      inputCaptureElement.addEventListener("compositionend", (event) => {
-        this.handleCompositionEnd(event);
-      });
-    }
-    handleHostMessage(message) {
-      if (!isCustomUiHostMessage(message)) {
-        return false;
-      }
-      if (message.type === "customUiShow") {
-        this.show(message.id);
-        return true;
-      }
-      if (message.type === "customUiRender") {
-        this.scheduleRender(message.id, message.lines, message.outputColors !== false);
-        return true;
-      }
-      this.hide(message.id);
-      return true;
-    }
-    handleGlobalKeydown(event) {
-      if (!this.activeId) {
-        return false;
-      }
-      if (event.target === this.options.customUiCloseButton) {
-        return false;
-      }
-      this.handleKeydown(event);
-      return true;
-    }
-    handleGlobalKeyup(event) {
-      if (!this.activeId) {
-        return false;
-      }
-      if (event.target === this.options.customUiCloseButton) {
-        return false;
-      }
-      this.handleKeyup(event);
-      return true;
-    }
-    syncForRender(isSessionLane) {
-      const active = Boolean(this.activeId) && !isSessionLane;
-      this.options.customUiElement.hidden = !active;
-      this.options.customUiElement.inert = !active;
-      this.options.form.classList.toggle("composer--custom-hidden", Boolean(this.activeId));
-      if (this.activeId) {
-        this.options.form.setAttribute("aria-hidden", "true");
-        this.options.form.inert = true;
-        this.scheduleDimensionsPost();
-      }
-    }
-    handleResize() {
-      if (!this.activeId) {
-        return;
-      }
-      this.scheduleDimensionsPost();
-    }
-    isActive() {
-      return Boolean(this.activeId);
-    }
-    focusInput() {
-      if (!this.activeId || this.options.customUiElement.hidden || this.options.customUiElement.inert) {
-        return false;
-      }
-      this.focusInputCapture();
-      return true;
-    }
-    show(id) {
-      this.cancelPendingRender();
-      this.activeId = id;
-      this.lastDimensionSignature = "";
-      this.options.customUiOutputElement.replaceChildren();
-      this.options.customUiElement.hidden = false;
-      this.options.customUiElement.inert = false;
-      this.options.form.classList.add("composer--custom-hidden");
-      this.options.form.setAttribute("aria-hidden", "true");
-      this.options.form.inert = true;
-      this.focusInputCapture();
-      this.scheduleDimensionsPost();
-    }
-    scheduleRender(id, lines, outputColors) {
-      if (this.activeId !== id) {
-        return;
-      }
-      this.pendingRender = { id, lines, outputColors };
-      if (this.renderFrame !== void 0) {
-        return;
-      }
-      this.renderFrame = requestAnimationFrame(() => {
-        this.renderFrame = void 0;
-        const pending = this.pendingRender;
-        this.pendingRender = void 0;
-        if (!pending) {
-          return;
-        }
-        this.renderNow(pending.id, pending.lines, pending.outputColors);
-      });
-    }
-    renderNow(id, lines, outputColors) {
-      if (this.activeId !== id) {
-        return;
-      }
-      const prepared = prepareCustomUiLines(lines);
-      const fragment = document.createDocumentFragment();
-      for (const line of prepared.lines) {
-        const lineElement = document.createElement("div");
-        lineElement.className = "custom-ui__line";
-        renderAnsiTextInto(lineElement, line, outputColors);
-        fragment.append(lineElement);
-      }
-      this.options.customUiOutputElement.replaceChildren(fragment);
-      this.updateCursor(prepared.cursor);
-      this.scheduleDimensionsPost();
-    }
-    hide(id) {
-      if (this.activeId !== id) {
-        return;
-      }
-      this.activeId = void 0;
-      this.lastDimensionSignature = "";
-      this.cancelPendingRender();
-      this.isComposing = false;
-      this.clearCompositionFallback();
-      this.clearInputCaptureValue();
-      this.options.customUiElement.hidden = true;
-      this.options.customUiElement.inert = true;
-      this.updateCursor(void 0);
-      this.options.customUiOutputElement.replaceChildren();
-      this.options.form.classList.remove("composer--custom-hidden");
-      this.options.form.removeAttribute("aria-hidden");
-      this.options.form.inert = false;
-      this.options.onClose?.();
-    }
-    cancel() {
-      if (!this.activeId) {
-        return;
-      }
-      this.options.vscode.postMessage({ type: "customUiCancel", id: this.activeId });
-    }
-    cancelPendingRender() {
-      this.pendingRender = void 0;
-      if (this.renderFrame !== void 0) {
-        cancelAnimationFrame(this.renderFrame);
-        this.renderFrame = void 0;
-      }
-    }
-    handlePaste(event) {
-      if (!this.activeId) {
-        return;
-      }
-      const text = event.clipboardData?.getData("text/plain") ?? "";
-      if (!text) {
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      this.postInput(text);
-    }
-    handleBeforeInput(event) {
-      if (!this.activeId) {
-        return;
-      }
-      if (!isTextInsertionInput(event)) {
-        return;
-      }
-      if (event.isComposing || this.isComposing || event.inputType === "insertCompositionText") {
-        return;
-      }
-      const data = event.data ?? "";
-      if (!data) {
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      this.postTextInput(data);
-    }
-    handleCompositionStart() {
-      this.isComposing = true;
-    }
-    handleCompositionEnd(event) {
-      this.isComposing = false;
-      this.clearInputCaptureValue();
-      const data = event.data ?? "";
-      if (!data || this.isRecentTextInput(data)) {
-        return;
-      }
-      this.clearCompositionFallback();
-      this.compositionFallbackTimer = window.setTimeout(() => {
-        this.compositionFallbackTimer = void 0;
-        if (!this.activeId || this.isRecentTextInput(data)) {
-          return;
-        }
-        this.postTextInput(data);
-      }, 0);
-    }
-    handleKeydown(event) {
-      if (!this.activeId) {
-        return;
-      }
-      if (event.target === this.options.customUiCloseButton) {
-        return;
-      }
-      if (event.isComposing || this.isComposing || event.key === "Process" || event.key === "Dead") {
-        return;
-      }
-      if (isTextInputKeyboardEvent(event)) {
-        this.focusInputCapture();
-        return;
-      }
-      const data = terminalDataForKeyboardEvent(event, event.repeat ? "repeat" : "press");
-      if (data === void 0) {
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      this.postInput(data);
-    }
-    handleKeyup(event) {
-      if (!this.activeId) {
-        return;
-      }
-      if (event.target === this.options.customUiCloseButton) {
-        return;
-      }
-      if (event.isComposing || this.isComposing || event.key === "Process" || event.key === "Dead") {
-        return;
-      }
-      const data = terminalDataForKeyboardEvent(event, "release");
-      if (data === void 0) {
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      this.postInput(data);
-    }
-    ensureInputCaptureElement() {
-      if (this.inputCaptureElement) {
-        return this.inputCaptureElement;
-      }
-      const element = document.createElement("textarea");
-      element.className = "custom-ui__input-capture";
-      element.setAttribute("aria-label", "Extension UI keyboard input");
-      element.autocapitalize = "off";
-      element.autocomplete = "off";
-      element.spellcheck = false;
-      element.rows = 1;
-      element.tabIndex = -1;
-      this.options.customUiElement.append(element);
-      this.inputCaptureElement = element;
-      return element;
-    }
-    focusInputCapture() {
-      const element = this.ensureInputCaptureElement();
-      element.value = "";
-      element.focus({ preventScroll: true });
-    }
-    ensureCursorElement() {
-      if (this.cursorElement) {
-        return this.cursorElement;
-      }
-      const element = document.createElement("span");
-      element.className = "custom-ui__cursor";
-      element.setAttribute("aria-hidden", "true");
-      this.cursorElement = element;
-      return element;
-    }
-    updateCursor(cursor) {
-      if (!cursor) {
-        if (this.cursorElement) {
-          this.cursorElement.hidden = true;
-        }
-        this.positionInputCapture(void 0);
-        return;
-      }
-      const element = this.ensureCursorElement();
-      const metrics = measureTerminalMetrics(this.options.customUiOutputElement);
-      element.hidden = false;
-      element.style.left = `${metrics.paddingLeft + cursor.column * metrics.charWidth}px`;
-      element.style.top = `${metrics.paddingTop + cursor.row * metrics.lineHeight}px`;
-      element.style.width = `${metrics.charWidth}px`;
-      element.style.height = `${metrics.lineHeight}px`;
-      this.options.customUiOutputElement.append(element);
-      this.positionInputCapture(element);
-    }
-    positionInputCapture(cursorElement) {
-      if (!cursorElement && !this.inputCaptureElement) {
-        return;
-      }
-      const input = this.ensureInputCaptureElement();
-      if (!cursorElement || cursorElement.hidden) {
-        input.style.left = "0px";
-        input.style.top = "0px";
-        input.style.height = "1px";
-        return;
-      }
-      const cursorRect = cursorElement.getBoundingClientRect();
-      const containerRect = this.options.customUiElement.getBoundingClientRect();
-      input.style.left = `${Math.max(0, cursorRect.left - containerRect.left)}px`;
-      input.style.top = `${Math.max(0, cursorRect.top - containerRect.top)}px`;
-      input.style.height = `${Math.max(1, cursorRect.height)}px`;
-    }
-    clearInputCaptureValue() {
-      if (this.inputCaptureElement) {
-        this.inputCaptureElement.value = "";
-      }
-    }
-    clearCompositionFallback() {
-      if (this.compositionFallbackTimer !== void 0) {
-        window.clearTimeout(this.compositionFallbackTimer);
-        this.compositionFallbackTimer = void 0;
-      }
-    }
-    postTextInput(data) {
-      this.clearCompositionFallback();
-      this.lastTextInputValue = data;
-      this.lastTextInputTime = Date.now();
-      this.clearInputCaptureValue();
-      this.postInput(data);
-    }
-    isRecentTextInput(data) {
-      return this.lastTextInputValue === data && Date.now() - this.lastTextInputTime < 100;
-    }
-    postInput(data) {
-      if (!this.activeId) {
-        return;
-      }
-      this.options.vscode.postMessage({ type: "customUiInput", id: this.activeId, data });
-    }
-    scheduleDimensionsPost() {
-      if (this.resizeFrame !== void 0) {
-        return;
-      }
-      this.resizeFrame = requestAnimationFrame(() => {
-        this.resizeFrame = void 0;
-        this.postDimensions();
-      });
-    }
-    postDimensions() {
-      if (!this.activeId || this.options.customUiElement.hidden) {
-        return;
-      }
-      const dimensions = measureTerminalDimensions(this.options.customUiOutputElement);
-      const signature = `${dimensions.columns}x${dimensions.rows}`;
-      if (signature === this.lastDimensionSignature) {
-        return;
-      }
-      this.lastDimensionSignature = signature;
-      this.options.vscode.postMessage({
-        type: "customUiDimensions",
-        id: this.activeId,
-        columns: dimensions.columns,
-        rows: dimensions.rows
-      });
-    }
-  };
-  function prepareCustomUiLines(lines) {
-    let cursor;
-    const preparedLines = lines.map((line, row) => {
-      const markerIndex = cursor ? -1 : line.indexOf(cursorMarker);
-      if (markerIndex !== -1) {
-        cursor = {
-          row,
-          column: visibleColumn(line.slice(0, markerIndex))
-        };
-      }
-      return sanitizeTuiLine(line);
-    });
-    return {
-      lines: preparedLines,
-      cursor
-    };
-  }
-  function sanitizeTuiLine(value) {
-    return value.replace(cursorMarkerPattern, "").replace(nonCsiEscapePattern, "");
-  }
-  function visibleColumn(value) {
-    const text = value.replace(cursorMarkerPattern, "").replace(nonCsiEscapePattern, "").replace(csiEscapePattern, "");
-    let column = 0;
-    for (const character of Array.from(text)) {
-      if (character === "	") {
-        column += Math.max(1, 2 - column % 2);
-        continue;
-      }
-      column += characterCellWidth(character);
-    }
-    return column;
-  }
-  function characterCellWidth(character) {
-    const codePoint = character.codePointAt(0);
-    if (codePoint === void 0 || codePoint === 0 || codePoint < 32 || codePoint >= 127 && codePoint < 160) {
-      return 0;
-    }
-    if (isCombiningCodePoint(codePoint)) {
-      return 0;
-    }
-    return isWideCodePoint(codePoint) ? 2 : 1;
-  }
-  function isCombiningCodePoint(codePoint) {
-    return codePoint >= 768 && codePoint <= 879 || codePoint >= 6832 && codePoint <= 6911 || codePoint >= 7616 && codePoint <= 7679 || codePoint >= 8400 && codePoint <= 8447 || codePoint >= 65056 && codePoint <= 65071;
-  }
-  function isWideCodePoint(codePoint) {
-    return codePoint >= 4352 && (codePoint <= 4447 || codePoint === 9001 || codePoint === 9002 || codePoint >= 11904 && codePoint <= 42191 && codePoint !== 12351 || codePoint >= 44032 && codePoint <= 55203 || codePoint >= 63744 && codePoint <= 64255 || codePoint >= 65040 && codePoint <= 65049 || codePoint >= 65072 && codePoint <= 65135 || codePoint >= 65280 && codePoint <= 65376 || codePoint >= 65504 && codePoint <= 65510 || codePoint >= 127744 && codePoint <= 128591 || codePoint >= 129280 && codePoint <= 129535);
-  }
-  var measurementCanvas;
-  function measureTerminalMetrics(element) {
-    const style = window.getComputedStyle(element);
-    const font = `${style.fontStyle} ${style.fontVariant} ${style.fontWeight} ${style.fontSize} / ${style.lineHeight} ${style.fontFamily}`;
-    const canvas = measurementCanvas ?? document.createElement("canvas");
-    measurementCanvas = canvas;
-    const context = canvas.getContext("2d");
-    let charWidth = 8;
-    if (context) {
-      context.font = font;
-      charWidth = Math.max(1, context.measureText("M").width);
-    }
-    const fontSize = Number.parseFloat(style.fontSize) || 12;
-    const lineHeight = Number.parseFloat(style.lineHeight) || fontSize * 1.35 || 18;
-    return {
-      charWidth,
-      lineHeight,
-      paddingLeft: Number.parseFloat(style.paddingLeft) || 0,
-      paddingTop: Number.parseFloat(style.paddingTop) || 0
-    };
-  }
-  function measureTerminalDimensions(element) {
-    const metrics = measureTerminalMetrics(element);
-    const rect = element.getBoundingClientRect();
-    const columns = Math.max(20, Math.floor(rect.width / metrics.charWidth));
-    const targetHeight = Math.max(rect.height, Math.min(window.innerHeight * 0.7, window.innerHeight - 140));
-    const rows = Math.max(4, Math.min(80, Math.floor(Math.max(120, targetHeight) / metrics.lineHeight)));
-    return { columns, rows };
-  }
-  function isTextInputKeyboardEvent(event) {
-    return !event.metaKey && !event.ctrlKey && !event.altKey && isSingleCodePoint(event.key);
-  }
-  function terminalDataForKeyboardEvent(event, eventType = "press") {
-    if (event.metaKey) {
-      return void 0;
-    }
-    if (eventType !== "press") {
-      return kittyDataForKeyboardEvent(event, eventType);
-    }
-    if (event.ctrlKey && !event.altKey && event.key.length === 1) {
-      const lower = event.key.toLowerCase();
-      if (lower >= "a" && lower <= "z") {
-        return String.fromCharCode(lower.charCodeAt(0) - 96);
-      }
-    }
-    const special = specialKeyData(event);
-    if (special !== void 0) {
-      return event.altKey && special.length > 0 && !special.startsWith("\x1B") ? `\x1B${special}` : special;
-    }
-    if (isSingleCodePoint(event.key) && !event.ctrlKey) {
-      return event.altKey ? `\x1B${event.key}` : event.key;
-    }
-    return void 0;
-  }
-  function kittyDataForKeyboardEvent(event, eventType) {
-    const modifier = kittyModifierForEvent(event);
-    const eventCode = eventType === "repeat" ? 2 : 3;
-    const special = kittySpecialKeyData(event, modifier, eventCode);
-    if (special !== void 0) {
-      return special;
-    }
-    if (!isSingleCodePoint(event.key)) {
-      return void 0;
-    }
-    const codepoint = event.key.codePointAt(0);
-    return codepoint === void 0 ? void 0 : `\x1B[${codepoint};${modifier}:${eventCode}u`;
-  }
-  function kittyModifierForEvent(event) {
-    return 1 + (event.shiftKey ? 1 : 0) + (event.altKey ? 2 : 0) + (event.ctrlKey ? 4 : 0);
-  }
-  function kittySpecialKeyData(event, modifier, eventCode) {
-    const arrowCode = arrowKittyCode(event.key);
-    if (arrowCode !== void 0) {
-      return `\x1B[1;${modifier}:${eventCode}${arrowCode}`;
-    }
-    if (event.key === "Home") return `\x1B[1;${modifier}:${eventCode}H`;
-    if (event.key === "End") return `\x1B[1;${modifier}:${eventCode}F`;
-    const functional = functionalKittyCode(event.key);
-    if (functional !== void 0) {
-      return `\x1B[${functional};${modifier}:${eventCode}~`;
-    }
-    const codepoint = csiUCodepoint(event.key);
-    return codepoint === void 0 ? void 0 : `\x1B[${codepoint};${modifier}:${eventCode}u`;
-  }
-  function arrowKittyCode(key) {
-    if (key === "ArrowUp") return "A";
-    if (key === "ArrowDown") return "B";
-    if (key === "ArrowRight") return "C";
-    if (key === "ArrowLeft") return "D";
-    return void 0;
-  }
-  function functionalKittyCode(key) {
-    if (key === "Insert") return 2;
-    if (key === "Delete") return 3;
-    if (key === "PageUp") return 5;
-    if (key === "PageDown") return 6;
-    return void 0;
-  }
-  function csiUCodepoint(key) {
-    if (key === "Escape") return 27;
-    if (key === "Tab") return 9;
-    if (key === "Enter") return 13;
-    if (key === "Backspace") return 127;
-    return void 0;
-  }
-  function specialKeyData(event) {
-    if (event.key === "Escape") return "\x1B";
-    if (event.key === "Enter") return event.shiftKey ? "\x1B\r" : "\r";
-    if (event.key === "Tab") return event.shiftKey ? "\x1B[Z" : "	";
-    if (event.key === "Backspace") return event.altKey ? "\x1B\x7F" : "\x7F";
-    if (event.key === "Delete") return "\x1B[3~";
-    if (event.key === "Home") return "\x1B[H";
-    if (event.key === "End") return "\x1B[F";
-    if (event.key === "PageUp") return "\x1B[5~";
-    if (event.key === "PageDown") return "\x1B[6~";
-    if (event.key === "ArrowUp") return event.shiftKey ? "\x1B[a" : event.ctrlKey ? "\x1BOa" : "\x1B[A";
-    if (event.key === "ArrowDown") return event.shiftKey ? "\x1B[b" : event.ctrlKey ? "\x1BOb" : "\x1B[B";
-    if (event.key === "ArrowRight") return event.shiftKey ? "\x1B[c" : event.ctrlKey ? "\x1BOc" : "\x1B[C";
-    if (event.key === "ArrowLeft") return event.shiftKey ? "\x1B[d" : event.ctrlKey ? "\x1BOd" : "\x1B[D";
-    return void 0;
-  }
-  function isTextInsertionInput(event) {
-    return event.inputType === "insertText" || event.inputType === "insertCompositionText" || event.inputType === "insertFromComposition";
-  }
-  function isSingleCodePoint(value) {
-    return Array.from(value).length === 1;
-  }
-  function isCustomUiHostMessage(value) {
-    if (!value || typeof value !== "object" || !("type" in value)) {
-      return false;
-    }
-    const message = value;
-    if (message.type === "customUiShow" || message.type === "customUiHide") {
-      return typeof message.id === "string" && message.id.length > 0;
-    }
-    return message.type === "customUiRender" && typeof message.id === "string" && message.id.length > 0 && Array.isArray(message.lines) && message.lines.every((line) => typeof line === "string");
-  }
-
   // src/webview/dom.ts
   function getWebviewDom() {
     return {
@@ -2526,6 +2554,9 @@
       customUiElement: queryRequired(".custom-ui"),
       customUiOutputElement: queryRequired(".custom-ui__output"),
       customUiCloseButton: queryRequired(".custom-ui__close"),
+      widgetBusySlotElement: queryRequired(".composer__widget-busy-slot"),
+      extensionWidgetsAboveElement: queryRequired(".extension-widgets--above"),
+      extensionWidgetsBelowElement: queryRequired(".extension-widgets--below"),
       form: queryRequired(".composer"),
       textarea: queryRequired("textarea"),
       composerStatusElement: queryRequired(".composer-status"),
@@ -6297,6 +6328,7 @@ ${after}`;
     animationsEnabled: true,
     customUiTheme: "default",
     extensionStatus: [],
+    extensionWidgets: [],
     allowRemoteImages: false,
     welcomeDismissed: false,
     promptContext: [],
@@ -6339,6 +6371,7 @@ ${after}`;
       animationsEnabled: typeof record.animationsEnabled === "boolean" ? record.animationsEnabled : true,
       customUiTheme: parseWebviewCustomUiTheme(record.customUiTheme),
       extensionStatus: parseExtensionStatus(record.extensionStatus),
+      extensionWidgets: parseExtensionWidgets(record.extensionWidgets),
       allowRemoteImages: typeof record.allowRemoteImages === "boolean" ? record.allowRemoteImages : false,
       welcomeDismissed: Boolean(record.welcomeDismissed),
       promptContext: Array.isArray(record.promptContext) ? record.promptContext : [],
@@ -6371,6 +6404,19 @@ ${after}`;
   }
   function isExtensionStatusEntry(value) {
     return isRecord3(value) && typeof value.key === "string" && typeof value.text === "string";
+  }
+  function parseExtensionWidgets(value) {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.filter(isExtensionWidgetEntry).map((entry) => ({
+      key: entry.key,
+      placement: entry.placement,
+      lines: entry.lines.map((line) => String(line))
+    }));
+  }
+  function isExtensionWidgetEntry(value) {
+    return isRecord3(value) && typeof value.key === "string" && (value.placement === "aboveEditor" || value.placement === "belowEditor") && Array.isArray(value.lines);
   }
   function parseAuthState(value) {
     if (!isRecord3(value)) {
@@ -6541,6 +6587,9 @@ ${after}`;
     customUiElement,
     customUiOutputElement,
     customUiCloseButton,
+    widgetBusySlotElement,
+    extensionWidgetsAboveElement,
+    extensionWidgetsBelowElement,
     form,
     textarea,
     composerStatusElement,
@@ -6584,6 +6633,9 @@ ${after}`;
   var hasReceivedHostState = false;
   var faceTransitionSuppressionFrame;
   var renderInstrumentationEnabled = document.body.dataset.tauDevRenderInstrumentation === "true";
+  var busySubmitHomeMarker = document.createComment("busy-submit-home");
+  busySubmitElement.after(busySubmitHomeMarker);
+  var widgetDimensionSignatures = /* @__PURE__ */ new Map();
   var sessionsController;
   var settingsController;
   var customUiController = new CustomUiController({
@@ -6887,6 +6939,7 @@ ${after}`;
     form.classList.toggle("composer--list-hidden", isSessionLane);
     form.setAttribute("aria-hidden", isSessionLane || isSettingsFaceVisible ? "true" : "false");
     form.inert = isSessionLane || isSettingsFaceVisible;
+    syncExtensionWidgets(isSessionLane || isSettingsFaceVisible);
     syncExtensionStatus(isSessionLane || isSettingsFaceVisible);
     sessionsController.syncForRender(isSessionLane);
     settingsController.syncForRender(isSessionLane);
@@ -6923,6 +6976,111 @@ ${after}`;
     if (shouldStickToBottom) {
       messagesController.scheduleMessagesToBottom();
     }
+  }
+  function syncExtensionWidgets(hiddenBySurface) {
+    const aboveWidgets = hiddenBySurface ? [] : state.extensionWidgets.filter((widget) => widget.placement === "aboveEditor");
+    const belowWidgets = hiddenBySurface ? [] : state.extensionWidgets.filter((widget) => widget.placement === "belowEditor");
+    const busyAboveWidgets = state.busy && aboveWidgets.length > 0;
+    const activeKeys = new Set([...aboveWidgets, ...belowWidgets].map((widget) => widget.key));
+    for (const key of widgetDimensionSignatures.keys()) {
+      if (!activeKeys.has(key)) {
+        widgetDimensionSignatures.delete(key);
+      }
+    }
+    renderExtensionWidgetContainer(extensionWidgetsAboveElement, aboveWidgets);
+    renderExtensionWidgetContainer(extensionWidgetsBelowElement, belowWidgets);
+    syncBusySubmitPlacement(busyAboveWidgets && !hiddenBySurface);
+    viewElement.classList.toggle("tau-view--has-extension-widgets-above", aboveWidgets.length > 0);
+    viewElement.classList.toggle("tau-view--has-extension-widgets-below", belowWidgets.length > 0);
+  }
+  function renderExtensionWidgetContainer(container, widgets) {
+    container.hidden = widgets.length === 0;
+    container.setAttribute("aria-hidden", widgets.length === 0 ? "true" : "false");
+    if (widgets.length === 0) {
+      container.replaceChildren();
+      return;
+    }
+    const fragment = document.createDocumentFragment();
+    for (const widget of widgets) {
+      const element = document.createElement("article");
+      element.className = "extension-widget";
+      element.dataset.widgetKey = widget.key;
+      element.setAttribute("aria-label", `Pi extension widget ${widget.key}`);
+      const prepared = prepareCustomUiLines(widget.lines);
+      for (const line of prepared.lines) {
+        const lineElement = document.createElement("div");
+        lineElement.className = "extension-widget__line";
+        const background = getAnsiLineBackground(line, state.outputColors);
+        if (background) {
+          lineElement.classList.add("extension-widget__line--ansi-background");
+          lineElement.style.backgroundColor = background;
+        }
+        renderAnsiTextInto(lineElement, line, state.outputColors);
+        element.append(lineElement);
+      }
+      fragment.append(element);
+    }
+    container.replaceChildren(fragment);
+    scheduleExtensionWidgetDimensionsPost(container, widgets);
+  }
+  function syncBusySubmitPlacement(aboveWidgets) {
+    widgetBusySlotElement.hidden = true;
+    if (aboveWidgets) {
+      if (busySubmitElement.parentElement !== extensionWidgetsAboveElement) {
+        extensionWidgetsAboveElement.insertBefore(busySubmitElement, extensionWidgetsAboveElement.firstChild);
+      } else if (extensionWidgetsAboveElement.firstChild !== busySubmitElement) {
+        extensionWidgetsAboveElement.insertBefore(busySubmitElement, extensionWidgetsAboveElement.firstChild);
+      }
+      return;
+    }
+    if (busySubmitElement.parentElement !== form) {
+      busySubmitHomeMarker.parentNode?.insertBefore(busySubmitElement, busySubmitHomeMarker);
+    }
+  }
+  function scheduleExtensionWidgetDimensionsPost(container, widgets) {
+    requestAnimationFrame(() => {
+      for (const widget of widgets) {
+        const element = container.querySelector(`.extension-widget[data-widget-key="${cssEscape(widget.key)}"]`);
+        if (!element) {
+          continue;
+        }
+        const dimensions = measureExtensionWidgetDimensions(element);
+        const signature = `${dimensions.columns}x${dimensions.rows}`;
+        const signatureKey = widget.key;
+        if (widgetDimensionSignatures.get(signatureKey) === signature) {
+          continue;
+        }
+        widgetDimensionSignatures.set(signatureKey, signature);
+        vscode.postMessage({
+          type: "extensionWidgetDimensions",
+          key: widget.key,
+          columns: dimensions.columns,
+          rows: dimensions.rows
+        });
+      }
+    });
+  }
+  function measureExtensionWidgetDimensions(element) {
+    const style = window.getComputedStyle(element);
+    const font = `${style.fontStyle} ${style.fontVariant} ${style.fontWeight} ${style.fontSize} / ${style.lineHeight} ${style.fontFamily}`;
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+    let charWidth = 8;
+    if (context) {
+      context.font = font;
+      charWidth = Math.max(1, context.measureText("M").width);
+    }
+    const fontSize = Number.parseFloat(style.fontSize) || 12;
+    const lineHeight = Number.parseFloat(style.lineHeight) || fontSize * 1.35 || 18;
+    const rect = element.getBoundingClientRect();
+    const contentWidth = Math.max(0, rect.width - (Number.parseFloat(style.paddingLeft) || 0) - (Number.parseFloat(style.paddingRight) || 0));
+    const contentHeight = Math.max(lineHeight, rect.height - (Number.parseFloat(style.paddingTop) || 0) - (Number.parseFloat(style.paddingBottom) || 0));
+    const columns = Math.max(20, Math.floor(contentWidth / charWidth));
+    const rows = Math.max(1, Math.min(80, Math.floor(contentHeight / lineHeight)));
+    return { columns, rows };
+  }
+  function cssEscape(value) {
+    return typeof CSS !== "undefined" && typeof CSS.escape === "function" ? CSS.escape(value) : value.replace(/[^a-zA-Z0-9_-]/g, "\\$&");
   }
   function syncExtensionStatus(hiddenBySurface) {
     const text = state.extensionStatus.map((entry) => entry.text.trim()).filter(Boolean).join("  \u2022  ");

@@ -23,6 +23,7 @@ export const initialWebviewState: WebviewState = {
   animationsEnabled: true,
   customUiTheme: 'default',
   extensionStatus: [],
+  extensionWidgets: [],
   allowRemoteImages: false,
   welcomeDismissed: false,
   promptContext: [],
@@ -67,6 +68,7 @@ export function parseWebviewStateMessage(data: unknown, previousState?: WebviewS
     animationsEnabled: typeof record.animationsEnabled === 'boolean' ? record.animationsEnabled : true,
     customUiTheme: parseWebviewCustomUiTheme(record.customUiTheme),
     extensionStatus: parseExtensionStatus(record.extensionStatus),
+    extensionWidgets: parseExtensionWidgets(record.extensionWidgets),
     allowRemoteImages: typeof record.allowRemoteImages === 'boolean' ? record.allowRemoteImages : false,
     welcomeDismissed: Boolean(record.welcomeDismissed),
     promptContext: Array.isArray(record.promptContext) ? record.promptContext : [],
@@ -104,6 +106,25 @@ function isExtensionStatusEntry(value: unknown): value is WebviewState['extensio
   return isRecord(value)
     && typeof value.key === 'string'
     && typeof value.text === 'string';
+}
+
+function parseExtensionWidgets(value: unknown): WebviewState['extensionWidgets'] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter(isExtensionWidgetEntry).map((entry) => ({
+    key: entry.key,
+    placement: entry.placement,
+    lines: entry.lines.map((line) => String(line))
+  }));
+}
+
+function isExtensionWidgetEntry(value: unknown): value is WebviewState['extensionWidgets'][number] {
+  return isRecord(value)
+    && typeof value.key === 'string'
+    && (value.placement === 'aboveEditor' || value.placement === 'belowEditor')
+    && Array.isArray(value.lines);
 }
 
 function parseAuthState(value: unknown): WebviewState['auth'] {

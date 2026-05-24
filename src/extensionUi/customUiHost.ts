@@ -1,6 +1,6 @@
 import type { ExtensionCustomUiFactory, ExtensionCustomUiOptions } from './types';
 
-type CustomUiComponent = {
+export type CustomUiComponent = {
   render(width: number): string[];
   handleInput?(data: string): void;
   wantsKeyRelease?: boolean;
@@ -9,7 +9,7 @@ type CustomUiComponent = {
   dispose?(): void;
 };
 
-type CustomUiTerminal = {
+export type CustomUiTerminal = {
   columns: number;
   rows: number;
 };
@@ -254,7 +254,7 @@ export class ExtensionCustomUiHost {
 
 }
 
-function createTuiFacade(terminal: CustomUiTerminal, requestRender: () => void) {
+export function createTuiFacade(terminal: CustomUiTerminal, requestRender: () => void) {
   return {
     terminal,
     requestRender,
@@ -294,7 +294,7 @@ function createOverlayHandle(cancel: () => void) {
   };
 }
 
-function setComponentFocused(component: CustomUiComponent, focused: boolean): void {
+export function setComponentFocused(component: CustomUiComponent, focused: boolean): void {
   if ('focused' in component) {
     component.focused = focused;
   }
@@ -380,7 +380,7 @@ const bgCodes: Record<string, number> = {
   toolErrorBg: 41
 };
 
-const tauTheme = {
+export const tauTheme = {
   fg(color: string, text: string) {
     return wrap(colorCodes[color] ?? 37, text);
   },
@@ -419,7 +419,7 @@ const tauTheme = {
   }
 };
 
-const tauKeybindings = {
+export const tauKeybindings = {
   matches(data: string, keybinding: string) {
     const keys = keybindingDefaults[keybinding] ?? [];
     return keys.some((key) => terminalDataForKey(key) === data);

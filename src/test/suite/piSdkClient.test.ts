@@ -282,12 +282,18 @@ suite('PiSdkClient', () => {
   test('maps extension UI bridge methods to Tau UI callbacks', async () => {
     const notifications: Array<{ message: string; notifyType: string }> = [];
     const statuses: Array<{ key: string; text: string | undefined }> = [];
+    const widgets: Array<{ key: string; lines: string[] | undefined; placement?: 'aboveEditor' | 'belowEditor' }> = [];
     const ui = createSdkExtensionUiContext({
       notify: (message, notifyType) => notifications.push({ message, notifyType }),
       select: async (_title, options) => options[1],
       confirm: async () => true,
       input: async (_title, placeholder) => placeholder,
-      setStatus: (key, text) => statuses.push({ key, text })
+      setStatus: (key, text) => statuses.push({ key, text }),
+      setWidget: (key, content, options) => widgets.push({
+        key,
+        lines: Array.isArray(content) ? content : undefined,
+        placement: options?.placement
+      })
     });
 
     assert.strictEqual(await ui.select('Pick', ['A', 'B']), 'B');
@@ -297,11 +303,15 @@ suite('PiSdkClient', () => {
     ui.notify('Saved', 'info');
     ui.setStatus('plan-mode', 'Planning');
     ui.setStatus('plan-mode', undefined);
+    ui.setWidget('todo', ['Line 1'], { placement: 'belowEditor' });
 
     assert.deepStrictEqual(notifications, [{ message: 'Saved', notifyType: 'info' }]);
     assert.deepStrictEqual(statuses, [
       { key: 'plan-mode', text: 'Planning' },
       { key: 'plan-mode', text: undefined }
+    ]);
+    assert.deepStrictEqual(widgets, [
+      { key: 'todo', lines: ['Line 1'], placement: 'belowEditor' }
     ]);
   });
 });

@@ -4,6 +4,7 @@ All notable changes to Tau will be documented in this file.
 
 ## Unreleased
 
+- Added Pi extension widget support for `ctx.ui.setWidget()` above and below the composer.
 - Changed the context status tooltip to show Pi-style live token, cost, subscription, context, and auto-compaction stats.
 - Added a one-line Pi extension status bar below the composer for `ctx.ui.setStatus()` updates.
 - Fixed the settings face so it does not replay the flip animation after safety setting updates refresh the webview.

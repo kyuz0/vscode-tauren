@@ -1,4 +1,6 @@
 import { configureCodeHighlighting, handleCodeHighlightMessage, watchCodeHighlightThemeChanges } from './codeHighlighting';
+import { prepareCustomUiLines } from './customUI/customUi';
+import { getAnsiLineBackground, renderAnsiTextInto } from './messages/ansi';
 import { configureMarkdownImageRendering, handleMarkdownImageMessage } from './messages/markdown';
 import { ComposerController } from './composer/composer';
 import { CustomUiController } from './customUI/customUi';
@@ -34,6 +36,9 @@ const {
   customUiElement,
   customUiOutputElement,
   customUiCloseButton,
+  widgetBusySlotElement,
+  extensionWidgetsAboveElement,
+  extensionWidgetsBelowElement,
   form,
   textarea,
   composerStatusElement,
@@ -79,6 +84,9 @@ let pendingReturnToChatAfterRender = false;
 let hasReceivedHostState = false;
 let faceTransitionSuppressionFrame: number | undefined;
 const renderInstrumentationEnabled = document.body.dataset.tauDevRenderInstrumentation === 'true';
+const busySubmitHomeMarker = document.createComment('busy-submit-home');
+busySubmitElement.after(busySubmitHomeMarker);
+const widgetDimensionSignatures = new Map<string, string>();
 
 let sessionsController: SessionViewController;
 let settingsController: SettingsPaneController;
@@ -444,6 +452,7 @@ function render(): void {
   form.classList.toggle('composer--list-hidden', isSessionLane);
   form.setAttribute('aria-hidden', isSessionLane || isSettingsFaceVisible ? 'true' : 'false');
   form.inert = isSessionLane || isSettingsFaceVisible;
+  syncExtensionWidgets(isSessionLane || isSettingsFaceVisible);
   syncExtensionStatus(isSessionLane || isSettingsFaceVisible);
 
   sessionsController.syncForRender(isSessionLane);
@@ -487,6 +496,140 @@ function render(): void {
   if (shouldStickToBottom) {
     messagesController.scheduleMessagesToBottom();
   }
+}
+
+function syncExtensionWidgets(hiddenBySurface: boolean): void {
+  const aboveWidgets = hiddenBySurface ? [] : state.extensionWidgets.filter((widget) => widget.placement === 'aboveEditor');
+  const belowWidgets = hiddenBySurface ? [] : state.extensionWidgets.filter((widget) => widget.placement === 'belowEditor');
+  const busyAboveWidgets = state.busy && aboveWidgets.length > 0;
+
+  const activeKeys = new Set([...aboveWidgets, ...belowWidgets].map((widget) => widget.key));
+  for (const key of widgetDimensionSignatures.keys()) {
+    if (!activeKeys.has(key)) {
+      widgetDimensionSignatures.delete(key);
+    }
+  }
+
+  renderExtensionWidgetContainer(extensionWidgetsAboveElement, aboveWidgets);
+  renderExtensionWidgetContainer(extensionWidgetsBelowElement, belowWidgets);
+  syncBusySubmitPlacement(busyAboveWidgets && !hiddenBySurface);
+  viewElement.classList.toggle('tau-view--has-extension-widgets-above', aboveWidgets.length > 0);
+  viewElement.classList.toggle('tau-view--has-extension-widgets-below', belowWidgets.length > 0);
+}
+
+function renderExtensionWidgetContainer(container: HTMLElement, widgets: WebviewState['extensionWidgets']): void {
+  container.hidden = widgets.length === 0;
+  container.setAttribute('aria-hidden', widgets.length === 0 ? 'true' : 'false');
+
+  if (widgets.length === 0) {
+    container.replaceChildren();
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+
+  for (const widget of widgets) {
+    const element = document.createElement('article');
+    element.className = 'extension-widget';
+    element.dataset.widgetKey = widget.key;
+    element.setAttribute('aria-label', `Pi extension widget ${widget.key}`);
+
+    const prepared = prepareCustomUiLines(widget.lines);
+    for (const line of prepared.lines) {
+      const lineElement = document.createElement('div');
+      lineElement.className = 'extension-widget__line';
+      const background = getAnsiLineBackground(line, state.outputColors);
+      if (background) {
+        lineElement.classList.add('extension-widget__line--ansi-background');
+        lineElement.style.backgroundColor = background;
+      }
+      renderAnsiTextInto(lineElement, line, state.outputColors);
+      element.append(lineElement);
+    }
+
+    fragment.append(element);
+  }
+
+  container.replaceChildren(fragment);
+  scheduleExtensionWidgetDimensionsPost(container, widgets);
+}
+
+function syncBusySubmitPlacement(aboveWidgets: boolean): void {
+  widgetBusySlotElement.hidden = true;
+
+  if (aboveWidgets) {
+    if (busySubmitElement.parentElement !== extensionWidgetsAboveElement) {
+      extensionWidgetsAboveElement.insertBefore(busySubmitElement, extensionWidgetsAboveElement.firstChild);
+    } else if (extensionWidgetsAboveElement.firstChild !== busySubmitElement) {
+      extensionWidgetsAboveElement.insertBefore(busySubmitElement, extensionWidgetsAboveElement.firstChild);
+    }
+    return;
+  }
+
+  if (busySubmitElement.parentElement !== form) {
+    busySubmitHomeMarker.parentNode?.insertBefore(busySubmitElement, busySubmitHomeMarker);
+  }
+}
+
+function scheduleExtensionWidgetDimensionsPost(container: HTMLElement, widgets: WebviewState['extensionWidgets']): void {
+  requestAnimationFrame(() => {
+    for (const widget of widgets) {
+      const element = container.querySelector<HTMLElement>(`.extension-widget[data-widget-key="${cssEscape(widget.key)}"]`);
+
+      if (!element) {
+        continue;
+      }
+
+      const dimensions = measureExtensionWidgetDimensions(element);
+      const signature = `${dimensions.columns}x${dimensions.rows}`;
+      const signatureKey = widget.key;
+
+      if (widgetDimensionSignatures.get(signatureKey) === signature) {
+        continue;
+      }
+
+      widgetDimensionSignatures.set(signatureKey, signature);
+      vscode.postMessage({
+        type: 'extensionWidgetDimensions',
+        key: widget.key,
+        columns: dimensions.columns,
+        rows: dimensions.rows
+      });
+    }
+  });
+}
+
+function measureExtensionWidgetDimensions(element: HTMLElement): { columns: number; rows: number } {
+  const style = window.getComputedStyle(element);
+  const font = `${style.fontStyle} ${style.fontVariant} ${style.fontWeight} ${style.fontSize} / ${style.lineHeight} ${style.fontFamily}`;
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+  let charWidth = 8;
+
+  if (context) {
+    context.font = font;
+    charWidth = Math.max(1, context.measureText('M').width);
+  }
+
+  const fontSize = Number.parseFloat(style.fontSize) || 12;
+  const lineHeight = Number.parseFloat(style.lineHeight) || fontSize * 1.35 || 18;
+  const rect = element.getBoundingClientRect();
+  const contentWidth = Math.max(0, rect.width
+    - (Number.parseFloat(style.paddingLeft) || 0)
+    - (Number.parseFloat(style.paddingRight) || 0));
+  const contentHeight = Math.max(lineHeight, rect.height
+    - (Number.parseFloat(style.paddingTop) || 0)
+    - (Number.parseFloat(style.paddingBottom) || 0));
+  const columns = Math.max(20, Math.floor(contentWidth / charWidth));
+  const rows = Math.max(1, Math.min(80, Math.floor(contentHeight / lineHeight)));
+
+  return { columns, rows };
+}
+
+function cssEscape(value: string): string {
+  return typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+    ? CSS.escape(value)
+    : value.replace(/[^a-zA-Z0-9_-]/g, '\\$&');
 }
 
 function syncExtensionStatus(hiddenBySurface: boolean): void {

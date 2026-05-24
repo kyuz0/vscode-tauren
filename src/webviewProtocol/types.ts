@@ -82,6 +82,7 @@ export type WebviewMessage =
   | { type: 'customUiInput'; id: string; data: string }
   | { type: 'customUiCancel'; id: string }
   | { type: 'customUiDimensions'; id: string; columns: number; rows: number }
+  | { type: 'extensionWidgetDimensions'; key: string; columns: number; rows: number }
   | { type: 'submit'; text: string; streamingBehavior?: WebviewStreamingBehavior }
   | { type: 'setModel'; provider: string; modelId: string }
   | { type: 'setThinkingLevel'; level: string }
@@ -164,6 +165,12 @@ export type WebviewExtensionStatusEntry = {
   text: string;
 };
 
+export type WebviewExtensionWidgetEntry = {
+  key: string;
+  placement: 'aboveEditor' | 'belowEditor';
+  lines: string[];
+};
+
 export type WebviewMessagePatch = {
   upserts?: Array<{ index: number; message: ChatSnapshotMessage }>;
   deleteFrom?: number;
@@ -190,6 +197,7 @@ export type WebviewStateMessage = Omit<ChatState, 'messages'> & {
   animationsEnabled: boolean;
   customUiTheme: WebviewCustomUiTheme;
   extensionStatus: WebviewExtensionStatusEntry[];
+  extensionWidgets: WebviewExtensionWidgetEntry[];
   allowRemoteImages?: boolean;
   welcomeDismissed?: boolean;
   promptContext?: WebviewPromptContextAttachment[];
@@ -236,6 +244,7 @@ export type CreateWebviewStateMessageOptions = {
   animationsEnabled?: boolean;
   customUiTheme?: WebviewCustomUiTheme;
   extensionStatus?: WebviewExtensionStatusEntry[];
+  extensionWidgets?: WebviewExtensionWidgetEntry[];
   allowRemoteImages?: boolean;
   welcomeDismissed?: boolean;
   promptContext?: WebviewPromptContextAttachment[];

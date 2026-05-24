@@ -4,9 +4,88 @@ export const composerStyles = /* css */ `    .tau-view--has-extension-status {
       --tau-custom-ui-bottom-offset: calc(var(--tau-composer-bottom-margin) + var(--tau-composer-status-height) + var(--tau-composer-status-gap) + var(--tau-composer-min-height) + var(--tau-composer-custom-ui-clearance));
     }
 
+    .composer__widget-busy-slot {
+      grid-row: 2;
+      grid-column: 1;
+      margin: 0 var(--tau-chat-inline-padding) 6px;
+    }
+
+    .composer__widget-busy-slot[hidden] {
+      display: none;
+    }
+
+    .composer__widget-busy-slot .composer__busy-submit,
+    .extension-widgets--above .composer__busy-submit {
+      position: static;
+      left: auto;
+      right: auto;
+      bottom: auto;
+      width: 100%;
+      box-sizing: border-box;
+      background: var(--vscode-input-background);
+      border-color: var(--vscode-input-border, transparent);
+      border-radius: 14px;
+      box-shadow: inset 0 1px 0 color-mix(in srgb, var(--vscode-foreground) 8%, transparent);
+    }
+
+    .extension-widgets {
+      grid-column: 1;
+      display: grid;
+      gap: 6px;
+      margin: 0 var(--tau-chat-inline-padding);
+    }
+
+    .extension-widgets[hidden] {
+      display: none;
+    }
+
+    .extension-widgets--above {
+      grid-row: 3;
+      margin-bottom: 6px;
+    }
+
+    .extension-widgets--below {
+      grid-row: 5;
+      margin-top: 6px;
+      margin-bottom: var(--tau-composer-bottom-margin);
+    }
+
+    .tau-view--has-extension-widgets-below.tau-view--has-extension-status .extension-widgets--below {
+      margin-bottom: var(--tau-composer-status-gap, 6px);
+    }
+
+    .extension-widget {
+      min-width: 0;
+      max-width: 100%;
+      padding: 10px;
+      overflow: hidden;
+      color: var(--vscode-foreground);
+      background: var(--vscode-input-background);
+      border: 1px solid var(--vscode-input-border, transparent);
+      border-radius: 14px;
+      box-shadow: inset 0 1px 0 color-mix(in srgb, var(--vscode-foreground) 8%, transparent);
+      box-sizing: border-box;
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .extension-widget__line {
+      width: 100%;
+      min-width: 0;
+      margin: 0;
+      overflow: hidden;
+      line-height: inherit;
+      white-space: pre;
+    }
+
+    .extension-widget__line--ansi-background {
+      background-clip: padding-box;
+    }
+
     .composer {
       position: relative;
-      grid-row: 2;
+      grid-row: 4;
       grid-column: 1;
       display: grid;
       grid-template-columns: auto minmax(0, 1fr) 36px;
@@ -38,6 +117,11 @@ export const composerStyles = /* css */ `    .tau-view--has-extension-status {
       margin-bottom: var(--tau-composer-status-gap);
     }
 
+    .tau-view--has-extension-widgets-below .composer,
+    .tau-view--has-extension-widgets-below.tau-view--has-extension-status .composer {
+      margin-bottom: 0;
+    }
+
     .composer--list-hidden {
       opacity: 0;
       pointer-events: none;
@@ -54,7 +138,7 @@ export const composerStyles = /* css */ `    .tau-view--has-extension-status {
     }
 
     .composer-status {
-      grid-row: 3;
+      grid-row: 6;
       grid-column: 1;
       display: flex;
       align-items: center;

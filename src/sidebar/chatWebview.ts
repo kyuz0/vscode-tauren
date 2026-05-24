@@ -195,6 +195,14 @@ export function parseWebviewMessage(value: unknown): WebviewMessage {
         ? { type: 'customUiDimensions', id: value.id, columns, rows }
         : { type: 'unknown' };
     }
+    case 'extensionWidgetDimensions': {
+      const columns = parsePositiveInteger(value.columns);
+      const rows = parsePositiveInteger(value.rows);
+
+      return typeof value.key === 'string' && value.key && columns !== undefined && rows !== undefined
+        ? { type: 'extensionWidgetDimensions', key: value.key, columns, rows }
+        : { type: 'unknown' };
+    }
     case 'submit': {
       if (typeof value.text !== 'string') {
         return { type: 'unknown' };
@@ -235,6 +243,7 @@ export function createWebviewStateMessage({
   animationsEnabled = true,
   customUiTheme = 'default',
   extensionStatus = [],
+  extensionWidgets = [],
   allowRemoteImages = false,
   welcomeDismissed,
   promptContext = [],
@@ -270,6 +279,7 @@ export function createWebviewStateMessage({
     animationsEnabled,
     customUiTheme,
     extensionStatus: extensionStatus.map((entry) => ({ ...entry })),
+    extensionWidgets: extensionWidgets.map((entry) => ({ ...entry, lines: entry.lines.slice() })),
     allowRemoteImages: Boolean(allowRemoteImages)
   };
 
@@ -440,6 +450,8 @@ ${createInitialEmptyStateHtml(Boolean(options.welcomeDismissed))}
           </div>
           <div class="custom-ui__output" aria-live="polite"></div>
         </section>
+        <div class="composer__widget-busy-slot" hidden></div>
+        <section class="extension-widgets extension-widgets--above" aria-label="Pi extension widgets above composer" hidden></section>
         <form class="composer" aria-label="Prompt input">
       <div id="slash-command-list" class="composer__slash-menu" role="listbox" aria-label="Slash commands"></div>
       <div class="composer__context-badges" aria-label="Attached context" hidden></div>
@@ -495,6 +507,7 @@ ${createInitialEmptyStateHtml(Boolean(options.welcomeDismissed))}
         <span class="tau-icon-action-tooltip">Send message</span>
       </button>
         </form>
+        <section class="extension-widgets extension-widgets--below" aria-label="Pi extension widgets below composer" hidden></section>
         <section class="composer-status" aria-label="Pi extension status" role="status" aria-live="polite" hidden>
           <span class="composer-status__text"></span>
         </section>

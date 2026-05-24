@@ -86,6 +86,101 @@ suite('TauSessionManager', () => {
     harness.manager.dispose();
   });
 
+  test('surfaces extension widgets for the active session', async () => {
+    const harness = createManagerHarness([new FakePiClient()]);
+
+    await harness.manager.handleWebviewMessage({ type: 'submit', text: 'hello' });
+
+    const extensionUi = harness.clientOptions[0].extensionUi;
+    assert.ok(extensionUi);
+
+    extensionUi.setWidget?.('plan', ['\u001b[32mPlanning\u001b[0m']);
+    assert.deepStrictEqual(lastState(harness).extensionWidgets, [
+      { key: 'plan', placement: 'aboveEditor', lines: ['\u001b[32mPlanning\u001b[0m'] }
+    ]);
+
+    extensionUi.setWidget?.('review', ['Reviewing'], { placement: 'belowEditor' });
+    assert.deepStrictEqual(lastState(harness).extensionWidgets, [
+      { key: 'plan', placement: 'aboveEditor', lines: ['\u001b[32mPlanning\u001b[0m'] },
+      { key: 'review', placement: 'belowEditor', lines: ['Reviewing'] }
+    ]);
+
+    extensionUi.setWidget?.('plan', undefined);
+    assert.deepStrictEqual(lastState(harness).extensionWidgets, [
+      { key: 'review', placement: 'belowEditor', lines: ['Reviewing'] }
+    ]);
+
+    extensionUi.clearWidgets?.();
+    assert.deepStrictEqual(lastState(harness).extensionWidgets, []);
+    harness.manager.dispose();
+  });
+
+  test('renders component widgets and updates dimensions', async () => {
+    const harness = createManagerHarness([new FakePiClient()]);
+
+    await harness.manager.handleWebviewMessage({ type: 'submit', text: 'hello' });
+
+    const extensionUi = harness.clientOptions[0].extensionUi;
+    assert.ok(extensionUi);
+
+    let renderedWidth = 0;
+    extensionUi.setWidget?.('component', (_tui) => ({
+      render: (width) => {
+        renderedWidth = width;
+        return [`width ${width}`];
+      },
+      invalidate: () => undefined
+    }));
+    await flushPromises();
+
+    assert.deepStrictEqual(lastState(harness).extensionWidgets, [
+      { key: 'component', placement: 'aboveEditor', lines: ['width 80'] }
+    ]);
+
+    await harness.manager.handleWebviewMessage({ type: 'extensionWidgetDimensions', key: 'component', columns: 42, rows: 3 });
+    await wait(20);
+
+    assert.strictEqual(renderedWidth, 42);
+    assert.deepStrictEqual(lastState(harness).extensionWidgets, [
+      { key: 'component', placement: 'aboveEditor', lines: ['width 42'] }
+    ]);
+    harness.manager.dispose();
+  });
+
+  test('disposes replaced widget before mounting the replacement', async () => {
+    const harness = createManagerHarness([new FakePiClient()]);
+
+    await harness.manager.handleWebviewMessage({ type: 'submit', text: 'hello' });
+
+    const extensionUi = harness.clientOptions[0].extensionUi;
+    assert.ok(extensionUi);
+
+    let disposed = false;
+    extensionUi.setWidget?.('component', () => ({
+      render: () => ['first'],
+      invalidate: () => undefined,
+      dispose: () => { disposed = true; }
+    }));
+    await flushPromises();
+
+    disposed = false;
+    extensionUi.setWidget?.('component', () => {
+      assert.strictEqual(disposed, true);
+      disposed = false;
+      return {
+        render: () => disposed ? ['blank'] : ['replacement'],
+        invalidate: () => undefined,
+        dispose: () => { disposed = true; }
+      };
+    });
+    await flushPromises();
+
+    assert.deepStrictEqual(lastState(harness).extensionWidgets, [
+      { key: 'component', placement: 'aboveEditor', lines: ['replacement'] }
+    ]);
+    harness.manager.dispose();
+  });
+
   test('keeps background custom UI hidden until its session is selected', async () => {
     const firstClient = new FakePiClient({ state: { sessionFile: '/sessions/one.jsonl' } });
     const secondClient = new FakePiClient();

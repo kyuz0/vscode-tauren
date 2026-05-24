@@ -46,7 +46,7 @@ export const viewLayoutStyles = /* css */ `    .tau-chat-surface,
       position: relative;
       display: grid;
       grid-template-columns: minmax(0, 1fr);
-      grid-template-rows: minmax(0, 1fr) auto auto;
+      grid-template-rows: minmax(0, 1fr) auto auto auto auto auto;
       overflow: hidden;
       transform: rotateY(0deg);
       opacity: 1;

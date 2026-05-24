@@ -27,7 +27,9 @@ export function createSdkExtensionUiContext(ui?: ExtensionUi): ExtensionUIContex
     setWorkingVisible() {},
     setWorkingIndicator() {},
     setHiddenThinkingLabel() {},
-    setWidget() {},
+    setWidget(key, content, options) {
+      resolvedUi.setWidget?.(key, content, options);
+    },
     setFooter() {},
     setHeader() {},
     setTitle() {},
