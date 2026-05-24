@@ -74,6 +74,7 @@ export function parseWebviewStateMessage(data: unknown, previousState?: WebviewS
     promptContext: Array.isArray(record.promptContext) ? record.promptContext : [],
     composerText: typeof record.composerText === 'string' ? record.composerText : '',
     composerTextRevision: typeof record.composerTextRevision === 'number' ? record.composerTextRevision : 0,
+    composerPaste: parseComposerPaste(record.composerPaste),
     lane: parseWebviewLane(record.lane, 'chat'),
     chatFace: parseChatFace(record.chatFace, parseWebviewLane(record.lane, 'chat')),
     settingsSection: parseWebviewSettingsSection(record.settingsSection, 'appearance'),
@@ -88,6 +89,17 @@ export function parseWebviewStateMessage(data: unknown, previousState?: WebviewS
     treeRefreshing: Boolean(record.treeRefreshing),
     treeError: typeof record.treeError === 'string' ? record.treeError : '',
     sessionLoading: Boolean(record.sessionLoading)
+  };
+}
+
+function parseComposerPaste(value: unknown): WebviewState['composerPaste'] {
+  if (!isRecord(value) || typeof value.text !== 'string' || typeof value.revision !== 'number') {
+    return undefined;
+  }
+
+  return {
+    text: value.text,
+    revision: value.revision
   };
 }
 

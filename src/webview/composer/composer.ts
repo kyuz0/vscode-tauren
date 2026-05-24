@@ -1,5 +1,6 @@
 import { requestCodeHighlight } from '../codeHighlighting';
 import { createDiffCounter, formatDiffLineCount, normalizeDiffLineCount, updateDiffCounter } from './diffCounter';
+import { ComposerPasteBuffer } from './paste';
 import {
   hiddenLocalSlashCommandNames,
   localSlashCommands,
@@ -58,6 +59,7 @@ export class ComposerController {
   private busySubmitHideTimeout: ReturnType<typeof setTimeout> | undefined;
   private modelSelectOptionsSignature = '';
   private textareaLayoutSignature = '';
+  private readonly pasteBuffer = new ComposerPasteBuffer();
   private readonly addedDiffCounter: ReturnType<typeof createDiffCounter>;
   private readonly removedDiffCounter: ReturnType<typeof createDiffCounter>;
 
@@ -286,6 +288,25 @@ export class ComposerController {
 
     this.appliedComposerTextRevision = state.composerTextRevision;
     this.options.textarea.value = state.composerText;
+    this.pasteBuffer.clear();
+    this.closeSlashMenu();
+    this.syncComposer({ preserveBottom: true });
+    this.options.focusPromptInput();
+  }
+
+  public pasteToEditor(text: string): void {
+    const textarea = this.options.textarea;
+    const result = this.pasteBuffer.paste(
+      textarea.value,
+      text,
+      textarea.selectionStart,
+      textarea.selectionEnd
+    );
+
+    textarea.value = result.text;
+    textarea.selectionStart = result.cursor;
+    textarea.selectionEnd = result.cursor;
+    this.slashMenuDismissedQuery = undefined;
     this.closeSlashMenu();
     this.syncComposer({ preserveBottom: true });
     this.options.focusPromptInput();
@@ -359,6 +380,7 @@ export class ComposerController {
 
     if (this.options.textarea.value.length > 0) {
       this.options.textarea.value = '';
+      this.pasteBuffer.clear();
       this.slashMenuDismissedQuery = undefined;
       this.closeSlashMenu();
       this.syncComposer({ preserveBottom: true });
@@ -392,7 +414,7 @@ export class ComposerController {
   private handleSubmit(event: SubmitEvent): void {
     const state = this.options.getState();
     event.preventDefault();
-    const text = this.options.textarea.value.trim();
+    const text = this.pasteBuffer.expand(this.options.textarea.value).trim();
 
     if (!text) {
       return;
@@ -404,6 +426,7 @@ export class ComposerController {
       ? { type: 'submit', text, streamingBehavior: this.streamingBehavior }
       : { type: 'submit', text });
     this.options.textarea.value = '';
+    this.pasteBuffer.clear();
     this.syncComposer({ preserveBottom: true });
     this.options.focusPromptInput();
   }

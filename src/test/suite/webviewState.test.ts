@@ -41,6 +41,7 @@ suite('Webview state helpers', () => {
       promptContext: [{ id: 'context-1', kind: 'file', label: 'file.ts', title: 'src/file.ts' }],
       composerText: 'draft',
       composerTextRevision: 2,
+      composerPaste: { text: 'paste', revision: 3 },
       lane: 'sessions',
       chatFace: 'settings',
       settingsSection: 'runtime',
@@ -89,6 +90,7 @@ suite('Webview state helpers', () => {
     assert.strictEqual(parsed.sessions[0]?.path, '/session.jsonl');
     assert.strictEqual(parsed.treeItems[0]?.entryId, 'entry-1');
     assert.strictEqual(parsed.sessionLoading, true);
+    assert.deepStrictEqual(parsed.composerPaste, { text: 'paste', revision: 3 });
 
     const settingsParsed = parseWebviewStateMessage({ lane: 'chat', chatFace: 'settings' });
     assert.strictEqual(settingsParsed.lane, 'chat');
@@ -139,6 +141,7 @@ suite('Webview state helpers', () => {
       modelLabel: 1,
       workspaceDiffStats: { addedLines: -1, removedLines: 'bad' },
       composerTextRevision: 'bad',
+      composerPaste: { text: 1, revision: 'bad' },
       customUiTheme: 'bad',
       lane: 'unknown',
       chatFace: 'bad',
@@ -150,6 +153,7 @@ suite('Webview state helpers', () => {
     assert.strictEqual(parsed.modelLabel, '');
     assert.deepStrictEqual(parsed.workspaceDiffStats, { addedLines: 0, removedLines: 0 });
     assert.strictEqual(parsed.composerTextRevision, 0);
+    assert.strictEqual(parsed.composerPaste, undefined);
     assert.strictEqual(parsed.lane, 'chat');
     assert.strictEqual(parsed.chatFace, 'main');
     assert.strictEqual(parsed.settingsSection, 'appearance');

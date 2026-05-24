@@ -130,6 +130,23 @@ suite('TauSessionManager', () => {
     harness.manager.dispose();
   });
 
+  test('pastes text from the active session extension UI', async () => {
+    const harness = createManagerHarness([new FakePiClient()]);
+
+    await harness.manager.handleWebviewMessage({ type: 'submit', text: 'hello' });
+
+    const extensionUi = harness.clientOptions[0].extensionUi;
+    assert.ok(extensionUi);
+
+    extensionUi.pasteToEditor?.('pasted by extension');
+
+    assert.deepStrictEqual(lastState(harness).composerPaste, {
+      text: 'pasted by extension',
+      revision: 1
+    });
+    harness.manager.dispose();
+  });
+
   test('activates source session when background extension UI sets composer text', async () => {
     const firstClient = new FakePiClient({ state: { sessionFile: '/sessions/one.jsonl' } });
     const secondClient = new FakePiClient({ state: { sessionFile: '/sessions/two.jsonl' } });

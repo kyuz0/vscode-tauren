@@ -36,6 +36,7 @@ type OpenSession = {
   inactiveDisposeTimer: ReturnType<typeof setTimeout> | undefined;
   outboundStateMessage: WebviewStateMessage | undefined;
   forceFullStatePost: boolean;
+  pendingComposerPaste: { text: string; revision: number } | undefined;
 };
 
 export class TauSessionManager {
@@ -44,6 +45,7 @@ export class TauSessionManager {
   private customUiViewAttached = false;
   private activeSessionId = '';
   private sessionSequence = 0;
+  private composerPasteRevision = 0;
 
   public constructor(private readonly options: TauSessionManagerOptions) {
     this.createSession({ initial: true });
@@ -252,7 +254,8 @@ export class TauSessionManager {
       inactiveSince: undefined,
       inactiveDisposeTimer: undefined,
       outboundStateMessage: undefined,
-      forceFullStatePost: true
+      forceFullStatePost: true,
+      pendingComposerPaste: undefined
     };
 
     this.sessions.push(session);
@@ -355,15 +358,38 @@ export class TauSessionManager {
       clearStatuses: () => this.clearExtensionStatuses(id),
       setWidget: (key, content, options) => extensionWidgetHost.setWidget(key, content, options),
       clearWidgets: () => extensionWidgetHost.clearWidgets(),
-      setEditorText: (text) => this.setEditorTextForSession(id, text)
+      setEditorText: (text) => this.setEditorTextForSession(id, text),
+      pasteToEditor: (text) => this.pasteToEditorForSession(id, text)
     };
   }
 
   private setEditorTextForSession(id: string, text: string): void {
-    const session = this.sessions.find((entry) => entry.id === id);
+    const session = this.showSessionComposer(id);
 
     if (!session) {
       return;
+    }
+
+    session.controller.setComposerText(text);
+  }
+
+  private pasteToEditorForSession(id: string, text: string): void {
+    const session = this.showSessionComposer(id);
+
+    if (!session) {
+      return;
+    }
+
+    this.composerPasteRevision += 1;
+    session.pendingComposerPaste = { text, revision: this.composerPasteRevision };
+    this.postState();
+  }
+
+  private showSessionComposer(id: string): OpenSession | undefined {
+    const session = this.sessions.find((entry) => entry.id === id);
+
+    if (!session) {
+      return undefined;
     }
 
     if (id !== this.activeSessionId) {
@@ -372,7 +398,7 @@ export class TauSessionManager {
       session.controller.showChat();
     }
 
-    session.controller.setComposerText(text);
+    return session;
   }
 
   private setExtensionStatus(id: string, key: string, text: string | undefined): void {
@@ -518,8 +544,12 @@ export class TauSessionManager {
 
     const sessions = state.sessions && state.sessions.length > 0 ? state.sessions : this.sessionCatalog;
 
+    const composerPaste = active.pendingComposerPaste;
+    active.pendingComposerPaste = undefined;
+
     this.options.postState({
       ...outboundState,
+      ...(composerPaste ? { composerPaste } : {}),
       sessions: augmentSessions(sessions ?? [], this.sessions, this.activeSessionId),
       currentSessionName: state.currentSessionName || active.title,
       extensionStatus: formatExtensionStatuses(active.extensionStatuses),

@@ -236,6 +236,7 @@ window.addEventListener('message', (event) => {
   hasReceivedHostState = true;
   const nextState = parseWebviewStateMessage(event.data, state);
   const hasComposerTextUpdate = nextState.composerTextRevision > 0;
+  const hasComposerPasteUpdate = nextState.composerPaste !== undefined;
   state = nextState;
 
   if (isInitialHostState) {
@@ -278,6 +279,10 @@ window.addEventListener('message', (event) => {
 
   if (hasComposerTextUpdate) {
     composerController.applyComposerTextFromState();
+  }
+
+  if (hasComposerPasteUpdate && state.composerPaste) {
+    composerController.pasteToEditor(state.composerPaste.text);
   }
 
   scheduleRender({ returnToChatMain: wasSessionLane && state.lane === 'chat' && state.chatFace !== 'settings' });

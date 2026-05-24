@@ -101,6 +101,10 @@ export type WebviewState = {
   promptContext: PromptContextAttachment[];
   composerText: string;
   composerTextRevision: number;
+  composerPaste?: {
+    text: string;
+    revision: number;
+  };
   lane: Lane;
   chatFace: ChatFace;
   settingsSection: SettingsSection;

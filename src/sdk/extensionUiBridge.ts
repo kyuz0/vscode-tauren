@@ -37,6 +37,11 @@ export function createSdkExtensionUiContext(ui?: ExtensionUi): ExtensionUIContex
       return await resolvedUi.custom?.(factory, opts) as T;
     },
     pasteToEditor(text) {
+      if (resolvedUi.pasteToEditor) {
+        resolvedUi.pasteToEditor(text);
+        return;
+      }
+
       this.setEditorText(text);
     },
     setEditorText(text) {

@@ -1652,6 +1652,74 @@
     return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
   }
 
+  // src/webview/composer/paste.ts
+  var pasteMarkerRegex = /\[paste #(\d+)( (\+\d+ lines|\d+ chars))?\]/g;
+  var csiuControlRegex = /\x1b\[(\d+);5u/g;
+  var ComposerPasteBuffer = class {
+    pastes = /* @__PURE__ */ new Map();
+    pasteCounter = 0;
+    paste(text, pastedText, selectionStart, selectionEnd) {
+      const start = clampIndex(selectionStart, text.length);
+      const end = clampIndex(selectionEnd, text.length);
+      const left = Math.min(start, end);
+      const right = Math.max(start, end);
+      const insertText = this.preparePasteText(text, pastedText, left);
+      const nextText = text.slice(0, left) + insertText + text.slice(right);
+      return {
+        text: nextText,
+        cursor: left + insertText.length
+      };
+    }
+    expand(text) {
+      if (this.pastes.size === 0 || !text.includes("[paste #")) {
+        return text;
+      }
+      return text.replace(pasteMarkerRegex, (marker, idText) => {
+        const paste = this.pastes.get(Number(idText));
+        return paste ?? marker;
+      });
+    }
+    clear() {
+      this.pastes.clear();
+      this.pasteCounter = 0;
+    }
+    preparePasteText(currentText, pastedText, cursor) {
+      const decodedText = pastedText.replace(csiuControlRegex, (match, code) => {
+        const cp = Number(code);
+        if (cp >= 97 && cp <= 122) {
+          return String.fromCharCode(cp - 96);
+        }
+        if (cp >= 65 && cp <= 90) {
+          return String.fromCharCode(cp - 64);
+        }
+        return match;
+      });
+      const cleanText = normalizePasteText(decodedText);
+      let filteredText = cleanText.split("").filter((char) => char === "\n" || char.charCodeAt(0) >= 32).join("");
+      if (/^[/~.]/.test(filteredText)) {
+        const charBeforeCursor = cursor > 0 ? currentText[cursor - 1] : "";
+        if (charBeforeCursor && /\w/.test(charBeforeCursor)) {
+          filteredText = ` ${filteredText}`;
+        }
+      }
+      const pastedLines = filteredText.split("\n");
+      const totalChars = filteredText.length;
+      if (pastedLines.length > 10 || totalChars > 1e3) {
+        this.pasteCounter += 1;
+        const pasteId = this.pasteCounter;
+        this.pastes.set(pasteId, filteredText);
+        return pastedLines.length > 10 ? `[paste #${pasteId} +${pastedLines.length} lines]` : `[paste #${pasteId} ${totalChars} chars]`;
+      }
+      return filteredText;
+    }
+  };
+  function normalizePasteText(text) {
+    return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\t/g, "    ");
+  }
+  function clampIndex(index, length) {
+    return Math.min(Math.max(Number.isFinite(index) ? Math.trunc(index) : length, 0), length);
+  }
+
   // src/commands/slashCommands.ts
   var localSlashCommandDefinitions = [
     { name: "model", description: "Select model", source: "builtin", supported: true },
@@ -1712,6 +1780,7 @@
     busySubmitHideTimeout;
     modelSelectOptionsSignature = "";
     textareaLayoutSignature = "";
+    pasteBuffer = new ComposerPasteBuffer();
     addedDiffCounter;
     removedDiffCounter;
     attachEventListeners() {
@@ -1887,6 +1956,23 @@
       }
       this.appliedComposerTextRevision = state2.composerTextRevision;
       this.options.textarea.value = state2.composerText;
+      this.pasteBuffer.clear();
+      this.closeSlashMenu();
+      this.syncComposer({ preserveBottom: true });
+      this.options.focusPromptInput();
+    }
+    pasteToEditor(text) {
+      const textarea2 = this.options.textarea;
+      const result = this.pasteBuffer.paste(
+        textarea2.value,
+        text,
+        textarea2.selectionStart,
+        textarea2.selectionEnd
+      );
+      textarea2.value = result.text;
+      textarea2.selectionStart = result.cursor;
+      textarea2.selectionEnd = result.cursor;
+      this.slashMenuDismissedQuery = void 0;
       this.closeSlashMenu();
       this.syncComposer({ preserveBottom: true });
       this.options.focusPromptInput();
@@ -1944,6 +2030,7 @@
       }
       if (this.options.textarea.value.length > 0) {
         this.options.textarea.value = "";
+        this.pasteBuffer.clear();
         this.slashMenuDismissedQuery = void 0;
         this.closeSlashMenu();
         this.syncComposer({ preserveBottom: true });
@@ -1968,7 +2055,7 @@
     handleSubmit(event) {
       const state2 = this.options.getState();
       event.preventDefault();
-      const text = this.options.textarea.value.trim();
+      const text = this.pasteBuffer.expand(this.options.textarea.value).trim();
       if (!text) {
         return;
       }
@@ -1976,6 +2063,7 @@
       this.options.cancelSessionNameEdit();
       this.options.postMessage(state2.busy ? { type: "submit", text, streamingBehavior: this.streamingBehavior } : { type: "submit", text });
       this.options.textarea.value = "";
+      this.pasteBuffer.clear();
       this.syncComposer({ preserveBottom: true });
       this.options.focusPromptInput();
     }
@@ -6377,6 +6465,7 @@ ${after}`;
       promptContext: Array.isArray(record.promptContext) ? record.promptContext : [],
       composerText: typeof record.composerText === "string" ? record.composerText : "",
       composerTextRevision: typeof record.composerTextRevision === "number" ? record.composerTextRevision : 0,
+      composerPaste: parseComposerPaste(record.composerPaste),
       lane: parseWebviewLane(record.lane, "chat"),
       chatFace: parseChatFace(record.chatFace, parseWebviewLane(record.lane, "chat")),
       settingsSection: parseWebviewSettingsSection(record.settingsSection, "appearance"),
@@ -6391,6 +6480,15 @@ ${after}`;
       treeRefreshing: Boolean(record.treeRefreshing),
       treeError: typeof record.treeError === "string" ? record.treeError : "",
       sessionLoading: Boolean(record.sessionLoading)
+    };
+  }
+  function parseComposerPaste(value) {
+    if (!isRecord3(value) || typeof value.text !== "string" || typeof value.revision !== "number") {
+      return void 0;
+    }
+    return {
+      text: value.text,
+      revision: value.revision
     };
   }
   function parseExtensionStatus(value) {
@@ -6766,6 +6864,7 @@ ${after}`;
     hasReceivedHostState = true;
     const nextState = parseWebviewStateMessage(event.data, state);
     const hasComposerTextUpdate = nextState.composerTextRevision > 0;
+    const hasComposerPasteUpdate = nextState.composerPaste !== void 0;
     state = nextState;
     if (isInitialHostState) {
       suppressFaceTransitionForNextRender();
@@ -6795,6 +6894,9 @@ ${after}`;
     }
     if (hasComposerTextUpdate) {
       composerController.applyComposerTextFromState();
+    }
+    if (hasComposerPasteUpdate && state.composerPaste) {
+      composerController.pasteToEditor(state.composerPaste.text);
     }
     scheduleRender({ returnToChatMain: wasSessionLane && state.lane === "chat" && state.chatFace !== "settings" });
     if (previousChatFace === "settings" && state.chatFace === "main" && state.lane === "chat") {

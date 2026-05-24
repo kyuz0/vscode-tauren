@@ -203,6 +203,10 @@ export type WebviewStateMessage = Omit<ChatState, 'messages'> & {
   promptContext?: WebviewPromptContextAttachment[];
   composerText?: string;
   composerTextRevision?: number;
+  composerPaste?: {
+    text: string;
+    revision: number;
+  };
   lane?: WebviewLane;
   sessions?: WebviewSessionItem[];
   sessionsRefreshing?: boolean;

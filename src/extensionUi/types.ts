@@ -29,6 +29,7 @@ export type ExtensionUi = {
   setWidget?(key: string, content: ExtensionWidgetContent | undefined, options?: ExtensionWidgetSetOptions): void;
   clearWidgets?(): void;
   setEditorText?(text: string): void;
+  pasteToEditor?(text: string): void;
 };
 
 export function createCancellingExtensionUi(

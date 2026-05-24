@@ -308,6 +308,7 @@ suite('PiSdkClient', () => {
     const statuses: Array<{ key: string; text: string | undefined }> = [];
     const widgets: Array<{ key: string; lines: string[] | undefined; placement?: 'aboveEditor' | 'belowEditor' }> = [];
     const composerTexts: string[] = [];
+    const composerPastes: string[] = [];
     const ui = createSdkExtensionUiContext({
       notify: (message, notifyType) => notifications.push({ message, notifyType }),
       select: async (_title, options) => options[1],
@@ -319,7 +320,8 @@ suite('PiSdkClient', () => {
         lines: Array.isArray(content) ? content : undefined,
         placement: options?.placement
       }),
-      setEditorText: (text) => composerTexts.push(text)
+      setEditorText: (text) => composerTexts.push(text),
+      pasteToEditor: (text) => composerPastes.push(text)
     });
 
     assert.strictEqual(await ui.select('Pick', ['A', 'B']), 'B');
@@ -341,7 +343,8 @@ suite('PiSdkClient', () => {
     assert.deepStrictEqual(widgets, [
       { key: 'todo', lines: ['Line 1'], placement: 'belowEditor' }
     ]);
-    assert.deepStrictEqual(composerTexts, ['prefilled prompt', 'pasted prompt']);
+    assert.deepStrictEqual(composerTexts, ['prefilled prompt']);
+    assert.deepStrictEqual(composerPastes, ['pasted prompt']);
   });
 });
 
