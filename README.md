@@ -1,6 +1,6 @@
 # Tau
 
-Tau is a transparent AI coding assistant for VS Code focused on session-based workflows and code traceability. Tau is the VS Code product/UI; Pi is the backend agent engine it runs on.
+Tau is a transparent AI coding assistant for VS Code focused on session-based workflows, code traceability and customizability.
 
 ## Philosophy
 
@@ -31,20 +31,43 @@ From there, session diffs make it easy to inspect exactly what changed during th
 
 ![Workflow Capture](resources/tau_capture.gif)
 
+### Customization via Pi extensions
+
+Aiming to stay on par with everything the ecosystem supports. Today it has:
+
+- Widgets, above and below the prompt
+- Status lines
+- Themeable Custom UI overlays to support questionnaire plugins and the like
+- All fully aware of ANSI escape sequences and the Kitty protocol
+- Support for TUI-image rendering and other quirks
+
+![Custom UI and Widgets](resources/custom-ui.gif)
+
 ### What else?
 
 Tau builds on top of the Pi engine's existing capabilities:
 
-- tree-based session management
-- plugin ecosystem
-- resumable sessions
-- transparent tool execution
+- Tree-based session management
+- Resumable sessions
+- Transparent tool execution
 
-It also adds parallel session workflows, allowing you to switch between multiple active sessions without losing context.
+In addition, it brings to the table:
+
+- A keyboard-centric workflow
+- Parallel / background sessions
+- IDE context
+- File attachments (Drag'n'drop, Copy&Paste, Mouse'n'Click)
+- Guardrails to restrict the agent to the workspace, if that's your thing
+
+### Can it run Doom?
+
+You bet! And because Τ=2\*π, it runs it twice:
+
+![Double Doom](resources/doom-twice.gif)
 
 ## Requirements / Setup
 
-Tau bundles the Pi SDK runtime. It still uses Pi-compatible credentials, so set up authentication the same way you would for terminal use:
+Setup Pi the standard way, if you don't already have:
 
 ```sh
 npm install -g @earendil-works/pi-coding-agent
@@ -52,18 +75,15 @@ pi
 /login
 ```
 
-You can also use Pi-supported environment credentials. For more information, read the [documentation here](https://pi.dev/docs/latest).
+For more information, read the [documentation here](https://pi.dev/docs/latest).
+
+Or, as of v2: Skip that part, Tau also got you covered on the OAuth / API Key front. Just click on the settings gear, you might be surprised what else you will find there.
 
 ## Using Tau
 
-Tau is heavily keyboard-oriented.
+Tau is heavily keyboard-oriented. I recommend: Play around with the `Esc`-key.
 
-The most important key is probably `Esc`:
-
-- from the prompt → opens the session list
-- from the session list → returns to the current session
-
-Everything else is mostly discoverable. You'll figure out the rest anyway.
+Everything else is mostly discoverable. You'll figure out the rest anyway, but the help icon for keybindings might be worth a visit.
 
 ## Development
 
