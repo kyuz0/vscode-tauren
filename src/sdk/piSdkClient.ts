@@ -1,3 +1,5 @@
+import * as os from 'node:os';
+import * as path from 'node:path';
 import type { ExtensionUi } from '../extensionUi/types';
 import type { PiClient } from '../pi/clientTypes';
 import type {
@@ -436,8 +438,9 @@ export class PiSdkClient implements PiClient {
   }
 
   public async exportHtml(outputPath?: string): Promise<PiExportHtmlResult> {
-    const { session } = await this.ensureRuntime();
-    return { path: await session.exportToHtml(outputPath) };
+    const runtime = await this.ensureRuntime();
+    const exportPath = resolveExportHtmlOutputPath(outputPath, runtime.session.sessionFile, runtime.cwd);
+    return { path: await runtime.session.exportToHtml(exportPath) };
   }
 
   public async getLastAssistantText(): Promise<PiLastAssistantText> {
@@ -768,6 +771,35 @@ export class PiSdkClient implements PiClient {
       listener(message);
     }
   }
+}
+
+function resolveExportHtmlOutputPath(outputPath: string | undefined, sessionFile: string | undefined, baseDir: string): string | undefined {
+  const trimmedPath = outputPath?.trim();
+  const exportBaseDir = baseDir || os.homedir();
+
+  if (trimmedPath) {
+    const expandedPath = expandHomePath(trimmedPath);
+    return path.isAbsolute(expandedPath) ? expandedPath : path.resolve(exportBaseDir, expandedPath);
+  }
+
+  if (!sessionFile) {
+    return undefined;
+  }
+
+  const sessionBasename = path.basename(sessionFile, '.jsonl');
+  return path.join(exportBaseDir, `pi-session-${sessionBasename}.html`);
+}
+
+function expandHomePath(filePath: string): string {
+  if (filePath === '~') {
+    return os.homedir();
+  }
+
+  if (filePath.startsWith('~/') || (process.platform === 'win32' && filePath.startsWith('~\\'))) {
+    return path.join(os.homedir(), filePath.slice(2));
+  }
+
+  return filePath;
 }
 
 function callOptionalSettingGetter<T>(settingsManager: SettingsManager, methodName: string): T | undefined {

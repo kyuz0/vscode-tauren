@@ -2,6 +2,10 @@
 
 All notable changes to Tau will be documented in this file.
 
+## Unreleased
+
+- Fixed HTML export writing relative files into the extension host working directory instead of the workspace/home directory.
+
 ## 2.0.0
 
 - Switched from RPC protocol to fully integrated SDK

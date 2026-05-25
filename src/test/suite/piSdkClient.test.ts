@@ -1,5 +1,6 @@
 import * as assert from 'assert';
 import * as os from 'node:os';
+import * as path from 'node:path';
 import { PiSdkClient } from '../../sdk/piSdkClient';
 import { createSdkExtensionUiContext } from '../../sdk/extensionUiBridge';
 import type { ExtensionUi } from '../../extensionUi/types';
@@ -96,6 +97,36 @@ suite('PiSdkClient', () => {
     await harness.client.getState();
 
     assert.deepStrictEqual(harness.createdSessionManagers, [{ type: 'create', cwd: os.homedir(), sessionDir: '/configured-sessions' }]);
+    harness.client.dispose();
+  });
+
+  test('exports HTML to the workspace by default', async () => {
+    const harness = createSdkHarness();
+
+    const result = await harness.client.exportHtml();
+
+    assert.deepStrictEqual(harness.session.exportToHtmlCalls, [path.join('/workspace', 'pi-session-current.html')]);
+    assert.deepStrictEqual(result, { path: path.join('/workspace', 'pi-session-current.html') });
+    harness.client.dispose();
+  });
+
+  test('exports HTML to the home directory when no workspace cwd is available', async () => {
+    const harness = createSdkHarness({ cwd: undefined });
+
+    const result = await harness.client.exportHtml();
+
+    assert.deepStrictEqual(harness.session.exportToHtmlCalls, [path.join(os.homedir(), 'pi-session-current.html')]);
+    assert.deepStrictEqual(result, { path: path.join(os.homedir(), 'pi-session-current.html') });
+    harness.client.dispose();
+  });
+
+  test('resolves relative HTML export paths against the workspace', async () => {
+    const harness = createSdkHarness();
+
+    const result = await harness.client.exportHtml('exports/current.html');
+
+    assert.deepStrictEqual(harness.session.exportToHtmlCalls, [path.join('/workspace', 'exports', 'current.html')]);
+    assert.deepStrictEqual(result, { path: path.join('/workspace', 'exports', 'current.html') });
     harness.client.dispose();
   });
 
@@ -407,6 +438,7 @@ class FakeSession {
   public readonly messages = [{ role: 'assistant', content: 'last answer' }];
   public readonly availableModels = [this.model];
   public readonly promptCalls: Array<{ message: string; streamingBehavior?: string; source?: string; images?: unknown }> = [];
+  public readonly exportToHtmlCalls: Array<string | undefined> = [];
   public promptImplementation: (message: string, options?: PromptOptions) => Promise<void> = async (_message, options) => {
     options?.preflightResult?.(true);
   };
@@ -527,8 +559,9 @@ class FakeSession {
     return {};
   }
 
-  public async exportToHtml(): Promise<string> {
-    return '/sessions/current.html';
+  public async exportToHtml(outputPath?: string): Promise<string> {
+    this.exportToHtmlCalls.push(outputPath);
+    return outputPath ?? '/sessions/current.html';
   }
 
   public getLastAssistantText(): string {
@@ -648,7 +681,11 @@ class FakeRuntime {
   public modelFallbackMessage: string | undefined;
   private rebindSession: (() => Promise<void>) | undefined;
 
-  public constructor(public session: FakeSession, private readonly replacementSession?: FakeSession) {}
+  public constructor(
+    public session: FakeSession,
+    private readonly replacementSession?: FakeSession,
+    public readonly cwd = '/workspace'
+  ) {}
 
   public setRebindSession(rebindSession?: () => Promise<void>): void {
     this.rebindSession = rebindSession;
@@ -713,7 +750,7 @@ function createSdkHarness(options: HarnessOptions = {}): {
     createWriteToolDefinition: () => ({ name: 'write' }),
     createAgentSessionRuntime: async (createRuntime: (runtimeOptions: unknown) => Promise<{ session: FakeSession }>, runtimeOptions: unknown) => {
       const created = await createRuntime(runtimeOptions);
-      return new FakeRuntime(created.session, options.replacementSession);
+      return new FakeRuntime(created.session, options.replacementSession, (runtimeOptions as { cwd?: string }).cwd);
     }
   } as unknown as PiSdkModule;
 
