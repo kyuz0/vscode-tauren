@@ -27,6 +27,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('tauren.moveSessionToTrash', () => provider.moveSessionToTrash()),
     vscode.commands.registerCommand('tauren.reloadPi', () => provider.reloadPi()),
     vscode.commands.registerCommand('tauren.copyLastResponse', () => provider.copyLastResponse()),
+    vscode.commands.registerCommand('tauren.searchTranscript', () => provider.searchTranscript()),
     vscode.commands.registerCommand('tauren.openModelPicker', () => provider.openModelPicker()),
     vscode.commands.registerCommand('tauren.toggleSettings', () => provider.toggleSettings()),
     vscode.commands.registerCommand('tauren.toggleHelp', () => provider.toggleHelp()),

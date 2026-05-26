@@ -46,7 +46,7 @@ export const viewLayoutStyles = /* css */ `    .tauren-chat-surface,
       position: relative;
       display: grid;
       grid-template-columns: minmax(0, 1fr);
-      grid-template-rows: minmax(0, 1fr) auto auto auto auto auto;
+      grid-template-rows: auto minmax(0, 1fr) auto auto auto auto auto;
       overflow: hidden;
       transform: rotateY(0deg);
       opacity: 1;
@@ -73,7 +73,7 @@ export const viewLayoutStyles = /* css */ `    .tauren-chat-surface,
     }
 
     .messages {
-      grid-row: 1;
+      grid-row: 2;
       grid-column: 1;
       width: 100%;
       height: 100%;

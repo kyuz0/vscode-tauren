@@ -9,6 +9,7 @@ import { CustomUiController } from './customUI/customUi';
 import { ExtensionEditorDialogController } from './extensionEditorDialog';
 import { getWebviewDom } from './dom';
 import { MessageListController } from './messages/messageList';
+import { TranscriptSearchController } from './messages/transcriptSearch';
 import { SessionViewController } from './sessions/sessionView';
 import { SettingsPaneController } from './settings/settingsPane';
 import { initialWebviewState, parseWebviewStateMessage } from './state';
@@ -101,6 +102,7 @@ let footerDimensionSignature = '';
 
 let sessionsController: SessionViewController;
 let settingsController: SettingsPaneController;
+let transcriptSearchController: TranscriptSearchController;
 
 const customUiController = new CustomUiController({
   vscode,
@@ -128,6 +130,13 @@ const messagesController = new MessageListController({
   messagesContentElement,
   busyStatusElement,
   busyStatusTextElement
+});
+
+transcriptSearchController = new TranscriptSearchController({
+  messagesElement,
+  messagesContentElement,
+  isChatMainVisible: () => state.lane === 'chat' && state.chatFace !== 'settings',
+  onClose: focusPromptInput
 });
 
 const composerController = new ComposerController({
@@ -212,6 +221,7 @@ window.addEventListener('message', (event) => {
   }
 
   if (handleCodeHighlightMessage(event.data)) {
+    transcriptSearchController.refreshHighlights({ preserveCurrent: true });
     messagesController.scheduleMessagesToBottom();
     return;
   }
@@ -223,6 +233,14 @@ window.addEventListener('message', (event) => {
 
   if (event.data?.type === 'focusInput') {
     focusPromptInput();
+    return;
+  }
+
+  if (event.data?.type === 'openTranscriptSearch') {
+    composerController.closeSlashMenu();
+    composerController.closeModelMenu();
+    sessionsController.closeSessionCommandMenu();
+    transcriptSearchController.openSearch();
     return;
   }
 
@@ -340,6 +358,13 @@ window.addEventListener('keydown', (event) => {
   }
 
   if (settingsController.handleGlobalKeydown(event)) {
+    return;
+  }
+
+  if (transcriptSearchController.handleGlobalKeydown(event)) {
+    composerController.closeSlashMenu();
+    composerController.closeModelMenu();
+    sessionsController.closeSessionCommandMenu();
     return;
   }
 
@@ -500,6 +525,8 @@ function render(): void {
   settingsController.syncForRender(isSessionLane);
   customUiController.syncForRender(isSessionLane || isSettingsFaceVisible);
 
+  transcriptSearchController.syncForRender();
+
   if (isSettingsFaceVisible) {
     busyStatusElement.hidden = true;
     composerController.closeSlashMenu();
@@ -526,6 +553,7 @@ function render(): void {
   }
 
   messagesController.renderMessageList();
+  transcriptSearchController.syncForRender();
 
   messagesController.syncBusyStatus();
   composerController.syncModelLabel();

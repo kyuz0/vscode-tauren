@@ -5,7 +5,7 @@ export const composerStyles = /* css */ `    .tauren-view--has-extension-status 
     }
 
     .composer__widget-busy-slot {
-      grid-row: 2;
+      grid-row: 3;
       grid-column: 1;
       margin: 0 var(--tauren-chat-inline-padding) 6px;
     }
@@ -36,12 +36,12 @@ export const composerStyles = /* css */ `    .tauren-view--has-extension-status 
     }
 
     .extension-widgets--above {
-      grid-row: 3;
+      grid-row: 4;
       margin-bottom: 6px;
     }
 
     .extension-widgets--below {
-      grid-row: 5;
+      grid-row: 6;
       margin-top: 6px;
       margin-bottom: var(--tauren-composer-bottom-margin);
     }
@@ -124,7 +124,7 @@ export const composerStyles = /* css */ `    .tauren-view--has-extension-status 
 
     .composer {
       position: relative;
-      grid-row: 4;
+      grid-row: 5;
       grid-column: 1;
       display: grid;
       grid-template-columns: auto minmax(0, 1fr) 36px;
@@ -204,7 +204,7 @@ export const composerStyles = /* css */ `    .tauren-view--has-extension-status 
     }
 
     .composer-status {
-      grid-row: 6;
+      grid-row: 7;
       grid-column: 1;
       display: flex;
       align-items: center;

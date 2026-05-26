@@ -1,4 +1,109 @@
-export const messageStyles = /* css */ `    .message {
+export const messageStyles = /* css */ `    .tauren-transcript-search {
+      z-index: var(--tauren-z-raised);
+      grid-row: 1;
+      grid-column: 1;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 6px;
+      align-items: center;
+      max-height: 0;
+      width: 100%;
+      padding: 0 12px 0 8px;
+      overflow: hidden;
+      box-sizing: border-box;
+      background: var(--vscode-sideBar-background);
+      opacity: 0;
+      transform: translateY(-8px);
+      transition: max-height 140ms ease, padding 140ms ease, opacity 120ms ease, transform 140ms ease;
+    }
+
+    .tauren-transcript-search--open {
+      max-height: 38px;
+      padding: 4px 12px 6px 8px;
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .tauren-transcript-search__input {
+      width: 100%;
+      min-width: 0;
+      height: 26px;
+      padding: 3px 7px;
+      color: var(--vscode-input-foreground);
+      background: var(--vscode-input-background);
+      border: 1px solid var(--vscode-input-border, transparent);
+      border-radius: 4px;
+      font: inherit;
+      font-size: 12px;
+      outline: none;
+    }
+
+    .tauren-transcript-search__input:focus {
+      border-color: var(--vscode-focusBorder, var(--vscode-input-border, transparent));
+    }
+
+    .tauren-transcript-search__input::placeholder {
+      color: var(--vscode-input-placeholderForeground, var(--vscode-descriptionForeground));
+    }
+
+    .tauren-transcript-search__count {
+      min-width: 54px;
+      color: var(--vscode-descriptionForeground);
+      font-size: 11px;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .tauren-transcript-search__actions {
+      display: inline-flex;
+      gap: 2px;
+      align-items: center;
+    }
+
+    .tauren-transcript-search__button {
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+      background: var(--vscode-button-secondaryBackground, transparent);
+      border: 1px solid var(--vscode-button-border, var(--vscode-input-border, transparent));
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .tauren-transcript-search__button:hover:not(:disabled),
+    .tauren-transcript-search__button:focus-visible {
+      color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+      background: var(--vscode-button-secondaryHoverBackground, color-mix(in srgb, var(--vscode-foreground) 10%, transparent));
+      border-color: var(--vscode-focusBorder, var(--vscode-button-border, var(--vscode-input-border, transparent)));
+      outline: none;
+    }
+
+    .tauren-transcript-search__button:disabled {
+      cursor: default;
+      opacity: 0.45;
+    }
+
+    .tauren-transcript-search__button--close {
+      margin-left: 6px;
+    }
+
+    .tauren-transcript-search-match {
+      padding: 0 1px;
+      color: inherit;
+      background: var(--vscode-editor-findMatchHighlightBackground, color-mix(in srgb, var(--vscode-editorWarning-foreground, #c7a85a) 42%, transparent));
+      border-radius: 2px;
+    }
+
+    .tauren-transcript-search-match--current {
+      color: var(--vscode-editor-findMatchForeground, inherit);
+      background: var(--vscode-editor-findMatchBackground, color-mix(in srgb, var(--vscode-focusBorder) 55%, transparent));
+      outline: 1px solid var(--vscode-focusBorder, currentColor);
+    }
+
+    .message {
       margin: 0 0 14px;
     }
 

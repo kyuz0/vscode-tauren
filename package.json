@@ -99,6 +99,11 @@
         "category": "Tauren"
       },
       {
+        "command": "tauren.searchTranscript",
+        "title": "Search in Transcript",
+        "category": "Tauren"
+      },
+      {
         "command": "tauren.openModelPicker",
         "title": "Open Model Picker",
         "category": "Tauren"
@@ -179,6 +184,9 @@
         },
         {
           "command": "tauren.toggleSessionList"
+        },
+        {
+          "command": "tauren.searchTranscript"
         }
       ],
       "view/title": [
@@ -234,6 +242,12 @@
         "command": "tauren.newSession",
         "key": "ctrl+n",
         "mac": "cmd+n",
+        "when": "tauren.sidebarFocus"
+      },
+      {
+        "command": "tauren.searchTranscript",
+        "key": "ctrl+f",
+        "mac": "cmd+f",
         "when": "tauren.sidebarFocus"
       }
     ],

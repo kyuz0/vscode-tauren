@@ -67,6 +67,7 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
   private webviewView: vscode.WebviewView | undefined;
   private pendingInputFocus = false;
   private pendingModelPickerOpen = false;
+  private pendingTranscriptSearchOpen = false;
   private pendingStreamingBehaviorToggle = false;
   private pendingHelpToggle = false;
   private pendingSessionNameEditStart = false;
@@ -391,6 +392,13 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
     await this.focus();
     this.pendingModelPickerOpen = true;
     this.postModelPickerOpenSoon();
+  }
+
+  public async searchTranscript(): Promise<void> {
+    this.controller.showChat();
+    await this.revealView();
+    this.pendingTranscriptSearchOpen = true;
+    this.postTranscriptSearchOpenSoon();
   }
 
   public async toggleSettings(): Promise<void> {
@@ -730,6 +738,7 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
       await this.controller.handleWebviewMessage(message);
       this.postInputFocusSoon();
       this.postModelPickerOpenSoon();
+      this.postTranscriptSearchOpenSoon();
       this.postStreamingBehaviorToggleSoon();
       this.postHelpToggleSoon();
       this.postSessionNameEditStartSoon();
@@ -980,6 +989,19 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
 
   private postModelPickerOpenSoon(): void {
     setTimeout(() => this.postModelPickerOpen(), 0);
+  }
+
+  private postTranscriptSearchOpen(): void {
+    if (!this.pendingTranscriptSearchOpen || !this.webviewView || !this.webviewReady) {
+      return;
+    }
+
+    this.pendingTranscriptSearchOpen = false;
+    void this.webviewView.webview.postMessage({ type: 'openTranscriptSearch' });
+  }
+
+  private postTranscriptSearchOpenSoon(): void {
+    setTimeout(() => this.postTranscriptSearchOpen(), 0);
   }
 
   private postStreamingBehaviorToggle(): void {

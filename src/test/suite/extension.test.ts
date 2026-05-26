@@ -41,6 +41,7 @@ suite('Tauren extension', () => {
     assert.ok(commands.includes('tauren.moveSessionToTrash'));
     assert.ok(commands.includes('tauren.reloadPi'));
     assert.ok(commands.includes('tauren.copyLastResponse'));
+    assert.ok(commands.includes('tauren.searchTranscript'));
     assert.ok(commands.includes('tauren.openModelPicker'));
     assert.ok(commands.includes('tauren.toggleSettings'));
     assert.ok(commands.includes('tauren.toggleHelp'));
