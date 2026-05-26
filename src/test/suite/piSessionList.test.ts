@@ -84,6 +84,34 @@ suite('Pi session list', () => {
     }
   });
 
+  test('builds exact session list metadata while skipping malformed and nested non-message records', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tauren-sessions-summary-'));
+
+    try {
+      const sessionPath = join(dir, 'summary.jsonl');
+      await writeFile(sessionPath, [
+        JSON.stringify({ type: 'session', version: 3, id: 'summary', timestamp: '2026-01-01T00:00:00.000Z', cwd: '/workspace' }),
+        JSON.stringify({ type: 'session_info', name: 'Initial name' }),
+        JSON.stringify({ type: 'message', timestamp: '2026-01-01T00:00:01.000Z', message: { role: 'user', content: [{ type: 'text', text: 'First prompt' }, { type: 'text', text: 'continued' }] } }),
+        JSON.stringify({ type: 'event', payload: { type: 'message', message: { role: 'assistant' } } }),
+        '{"type":"message","message":{"role":"assistant","timestamp":1767225602000,},}',
+        '{"type":"message","message":{"r\\u006fle":"assistant","timestamp":1767225603000}}',
+        JSON.stringify({ type: 'message', timestamp: '2026-01-01T00:00:04.000Z', message: [] }),
+        JSON.stringify({ type: 'session_info', name: 'Renamed session' })
+      ].join('\n') + '\n');
+
+      const sessions = await listPiSessions({ sessionDir: dir });
+
+      assert.strictEqual(sessions.length, 1);
+      assert.strictEqual(sessions[0].name, 'Renamed session');
+      assert.strictEqual(sessions[0].messageCount, 3);
+      assert.strictEqual(sessions[0].firstMessage, 'First prompt continued');
+      assert.strictEqual(sessions[0].modified, '2026-01-01T00:00:03.000Z');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   test('truncates long first messages in session list metadata', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'tauren-sessions-'));
 

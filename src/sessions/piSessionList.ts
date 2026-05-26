@@ -2,18 +2,16 @@ import { existsSync, type Stats } from 'fs';
 import { readdir, readFile, stat } from 'fs/promises';
 import { homedir } from 'os';
 import { dirname, isAbsolute, join, resolve } from 'path';
-import { extractPiMessageText } from '../pi/messageContent';
-import { parseSessionJsonlFileRecords, readSessionJsonlHeader } from '../pi/sessionJsonl';
+import { readSessionJsonlHeader } from '../pi/sessionJsonl';
 import { readSessionMetadataCache, writeSessionMetadataCache, type CachedSessionInfo } from './sessionMetadataCache';
+import { readSessionSummary } from './sessionSummaryParser';
 import type { ListPiSessionsOptions, PiSessionCandidate, PiSessionListItem, RawSessionInfo, SessionTreeNode } from './types';
 export type { ListPiSessionsOptions, PiSessionCandidate, PiSessionListItem } from './types';
 
 const piSessionDirEnvName = 'PI_CODING_AGENT_SESSION_DIR';
 const maxConcurrentSessionFileReads = 8;
 const maxCachedSessionInfos = 5000;
-const maxSessionFirstMessageLength = 500;
 const sessionListProgressBatchSize = 50;
-const truncationMarker = '…';
 
 const sessionInfoCache = new Map<string, { mtimeMs: number; size: number; session: RawSessionInfo }>();
 
@@ -249,68 +247,11 @@ async function buildSessionInfo(filePath: string, knownStats?: Stats): Promise<R
       return cached;
     }
 
-    let header: Record<string, unknown> | undefined;
-    let messageCount = 0;
-    let firstMessage = '';
-    let name: string | undefined;
-    let lastActivityTime: number | undefined;
+    const session = await readSessionSummary(filePath, stats);
 
-    for await (const entry of parseSessionJsonlFileRecords(filePath)) {
-      if (!isRecord(entry)) {
-        continue;
-      }
-
-      if (!header) {
-        if (entry.type !== 'session' || typeof entry.id !== 'string') {
-          return undefined;
-        }
-
-        header = entry;
-        continue;
-      }
-
-      if (entry.type === 'session_info') {
-        name = typeof entry.name === 'string' && entry.name.trim() ? entry.name.trim() : undefined;
-        continue;
-      }
-
-      if (entry.type !== 'message' || !isRecord(entry.message)) {
-        continue;
-      }
-
-      messageCount += 1;
-      const role = entry.message.role;
-
-      if (role === 'user' || role === 'assistant') {
-        const activityTime = getMessageActivityTime(entry, entry.message);
-
-        if (activityTime !== undefined) {
-          lastActivityTime = Math.max(lastActivityTime ?? 0, activityTime);
-        }
-      }
-
-      if (role === 'user' && !firstMessage) {
-        firstMessage = truncateSessionFirstMessage(extractPiMessageText(entry.message.content, { separator: ' ' }).trim());
-      }
-    }
-
-    if (!header) {
+    if (!session) {
       return undefined;
     }
-
-    const created = parseDate(header.timestamp, stats.mtime);
-    const modified = lastActivityTime !== undefined ? new Date(lastActivityTime) : created;
-    const session = {
-      path: filePath,
-      id: header.id as string,
-      cwd: typeof header.cwd === 'string' ? header.cwd : '',
-      name,
-      parentSessionPath: typeof header.parentSession === 'string' ? header.parentSession : undefined,
-      created: created.toISOString(),
-      modified: modified.toISOString(),
-      messageCount,
-      firstMessage: firstMessage || '(no messages)'
-    };
 
     rememberSessionInfo(filePath, stats, session);
     return session;
@@ -357,16 +298,6 @@ async function parseSessionInfoFiles(
 
   const workerCount = Math.min(maxConcurrentSessionFileReads, files.length);
   await Promise.all(Array.from({ length: workerCount }, worker));
-}
-
-function truncateSessionFirstMessage(value: string): string {
-  const chars = Array.from(value);
-
-  if (chars.length <= maxSessionFirstMessageLength) {
-    return value;
-  }
-
-  return chars.slice(0, maxSessionFirstMessageLength - truncationMarker.length).join('').trimEnd() + truncationMarker;
 }
 
 function getCachedSessionInfo(filePath: string, stats: Stats): RawSessionInfo | undefined {
@@ -427,28 +358,6 @@ async function mapWithConcurrency<T, R>(
   const workerCount = Math.min(Math.max(limit, 1), items.length);
   await Promise.all(Array.from({ length: workerCount }, worker));
   return results;
-}
-
-function getMessageActivityTime(entry: Record<string, unknown>, message: Record<string, unknown>): number | undefined {
-  if (typeof message.timestamp === 'number') {
-    return message.timestamp;
-  }
-
-  if (typeof entry.timestamp === 'string') {
-    const time = new Date(entry.timestamp).getTime();
-    return Number.isNaN(time) ? undefined : time;
-  }
-
-  return undefined;
-}
-
-function parseDate(value: unknown, fallback: Date): Date {
-  if (typeof value !== 'string') {
-    return fallback;
-  }
-
-  const time = new Date(value).getTime();
-  return Number.isNaN(time) ? fallback : new Date(time);
 }
 
 function buildSessionTree(sessions: RawSessionInfo[]): SessionTreeNode[] {
