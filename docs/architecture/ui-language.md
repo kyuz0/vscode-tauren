@@ -26,6 +26,8 @@
 
 ## Elements
 
+- Transcript: the scrolling conversation/runtime output surface inside the Chat Lane.
+- Transcript Entry: one rendered item inside the transcript (message, tool output, image, widget, etc.).
 - Composer Suggestions: Narrow-down area above the prompt for slash-commands, @-file-suggestions etc.
 - Toast: transient notification surface.
 - Busy bar: Bar at the top of the composer containing Changes and Steer/Follow-up controls, shown when Pi is busy.
