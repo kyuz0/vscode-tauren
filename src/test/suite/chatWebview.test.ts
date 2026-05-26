@@ -9,6 +9,14 @@ import {
 import type { ChatState } from '../../chat/chatSession';
 
 suite('Chat webview helpers', () => {
+  test('parseWebviewMessage accepts @ file suggestion requests', () => {
+    assert.deepStrictEqual(
+      parseWebviewMessage({ type: 'requestFileSuggestions', id: '1', prefix: '@src' }),
+      { type: 'requestFileSuggestions', id: '1', prefix: '@src' }
+    );
+    assert.deepStrictEqual(parseWebviewMessage({ type: 'requestFileSuggestions', id: '1', prefix: 'src' }), { type: 'unknown' });
+  });
+
   test('createWebviewStateMessage adds message type, model metadata, and context usage', () => {
     const state: ChatState = {
       messages: [

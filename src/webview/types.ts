@@ -4,6 +4,7 @@ import type {
   WebviewCustomUiTheme,
   WebviewExtensionStatusEntry,
   WebviewExtensionWidgetEntry,
+  WebviewFileSuggestion,
   WebviewLane,
   WebviewModelOption,
   WebviewPromptContextAttachment,
@@ -33,6 +34,7 @@ export type WebviewApi = {
 
 export type ModelOption = WebviewModelOption;
 export type SlashCommand = WebviewSlashCommand;
+export type FileSuggestion = WebviewFileSuggestion;
 export type PromptContextAttachment = WebviewPromptContextAttachment;
 export type PromptImageAttachment = WebviewPromptImageAttachment;
 export type SessionItem = WebviewSessionItem;
@@ -130,6 +132,13 @@ export type LocalImageResolveResult = {
   id: string;
   uri?: string;
   error?: string;
+};
+
+export type FileSuggestionsResult = {
+  type: 'fileSuggestionsResult';
+  id: string;
+  prefix: string;
+  items: FileSuggestion[];
 };
 
 export type MarkdownRenderer = {

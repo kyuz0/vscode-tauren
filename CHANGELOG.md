@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Added `@` file suggestions to the composer.
+
 ## 1.0.1 - Maintenance release
 
 - Updated extension keywords and artwork.

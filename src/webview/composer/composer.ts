@@ -16,6 +16,8 @@ import {
 } from '../constants';
 import type {
   ModelOption,
+  FileSuggestion,
+  FileSuggestionsResult,
   PromptContextAttachment,
   PromptImageAttachment,
   SlashCommand,
@@ -65,6 +67,11 @@ export class ComposerController {
   private slashMenuQuery = '';
   private slashMenuDismissedQuery: string | undefined;
   private slashCommandsRefreshRequested = false;
+  private suggestionKind: 'slash' | 'file' | undefined;
+  private fileSuggestionItems: FileSuggestion[] = [];
+  private fileSuggestionPrefix = '';
+  private fileSuggestionRequestId = 0;
+  private fileSuggestionLoading = false;
   private streamingBehavior: WebviewStreamingBehavior = 'steer';
   private busySubmitHideTimeout: ReturnType<typeof setTimeout> | undefined;
   private composerDragDepth = 0;
@@ -146,6 +153,17 @@ export class ComposerController {
       }
 
       const index = Number(item.getAttribute('data-index'));
+
+      if (this.suggestionKind === 'file') {
+        const file = this.fileSuggestionItems[index];
+
+        if (file) {
+          this.acceptFileSuggestion(file);
+        }
+
+        return;
+      }
+
       const command = this.slashMenuItems[index];
 
       if (command) {
@@ -204,7 +222,7 @@ export class ComposerController {
   }
 
   public dismissSlashMenu(): void {
-    this.slashMenuDismissedQuery = this.getSlashCommandQuery();
+    this.slashMenuDismissedQuery = this.suggestionKind === 'slash' ? this.getSlashCommandQuery() : undefined;
     this.closeSlashMenu();
   }
 
@@ -214,10 +232,38 @@ export class ComposerController {
     this.slashMenuItems = [];
     this.slashMenuActiveIndex = 0;
     this.slashMenuQuery = '';
+    this.suggestionKind = undefined;
+    this.fileSuggestionItems = [];
+    this.fileSuggestionPrefix = '';
+    this.fileSuggestionLoading = false;
     this.disableSlashMenuPointerHover();
     this.options.slashMenuElement?.removeAttribute('open');
+    this.options.slashMenuElement?.setAttribute('aria-label', 'Slash commands');
     this.options.textarea.setAttribute('aria-expanded', 'false');
     this.options.textarea.removeAttribute('aria-activedescendant');
+  }
+
+  public handleHostMessage(message: unknown): boolean {
+    if (!isFileSuggestionsResult(message)) {
+      return false;
+    }
+
+    if (message.id !== String(this.fileSuggestionRequestId) || message.prefix !== this.fileSuggestionPrefix) {
+      return true;
+    }
+
+    const activePrefix = this.getFileSuggestionPrefixInfo()?.prefix;
+
+    if (activePrefix !== message.prefix) {
+      return true;
+    }
+
+    this.fileSuggestionLoading = false;
+    this.fileSuggestionItems = message.items;
+    this.slashMenuActiveIndex = Math.min(this.slashMenuActiveIndex, Math.max(0, this.fileSuggestionItems.length - 1));
+    this.renderFileSuggestionMenu(message.prefix);
+    this.openSlashMenu();
+    return true;
   }
 
   public closeModelMenu(): void {
@@ -459,6 +505,13 @@ export class ComposerController {
   }
 
   public syncSlashMenu(): void {
+    const filePrefix = this.getFileSuggestionPrefixInfo()?.prefix;
+
+    if (filePrefix) {
+      this.syncFileSuggestionMenu(filePrefix);
+      return;
+    }
+
     const state = this.options.getState();
 
     if (!this.shouldShowSlashMenu()) {
@@ -483,7 +536,10 @@ export class ComposerController {
       return;
     }
 
-    if (query !== this.slashMenuQuery) {
+    if (this.suggestionKind !== 'slash' || query !== this.slashMenuQuery) {
+      this.suggestionKind = 'slash';
+      this.fileSuggestionItems = [];
+      this.fileSuggestionLoading = false;
       this.slashMenuQuery = query;
       this.slashMenuActiveIndex = 0;
       this.disableSlashMenuPointerHover();
@@ -962,13 +1018,13 @@ export class ComposerController {
 
     if (event.key === 'Tab') {
       event.preventDefault();
-      this.acceptActiveSlashCommand();
+      this.acceptActiveSuggestion();
       return true;
     }
 
-    if (event.key === 'Enter' && !event.shiftKey && this.slashMenuItems.length > 0) {
+    if (event.key === 'Enter' && !event.shiftKey && this.getActiveSuggestionCount() > 0) {
       event.preventDefault();
-      this.acceptActiveSlashCommand();
+      this.acceptActiveSuggestion();
       return true;
     }
 
@@ -1002,6 +1058,47 @@ export class ComposerController {
 
   private getSlashCommandQuery(): string {
     return this.options.textarea.value.slice(1, this.options.textarea.selectionStart).toLowerCase();
+  }
+
+  private syncFileSuggestionMenu(prefix: string): void {
+    if (document.activeElement !== this.options.textarea) {
+      this.closeSlashMenu();
+      return;
+    }
+
+    this.closeModelMenu();
+    this.options.cancelSessionNameEdit();
+
+    if (this.suggestionKind !== 'file' || prefix !== this.fileSuggestionPrefix) {
+      this.suggestionKind = 'file';
+      this.slashMenuItems = [];
+      this.fileSuggestionItems = [];
+      this.fileSuggestionPrefix = prefix;
+      this.fileSuggestionLoading = true;
+      this.slashMenuActiveIndex = 0;
+      this.disableSlashMenuPointerHover();
+      this.options.slashMenuElement?.scrollTo({ top: 0 });
+      this.fileSuggestionRequestId += 1;
+      this.options.postMessage({
+        type: 'requestFileSuggestions',
+        id: String(this.fileSuggestionRequestId),
+        prefix
+      });
+    }
+
+    this.renderFileSuggestionMenu(prefix);
+    this.openSlashMenu();
+  }
+
+  private getFileSuggestionPrefixInfo(): { prefix: string; start: number } | undefined {
+    const textarea = this.options.textarea;
+    const cursor = textarea.selectionStart;
+
+    if (cursor !== textarea.selectionEnd) {
+      return undefined;
+    }
+
+    return extractAtFilePrefix(textarea.value.slice(0, cursor));
   }
 
   private getFilteredSlashCommands(query: string): SlashCommand[] {
@@ -1084,7 +1181,33 @@ export class ComposerController {
     this.syncSlashMenuActiveDescendant();
   }
 
-  private createSlashMenuItemElement(command: SlashCommand, index: number): HTMLElement {
+  private renderFileSuggestionMenu(prefix: string): void {
+    const slashMenuElement = this.options.slashMenuElement;
+
+    if (!slashMenuElement) {
+      return;
+    }
+
+    slashMenuElement.replaceChildren();
+
+    if (this.fileSuggestionLoading && this.fileSuggestionItems.length === 0) {
+      slashMenuElement.append(createSlashMenuEmptyElement('Finding files...'));
+      return;
+    }
+
+    if (this.fileSuggestionItems.length === 0) {
+      slashMenuElement.append(createSlashMenuEmptyElement(prefix.length > 1 ? 'No matching files' : 'No files available'));
+      return;
+    }
+
+    for (let index = 0; index < this.fileSuggestionItems.length; index += 1) {
+      slashMenuElement.append(this.createFileSuggestionItemElement(this.fileSuggestionItems[index], index));
+    }
+
+    this.syncSlashMenuActiveDescendant();
+  }
+
+  private createSuggestionBaseElement(index: number): HTMLButtonElement {
     const item = document.createElement('button');
     item.type = 'button';
     item.id = 'slash-command-' + index;
@@ -1092,6 +1215,34 @@ export class ComposerController {
     item.setAttribute('role', 'option');
     item.setAttribute('aria-selected', index === this.slashMenuActiveIndex ? 'true' : 'false');
     item.setAttribute('data-index', String(index));
+    return item;
+  }
+
+  private createFileSuggestionItemElement(file: FileSuggestion, index: number): HTMLElement {
+    const item = this.createSuggestionBaseElement(index);
+
+    const label = document.createElement('span');
+    label.className = 'composer__slash-label';
+    label.textContent = file.label;
+    item.append(label);
+
+    const source = document.createElement('span');
+    source.className = 'composer__slash-source';
+    source.textContent = file.directory ? 'dir' : 'file';
+    item.append(source);
+
+    if (file.description) {
+      const description = document.createElement('span');
+      description.className = 'composer__slash-description';
+      description.textContent = file.description;
+      item.append(description);
+    }
+
+    return item;
+  }
+
+  private createSlashMenuItemElement(command: SlashCommand, index: number): HTMLElement {
+    const item = this.createSuggestionBaseElement(index);
 
     const label = document.createElement('span');
     label.className = 'composer__slash-label';
@@ -1123,17 +1274,25 @@ export class ComposerController {
 
     this.slashMenuOpen = true;
     this.options.slashMenuElement.setAttribute('open', '');
+    this.options.slashMenuElement.setAttribute('aria-label', this.suggestionKind === 'file' ? 'File suggestions' : 'Slash commands');
     this.options.textarea.setAttribute('aria-expanded', 'true');
     this.syncSlashMenuActiveDescendant();
   }
 
   private moveSlashMenuSelection(delta: number): void {
-    if (this.slashMenuItems.length === 0) {
+    const itemCount = this.getActiveSuggestionCount();
+
+    if (itemCount === 0) {
       return;
     }
 
-    this.slashMenuActiveIndex = (this.slashMenuActiveIndex + delta + this.slashMenuItems.length) % this.slashMenuItems.length;
-    this.renderSlashMenu(this.getSlashCommandQuery());
+    this.slashMenuActiveIndex = (this.slashMenuActiveIndex + delta + itemCount) % itemCount;
+
+    if (this.suggestionKind === 'file') {
+      this.renderFileSuggestionMenu(this.fileSuggestionPrefix);
+    } else {
+      this.renderSlashMenu(this.getSlashCommandQuery());
+    }
   }
 
   private enableSlashMenuPointerHover(): void {
@@ -1169,7 +1328,7 @@ export class ComposerController {
 
     const index = Number(item.getAttribute('data-index'));
 
-    if (!Number.isInteger(index) || !this.slashMenuItems[index]) {
+    if (!Number.isInteger(index) || index < 0 || index >= this.getActiveSuggestionCount()) {
       return;
     }
 
@@ -1201,7 +1360,7 @@ export class ComposerController {
   }
 
   private syncSlashMenuActiveDescendant(options: { reveal?: boolean } = {}): void {
-    if (!this.slashMenuOpen || this.slashMenuItems.length === 0) {
+    if (!this.slashMenuOpen || this.getActiveSuggestionCount() === 0) {
       this.options.textarea.removeAttribute('aria-activedescendant');
       return;
     }
@@ -1213,12 +1372,26 @@ export class ComposerController {
     }
   }
 
-  private acceptActiveSlashCommand(): void {
+  private acceptActiveSuggestion(): void {
+    if (this.suggestionKind === 'file') {
+      const file = this.fileSuggestionItems[this.slashMenuActiveIndex];
+
+      if (file) {
+        this.acceptFileSuggestion(file);
+      }
+
+      return;
+    }
+
     const command = this.slashMenuItems[this.slashMenuActiveIndex];
 
     if (command) {
       this.acceptSlashCommand(command);
     }
+  }
+
+  private getActiveSuggestionCount(): number {
+    return this.suggestionKind === 'file' ? this.fileSuggestionItems.length : this.slashMenuItems.length;
   }
 
   private acceptSlashCommand(command: SlashCommand): void {
@@ -1228,6 +1401,32 @@ export class ComposerController {
     const nextCursor = command.name.length + 2;
     this.options.textarea.value = value;
     this.options.textarea.setSelectionRange(nextCursor, nextCursor);
+    this.closeSlashMenu();
+    this.syncComposer({ preserveBottom: true });
+    this.options.focusPromptInput();
+  }
+
+  private acceptFileSuggestion(file: FileSuggestion): void {
+    const prefixInfo = this.getFileSuggestionPrefixInfo();
+
+    if (!prefixInfo) {
+      return;
+    }
+
+    const textarea = this.options.textarea;
+    const cursor = textarea.selectionStart;
+    const beforePrefix = textarea.value.slice(0, prefixInfo.start);
+    const afterCursor = textarea.value.slice(cursor);
+    const hasLeadingQuoteAfterCursor = afterCursor.startsWith('"');
+    const hasTrailingQuoteInItem = file.value.endsWith('"');
+    const adjustedAfterCursor = hasTrailingQuoteInItem && hasLeadingQuoteAfterCursor ? afterCursor.slice(1) : afterCursor;
+    const suffix = file.directory ? '' : ' ';
+    const nextValue = beforePrefix + file.value + suffix + adjustedAfterCursor;
+    const cursorOffset = file.directory && hasTrailingQuoteInItem ? file.value.length - 1 : file.value.length;
+    const nextCursor = beforePrefix.length + cursorOffset + suffix.length;
+
+    textarea.value = nextValue;
+    textarea.setSelectionRange(nextCursor, nextCursor);
     this.closeSlashMenu();
     this.syncComposer({ preserveBottom: true });
     this.options.focusPromptInput();
@@ -1641,6 +1840,85 @@ function getSlashCommandSourceRank(source: string): number {
   }
 
   return 5;
+}
+
+const fileSuggestionDelimiters = new Set([' ', '\t', '\n', '\r', '"', "'", '=']);
+
+export function extractAtFilePrefix(textBeforeCursor: string): { prefix: string; start: number } | undefined {
+  const quotedPrefix = extractQuotedAtFilePrefix(textBeforeCursor);
+
+  if (quotedPrefix) {
+    return quotedPrefix;
+  }
+
+  const lastDelimiterIndex = findLastFileSuggestionDelimiter(textBeforeCursor);
+  const tokenStart = lastDelimiterIndex === -1 ? 0 : lastDelimiterIndex + 1;
+
+  if (textBeforeCursor[tokenStart] === '@') {
+    return { prefix: textBeforeCursor.slice(tokenStart), start: tokenStart };
+  }
+
+  return undefined;
+}
+
+function extractQuotedAtFilePrefix(textBeforeCursor: string): { prefix: string; start: number } | undefined {
+  let inQuotes = false;
+  let quoteStart = -1;
+
+  for (let index = 0; index < textBeforeCursor.length; index += 1) {
+    if (textBeforeCursor[index] === '"') {
+      inQuotes = !inQuotes;
+
+      if (inQuotes) {
+        quoteStart = index;
+      }
+    }
+  }
+
+  if (!inQuotes || quoteStart <= 0 || textBeforeCursor[quoteStart - 1] !== '@') {
+    return undefined;
+  }
+
+  const atStart = quoteStart - 1;
+
+  if (atStart > 0 && !fileSuggestionDelimiters.has(textBeforeCursor[atStart - 1] ?? '')) {
+    return undefined;
+  }
+
+  return { prefix: textBeforeCursor.slice(atStart), start: atStart };
+}
+
+function findLastFileSuggestionDelimiter(text: string): number {
+  for (let index = text.length - 1; index >= 0; index -= 1) {
+    if (fileSuggestionDelimiters.has(text[index] ?? '')) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+function isFileSuggestionsResult(message: unknown): message is FileSuggestionsResult {
+  if (!isRecord(message) || message.type !== 'fileSuggestionsResult') {
+    return false;
+  }
+
+  return typeof message.id === 'string'
+    && typeof message.prefix === 'string'
+    && Array.isArray(message.items)
+    && message.items.every(isFileSuggestion);
+}
+
+function isFileSuggestion(value: unknown): value is FileSuggestion {
+  return isRecord(value)
+    && typeof value.value === 'string'
+    && typeof value.label === 'string'
+    && ('description' in value ? typeof value.description === 'string' : true)
+    && typeof value.directory === 'boolean';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 function createSlashMenuEmptyElement(text: string): HTMLElement {

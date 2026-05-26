@@ -202,6 +202,10 @@ window.addEventListener('message', (event) => {
     return;
   }
 
+  if (composerController.handleHostMessage(event.data)) {
+    return;
+  }
+
   if (customUiController.handleHostMessage(event.data)) {
     return;
   }

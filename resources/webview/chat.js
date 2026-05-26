@@ -2058,6 +2058,11 @@
     slashMenuQuery = "";
     slashMenuDismissedQuery;
     slashCommandsRefreshRequested = false;
+    suggestionKind;
+    fileSuggestionItems = [];
+    fileSuggestionPrefix = "";
+    fileSuggestionRequestId = 0;
+    fileSuggestionLoading = false;
     streamingBehavior = "steer";
     busySubmitHideTimeout;
     composerDragDepth = 0;
@@ -2121,6 +2126,13 @@
           return;
         }
         const index = Number(item.getAttribute("data-index"));
+        if (this.suggestionKind === "file") {
+          const file = this.fileSuggestionItems[index];
+          if (file) {
+            this.acceptFileSuggestion(file);
+          }
+          return;
+        }
         const command = this.slashMenuItems[index];
         if (command) {
           this.acceptSlashCommand(command);
@@ -2167,7 +2179,7 @@
       return this.options.modelMenuElement?.hasAttribute("open") ?? false;
     }
     dismissSlashMenu() {
-      this.slashMenuDismissedQuery = this.getSlashCommandQuery();
+      this.slashMenuDismissedQuery = this.suggestionKind === "slash" ? this.getSlashCommandQuery() : void 0;
       this.closeSlashMenu();
     }
     closeSlashMenu() {
@@ -2176,10 +2188,33 @@
       this.slashMenuItems = [];
       this.slashMenuActiveIndex = 0;
       this.slashMenuQuery = "";
+      this.suggestionKind = void 0;
+      this.fileSuggestionItems = [];
+      this.fileSuggestionPrefix = "";
+      this.fileSuggestionLoading = false;
       this.disableSlashMenuPointerHover();
       this.options.slashMenuElement?.removeAttribute("open");
+      this.options.slashMenuElement?.setAttribute("aria-label", "Slash commands");
       this.options.textarea.setAttribute("aria-expanded", "false");
       this.options.textarea.removeAttribute("aria-activedescendant");
+    }
+    handleHostMessage(message) {
+      if (!isFileSuggestionsResult(message)) {
+        return false;
+      }
+      if (message.id !== String(this.fileSuggestionRequestId) || message.prefix !== this.fileSuggestionPrefix) {
+        return true;
+      }
+      const activePrefix = this.getFileSuggestionPrefixInfo()?.prefix;
+      if (activePrefix !== message.prefix) {
+        return true;
+      }
+      this.fileSuggestionLoading = false;
+      this.fileSuggestionItems = message.items;
+      this.slashMenuActiveIndex = Math.min(this.slashMenuActiveIndex, Math.max(0, this.fileSuggestionItems.length - 1));
+      this.renderFileSuggestionMenu(message.prefix);
+      this.openSlashMenu();
+      return true;
     }
     closeModelMenu() {
       this.options.modelMenuElement?.removeAttribute("open");
@@ -2370,6 +2405,11 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
       }
     }
     syncSlashMenu() {
+      const filePrefix = this.getFileSuggestionPrefixInfo()?.prefix;
+      if (filePrefix) {
+        this.syncFileSuggestionMenu(filePrefix);
+        return;
+      }
       const state2 = this.options.getState();
       if (!this.shouldShowSlashMenu()) {
         this.closeSlashMenu();
@@ -2386,7 +2426,10 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
         this.closeSlashMenu();
         return;
       }
-      if (query !== this.slashMenuQuery) {
+      if (this.suggestionKind !== "slash" || query !== this.slashMenuQuery) {
+        this.suggestionKind = "slash";
+        this.fileSuggestionItems = [];
+        this.fileSuggestionLoading = false;
         this.slashMenuQuery = query;
         this.slashMenuActiveIndex = 0;
         this.disableSlashMenuPointerHover();
@@ -2756,12 +2799,12 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
       }
       if (event.key === "Tab") {
         event.preventDefault();
-        this.acceptActiveSlashCommand();
+        this.acceptActiveSuggestion();
         return true;
       }
-      if (event.key === "Enter" && !event.shiftKey && this.slashMenuItems.length > 0) {
+      if (event.key === "Enter" && !event.shiftKey && this.getActiveSuggestionCount() > 0) {
         event.preventDefault();
-        this.acceptActiveSlashCommand();
+        this.acceptActiveSuggestion();
         return true;
       }
       if (event.key === "Escape") {
@@ -2786,6 +2829,40 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
     }
     getSlashCommandQuery() {
       return this.options.textarea.value.slice(1, this.options.textarea.selectionStart).toLowerCase();
+    }
+    syncFileSuggestionMenu(prefix) {
+      if (document.activeElement !== this.options.textarea) {
+        this.closeSlashMenu();
+        return;
+      }
+      this.closeModelMenu();
+      this.options.cancelSessionNameEdit();
+      if (this.suggestionKind !== "file" || prefix !== this.fileSuggestionPrefix) {
+        this.suggestionKind = "file";
+        this.slashMenuItems = [];
+        this.fileSuggestionItems = [];
+        this.fileSuggestionPrefix = prefix;
+        this.fileSuggestionLoading = true;
+        this.slashMenuActiveIndex = 0;
+        this.disableSlashMenuPointerHover();
+        this.options.slashMenuElement?.scrollTo({ top: 0 });
+        this.fileSuggestionRequestId += 1;
+        this.options.postMessage({
+          type: "requestFileSuggestions",
+          id: String(this.fileSuggestionRequestId),
+          prefix
+        });
+      }
+      this.renderFileSuggestionMenu(prefix);
+      this.openSlashMenu();
+    }
+    getFileSuggestionPrefixInfo() {
+      const textarea2 = this.options.textarea;
+      const cursor = textarea2.selectionStart;
+      if (cursor !== textarea2.selectionEnd) {
+        return void 0;
+      }
+      return extractAtFilePrefix(textarea2.value.slice(0, cursor));
     }
     getFilteredSlashCommands(query) {
       const commands = this.getAllSlashCommands();
@@ -2847,7 +2924,26 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
       }
       this.syncSlashMenuActiveDescendant();
     }
-    createSlashMenuItemElement(command, index) {
+    renderFileSuggestionMenu(prefix) {
+      const slashMenuElement2 = this.options.slashMenuElement;
+      if (!slashMenuElement2) {
+        return;
+      }
+      slashMenuElement2.replaceChildren();
+      if (this.fileSuggestionLoading && this.fileSuggestionItems.length === 0) {
+        slashMenuElement2.append(createSlashMenuEmptyElement("Finding files..."));
+        return;
+      }
+      if (this.fileSuggestionItems.length === 0) {
+        slashMenuElement2.append(createSlashMenuEmptyElement(prefix.length > 1 ? "No matching files" : "No files available"));
+        return;
+      }
+      for (let index = 0; index < this.fileSuggestionItems.length; index += 1) {
+        slashMenuElement2.append(this.createFileSuggestionItemElement(this.fileSuggestionItems[index], index));
+      }
+      this.syncSlashMenuActiveDescendant();
+    }
+    createSuggestionBaseElement(index) {
       const item = document.createElement("button");
       item.type = "button";
       item.id = "slash-command-" + index;
@@ -2855,6 +2951,28 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
       item.setAttribute("role", "option");
       item.setAttribute("aria-selected", index === this.slashMenuActiveIndex ? "true" : "false");
       item.setAttribute("data-index", String(index));
+      return item;
+    }
+    createFileSuggestionItemElement(file, index) {
+      const item = this.createSuggestionBaseElement(index);
+      const label = document.createElement("span");
+      label.className = "composer__slash-label";
+      label.textContent = file.label;
+      item.append(label);
+      const source = document.createElement("span");
+      source.className = "composer__slash-source";
+      source.textContent = file.directory ? "dir" : "file";
+      item.append(source);
+      if (file.description) {
+        const description = document.createElement("span");
+        description.className = "composer__slash-description";
+        description.textContent = file.description;
+        item.append(description);
+      }
+      return item;
+    }
+    createSlashMenuItemElement(command, index) {
+      const item = this.createSuggestionBaseElement(index);
       const label = document.createElement("span");
       label.className = "composer__slash-label";
       label.textContent = "/" + command.name;
@@ -2880,15 +2998,21 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
       }
       this.slashMenuOpen = true;
       this.options.slashMenuElement.setAttribute("open", "");
+      this.options.slashMenuElement.setAttribute("aria-label", this.suggestionKind === "file" ? "File suggestions" : "Slash commands");
       this.options.textarea.setAttribute("aria-expanded", "true");
       this.syncSlashMenuActiveDescendant();
     }
     moveSlashMenuSelection(delta) {
-      if (this.slashMenuItems.length === 0) {
+      const itemCount = this.getActiveSuggestionCount();
+      if (itemCount === 0) {
         return;
       }
-      this.slashMenuActiveIndex = (this.slashMenuActiveIndex + delta + this.slashMenuItems.length) % this.slashMenuItems.length;
-      this.renderSlashMenu(this.getSlashCommandQuery());
+      this.slashMenuActiveIndex = (this.slashMenuActiveIndex + delta + itemCount) % itemCount;
+      if (this.suggestionKind === "file") {
+        this.renderFileSuggestionMenu(this.fileSuggestionPrefix);
+      } else {
+        this.renderSlashMenu(this.getSlashCommandQuery());
+      }
     }
     enableSlashMenuPointerHover() {
       if (this.slashMenuPointerHoverEnabled) {
@@ -2914,7 +3038,7 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
         return;
       }
       const index = Number(item.getAttribute("data-index"));
-      if (!Number.isInteger(index) || !this.slashMenuItems[index]) {
+      if (!Number.isInteger(index) || index < 0 || index >= this.getActiveSuggestionCount()) {
         return;
       }
       const previousIndex = this.slashMenuActiveIndex;
@@ -2938,7 +3062,7 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
       item.setAttribute("aria-selected", selected ? "true" : "false");
     }
     syncSlashMenuActiveDescendant(options = {}) {
-      if (!this.slashMenuOpen || this.slashMenuItems.length === 0) {
+      if (!this.slashMenuOpen || this.getActiveSuggestionCount() === 0) {
         this.options.textarea.removeAttribute("aria-activedescendant");
         return;
       }
@@ -2947,11 +3071,21 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
         this.options.slashMenuElement?.querySelector(".composer__slash-item--active")?.scrollIntoView({ block: "nearest" });
       }
     }
-    acceptActiveSlashCommand() {
+    acceptActiveSuggestion() {
+      if (this.suggestionKind === "file") {
+        const file = this.fileSuggestionItems[this.slashMenuActiveIndex];
+        if (file) {
+          this.acceptFileSuggestion(file);
+        }
+        return;
+      }
       const command = this.slashMenuItems[this.slashMenuActiveIndex];
       if (command) {
         this.acceptSlashCommand(command);
       }
+    }
+    getActiveSuggestionCount() {
+      return this.suggestionKind === "file" ? this.fileSuggestionItems.length : this.slashMenuItems.length;
     }
     acceptSlashCommand(command) {
       const cursor = this.options.textarea.selectionStart;
@@ -2960,6 +3094,28 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
       const nextCursor = command.name.length + 2;
       this.options.textarea.value = value;
       this.options.textarea.setSelectionRange(nextCursor, nextCursor);
+      this.closeSlashMenu();
+      this.syncComposer({ preserveBottom: true });
+      this.options.focusPromptInput();
+    }
+    acceptFileSuggestion(file) {
+      const prefixInfo = this.getFileSuggestionPrefixInfo();
+      if (!prefixInfo) {
+        return;
+      }
+      const textarea2 = this.options.textarea;
+      const cursor = textarea2.selectionStart;
+      const beforePrefix = textarea2.value.slice(0, prefixInfo.start);
+      const afterCursor = textarea2.value.slice(cursor);
+      const hasLeadingQuoteAfterCursor = afterCursor.startsWith('"');
+      const hasTrailingQuoteInItem = file.value.endsWith('"');
+      const adjustedAfterCursor = hasTrailingQuoteInItem && hasLeadingQuoteAfterCursor ? afterCursor.slice(1) : afterCursor;
+      const suffix = file.directory ? "" : " ";
+      const nextValue = beforePrefix + file.value + suffix + adjustedAfterCursor;
+      const cursorOffset = file.directory && hasTrailingQuoteInItem ? file.value.length - 1 : file.value.length;
+      const nextCursor = beforePrefix.length + cursorOffset + suffix.length;
+      textarea2.value = nextValue;
+      textarea2.setSelectionRange(nextCursor, nextCursor);
       this.closeSlashMenu();
       this.syncComposer({ preserveBottom: true });
       this.options.focusPromptInput();
@@ -3255,6 +3411,59 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
       return 4;
     }
     return 5;
+  }
+  var fileSuggestionDelimiters = /* @__PURE__ */ new Set([" ", "	", "\n", "\r", '"', "'", "="]);
+  function extractAtFilePrefix(textBeforeCursor) {
+    const quotedPrefix = extractQuotedAtFilePrefix(textBeforeCursor);
+    if (quotedPrefix) {
+      return quotedPrefix;
+    }
+    const lastDelimiterIndex = findLastFileSuggestionDelimiter(textBeforeCursor);
+    const tokenStart = lastDelimiterIndex === -1 ? 0 : lastDelimiterIndex + 1;
+    if (textBeforeCursor[tokenStart] === "@") {
+      return { prefix: textBeforeCursor.slice(tokenStart), start: tokenStart };
+    }
+    return void 0;
+  }
+  function extractQuotedAtFilePrefix(textBeforeCursor) {
+    let inQuotes = false;
+    let quoteStart = -1;
+    for (let index = 0; index < textBeforeCursor.length; index += 1) {
+      if (textBeforeCursor[index] === '"') {
+        inQuotes = !inQuotes;
+        if (inQuotes) {
+          quoteStart = index;
+        }
+      }
+    }
+    if (!inQuotes || quoteStart <= 0 || textBeforeCursor[quoteStart - 1] !== "@") {
+      return void 0;
+    }
+    const atStart = quoteStart - 1;
+    if (atStart > 0 && !fileSuggestionDelimiters.has(textBeforeCursor[atStart - 1] ?? "")) {
+      return void 0;
+    }
+    return { prefix: textBeforeCursor.slice(atStart), start: atStart };
+  }
+  function findLastFileSuggestionDelimiter(text) {
+    for (let index = text.length - 1; index >= 0; index -= 1) {
+      if (fileSuggestionDelimiters.has(text[index] ?? "")) {
+        return index;
+      }
+    }
+    return -1;
+  }
+  function isFileSuggestionsResult(message) {
+    if (!isRecord4(message) || message.type !== "fileSuggestionsResult") {
+      return false;
+    }
+    return typeof message.id === "string" && typeof message.prefix === "string" && Array.isArray(message.items) && message.items.every(isFileSuggestion);
+  }
+  function isFileSuggestion(value) {
+    return isRecord4(value) && typeof value.value === "string" && typeof value.label === "string" && ("description" in value ? typeof value.description === "string" : true) && typeof value.directory === "boolean";
+  }
+  function isRecord4(value) {
+    return typeof value === "object" && value !== null;
   }
   function createSlashMenuEmptyElement(text) {
     const empty = document.createElement("div");
@@ -7334,7 +7543,7 @@ ${after}`;
     sessionLoading: false
   };
   function parseWebviewStateMessage(data, previousState) {
-    const record = isRecord4(data) ? data : {};
+    const record = isRecord5(data) ? data : {};
     return {
       messages: parseMessages(record, previousState?.messages ?? []),
       busy: Boolean(record.busy),
@@ -7393,10 +7602,10 @@ ${after}`;
     }));
   }
   function isPromptImageAttachment2(value) {
-    return isRecord4(value) && typeof value.id === "string" && typeof value.label === "string" && typeof value.title === "string" && typeof value.mimeType === "string" && typeof value.sizeBytes === "number";
+    return isRecord5(value) && typeof value.id === "string" && typeof value.label === "string" && typeof value.title === "string" && typeof value.mimeType === "string" && typeof value.sizeBytes === "number";
   }
   function parseComposerPaste(value) {
-    if (!isRecord4(value) || typeof value.text !== "string" || typeof value.revision !== "number") {
+    if (!isRecord5(value) || typeof value.text !== "string" || typeof value.revision !== "number") {
       return void 0;
     }
     return {
@@ -7414,7 +7623,7 @@ ${after}`;
     }));
   }
   function isExtensionStatusEntry(value) {
-    return isRecord4(value) && typeof value.key === "string" && typeof value.text === "string";
+    return isRecord5(value) && typeof value.key === "string" && typeof value.text === "string";
   }
   function parseExtensionWidgets(value) {
     if (!Array.isArray(value)) {
@@ -7428,10 +7637,10 @@ ${after}`;
     }));
   }
   function isExtensionWidgetEntry(value) {
-    return isRecord4(value) && typeof value.key === "string" && (value.placement === "aboveEditor" || value.placement === "belowEditor") && Array.isArray(value.lines);
+    return isRecord5(value) && typeof value.key === "string" && (value.placement === "aboveEditor" || value.placement === "belowEditor") && Array.isArray(value.lines);
   }
   function parseAuthState(value) {
-    if (!isRecord4(value)) {
+    if (!isRecord5(value)) {
       return { providers: [] };
     }
     return {
@@ -7444,7 +7653,7 @@ ${after}`;
     };
   }
   function isAuthProvider(value) {
-    return isRecord4(value) && typeof value.id === "string" && typeof value.name === "string" && (value.authType === "oauth" || value.authType === "api_key") && typeof value.configured === "boolean" && typeof value.canLogout === "boolean";
+    return isRecord5(value) && typeof value.id === "string" && typeof value.name === "string" && (value.authType === "oauth" || value.authType === "api_key") && typeof value.configured === "boolean" && typeof value.canLogout === "boolean";
   }
   function sanitizeAuthProvider(provider) {
     return {
@@ -7460,14 +7669,14 @@ ${after}`;
     };
   }
   function isAuthProgress(value) {
-    return isRecord4(value) && typeof value.message === "string" && (!("providerId" in value) || typeof value.providerId === "string") && (!("url" in value) || typeof value.url === "string") && (!("userCode" in value) || typeof value.userCode === "string") && (!("verificationUri" in value) || typeof value.verificationUri === "string");
+    return isRecord5(value) && typeof value.message === "string" && (!("providerId" in value) || typeof value.providerId === "string") && (!("url" in value) || typeof value.url === "string") && (!("userCode" in value) || typeof value.userCode === "string") && (!("verificationUri" in value) || typeof value.verificationUri === "string");
   }
   function parseSettingsState(value) {
-    if (!isRecord4(value)) {
+    if (!isRecord5(value)) {
       return { values: {} };
     }
     const parsedValues = {};
-    const values = isRecord4(value.values) ? value.values : {};
+    const values = isRecord5(value.values) ? value.values : {};
     for (const [settingId, settingValue] of Object.entries(values)) {
       if (!isSettingId(settingId)) {
         continue;
@@ -7484,7 +7693,7 @@ ${after}`;
     };
   }
   function parseSettingsErrors(value) {
-    if (!isRecord4(value)) {
+    if (!isRecord5(value)) {
       return void 0;
     }
     const parsedErrors = {};
@@ -7509,7 +7718,7 @@ ${after}`;
     return applyMessagePatch(previousMessages, patch);
   }
   function parseMessagePatch(value) {
-    if (!isRecord4(value)) {
+    if (!isRecord5(value)) {
       return void 0;
     }
     const upserts = Array.isArray(value.upserts) ? value.upserts.filter(isMessagePatchUpsert) : void 0;
@@ -7523,10 +7732,10 @@ ${after}`;
     };
   }
   function isMessagePatchUpsert(value) {
-    if (!isRecord4(value)) {
+    if (!isRecord5(value)) {
       return false;
     }
-    return typeof value.index === "number" && Number.isInteger(value.index) && value.index >= 0 && isRecord4(value.message) && typeof value.message.role === "string" && typeof value.message.text === "string";
+    return typeof value.index === "number" && Number.isInteger(value.index) && value.index >= 0 && isRecord5(value.message) && typeof value.message.role === "string" && typeof value.message.text === "string";
   }
   function applyMessagePatch(previousMessages, patch) {
     const messages = previousMessages.slice();
@@ -7562,7 +7771,7 @@ ${after}`;
     });
   }
   function parseWorkspaceDiffStats(value) {
-    if (!isRecord4(value)) {
+    if (!isRecord5(value)) {
       return { addedLines: 0, removedLines: 0 };
     }
     return {
@@ -7570,7 +7779,7 @@ ${after}`;
       removedLines: normalizeDiffLineCount(value.removedLines)
     };
   }
-  function isRecord4(value) {
+  function isRecord5(value) {
     return typeof value === "object" && value !== null;
   }
 
@@ -7747,6 +7956,9 @@ ${after}`;
   messagesElement.addEventListener("scroll", () => messagesController.handleMessagesScroll());
   window.addEventListener("message", (event) => {
     if (extensionEditorDialogController.handleHostMessage(event.data)) {
+      return;
+    }
+    if (composerController.handleHostMessage(event.data)) {
       return;
     }
     if (customUiController.handleHostMessage(event.data)) {

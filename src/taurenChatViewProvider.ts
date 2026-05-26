@@ -33,6 +33,7 @@ import { traceOrigin, type TraceOriginInput, type TraceOriginMatch } from './ori
 import { readCachedSessionMeta, writeCachedSessionMeta } from './metadata/cache';
 import { readSessionJsonlHeaderCwdSync } from './pi/sessionJsonl';
 import { getPiStartupCwdState, isSafeWorkspaceCwd, getUnsafeCwdReason } from './workspace/cwdSafety';
+import { getAtFileSuggestions } from './fileSuggestions/fileSuggestionProvider';
 
 export const taurenChatViewType = 'tauren.chatView';
 export type { PiClient } from './pi/clientTypes';
@@ -489,6 +490,21 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
     }
   }
 
+  private async requestFileSuggestions(message: Extract<WebviewMessage, { type: 'requestFileSuggestions' }>): Promise<void> {
+    const startupState = getPiStartupCwdState(this.workspaceCwdProvider(), getRejectEditWriteOutsideWorkspaceSetting());
+    const items = await getAtFileSuggestions({
+      cwd: startupState.status === 'ready' ? startupState.cwd : undefined,
+      prefix: message.prefix
+    });
+
+    void this.webviewView?.webview.postMessage({
+      type: 'fileSuggestionsResult',
+      id: message.id,
+      prefix: message.prefix,
+      items
+    });
+  }
+
   private async createPromptImageAttachment(uri: vscode.Uri): Promise<PiPromptImageAttachment | string> {
     const mimeType = getSupportedPromptImageMimeType(uri.fsPath);
     const label = getPathBasename(uri.fsPath);
@@ -694,6 +710,11 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
 
     if (message.type === 'selectPromptImages') {
       await this.selectPromptImages();
+      return;
+    }
+
+    if (message.type === 'requestFileSuggestions') {
+      await this.requestFileSuggestions(message);
       return;
     }
 

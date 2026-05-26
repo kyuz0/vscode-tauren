@@ -126,6 +126,10 @@ export function parseWebviewMessage(value: unknown): WebviewMessage {
       return { type: 'refreshMetadata' };
     case 'refreshSlashCommands':
       return { type: 'refreshSlashCommands' };
+    case 'requestFileSuggestions':
+      return typeof value.id === 'string' && value.id && typeof value.prefix === 'string' && value.prefix.startsWith('@')
+        ? { type: 'requestFileSuggestions', id: value.id, prefix: value.prefix }
+        : { type: 'unknown' };
     case 'selectPromptImages':
       return { type: 'selectPromptImages' };
     case 'dropPromptImages': {
