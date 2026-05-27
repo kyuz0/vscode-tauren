@@ -1,11 +1,3 @@
-export type BuiltInAuthProviderKind = 'oauth' | 'api_key';
-
-export type BuiltInAuthProviderMetadata = {
-  id: string;
-  name: string;
-  kind: BuiltInAuthProviderKind;
-};
-
 // Narrow mirror of Pi's built-in auth provider metadata used for /login UI.
 // Keep this intentionally small and data-only; AuthStorage/ModelRegistry remain authoritative.
 export const builtInOAuthProviderIds = new Set(['anthropic', 'openai-codex', 'github-copilot']);

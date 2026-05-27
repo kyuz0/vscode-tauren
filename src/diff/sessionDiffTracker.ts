@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
-import { iterSessionJsonlRecords, parseSessionJsonlFileRecords } from '../pi/sessionJsonl';
+import { parseSessionJsonlFileRecords } from '../pi/sessionJsonl';
 import { normalizeDiffLineCount } from './lineCount';
 import type {
   FileMutation,
@@ -36,19 +36,6 @@ export class SessionDiffTracker {
     return this.getStats();
   }
 
-  public async restoreFromSessionFile(sessionFile: string | undefined): Promise<SessionDiffStats> {
-    if (!sessionFile) {
-      return this.getStats();
-    }
-
-    const parsed = await parseSessionDiffStatsFromFile(sessionFile);
-
-    if (parsed) {
-      this.stats = parsed;
-    }
-
-    return this.getStats();
-  }
 }
 
 export function emptySessionDiffStats(): SessionDiffStats {
@@ -114,10 +101,6 @@ export async function parseSessionBestEffortFileDiffsFromFile(sessionFile: strin
   return { diffs: computeParsedSyntheticSessionFileDiffs(parsed), reconstructed: false };
 }
 
-export function parseSessionDiffStats(content: string): SessionDiffStats {
-  return getParsedToolStats(parseSessionDiffRecords(content));
-}
-
 type ParsedSessionDiffRecords = {
   cwd: string | undefined;
   toolExecutionStats: SessionDiffStats[];
@@ -135,16 +118,6 @@ async function parseSessionDiffRecordsFromFile(sessionFile: string): Promise<Par
     }
   } catch {
     return undefined;
-  }
-
-  return parsed;
-}
-
-function parseSessionDiffRecords(content: string): ParsedSessionDiffRecords {
-  const parsed = createParsedSessionDiffRecords();
-
-  for (const record of iterSessionJsonlRecords(content)) {
-    collectSessionDiffRecord(record, parsed);
   }
 
   return parsed;
@@ -231,25 +204,6 @@ function collectToolStats(value: unknown, toolExecutionStats: SessionDiffStats[]
   }
 }
 
-export async function parseSessionFileDiffs(content: string): Promise<SessionFileDiff[] | undefined> {
-  const { cwd, mutations } = parseSessionMutationHistory(content);
-
-  if (mutations.length === 0) {
-    return [];
-  }
-
-  if (!cwd) {
-    return undefined;
-  }
-
-  return computeSessionFileDiffs(cwd, mutations);
-}
-
-export function parseSessionMutationFileDiffs(content: string): SessionFileDiff[] {
-  const { cwd, mutations } = parseSessionMutationHistory(content);
-  return computeSyntheticSessionFileDiffs(cwd, mutations);
-}
-
 async function parseSessionNetDiffStatsFromParsed(parsed: ParsedSessionDiffRecords): Promise<SessionDiffStats | undefined> {
   const mutations = getParsedMutations(parsed);
 
@@ -259,14 +213,6 @@ async function parseSessionNetDiffStatsFromParsed(parsed: ParsedSessionDiffRecor
 
   const fileDiffs = await computeSessionFileDiffs(parsed.cwd, mutations);
   return fileDiffs === undefined ? undefined : sumStats(fileDiffs.map((diff) => getLineDiffStats(diff.originalContent, diff.modifiedContent)));
-}
-
-function parseSessionMutationHistory(content: string): { cwd: string | undefined; mutations: FileMutation[] } {
-  const parsed = parseSessionDiffRecords(content);
-  return {
-    cwd: parsed.cwd,
-    mutations: getParsedMutations(parsed)
-  };
 }
 
 function collectToolMutations(value: unknown, executionMutations: FileMutation[], toolCallMutations: FileMutation[]): void {

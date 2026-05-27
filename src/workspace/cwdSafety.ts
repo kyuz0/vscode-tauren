@@ -32,16 +32,6 @@ export function getUnsafeCwdReason(cwd: string | undefined): string | undefined 
   return state.status === 'unsafe' ? state.reason : undefined;
 }
 
-export function assertSafeWorkspaceCwd(cwd: string | undefined): string {
-  const state = getWorkspaceCwdState(cwd);
-
-  if (state.status !== 'ready') {
-    throw new Error(`Tauren cannot start Pi engine because ${state.reason}. Open a project folder and try again.`);
-  }
-
-  return state.cwd;
-}
-
 export function getPiStartupCwdState(cwd: string | undefined, rejectWithoutWorkspace: boolean): PiStartupCwdState {
   const workspaceState = getWorkspaceCwdState(cwd);
 

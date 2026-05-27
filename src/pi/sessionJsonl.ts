@@ -1,9 +1,5 @@
 import { closeSync, createReadStream, openSync, readSync } from 'fs';
 
-export function parseSessionJsonlRecords(content: string): unknown[] {
-  return Array.from(iterSessionJsonlRecords(content));
-}
-
 export function* iterSessionJsonlRecords(content: string): Generator<unknown> {
   let lineStart = 0;
 
