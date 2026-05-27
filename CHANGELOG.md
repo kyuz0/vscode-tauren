@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Preserved user-prompt line breaks in transcript bubbles.
 - Fixed session-list rename prefill for unnamed sessions.
 - Added commands to raise or lower the active session thinking level.
 - Added a VS Code progress notification while Trace Origin is running.

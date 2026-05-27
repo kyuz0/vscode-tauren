@@ -1,6 +1,7 @@
 import { containsAnsiEscape, renderAnsiSpinnersInto, renderAnsiTextInto } from './ansi';
 import { createIconActionButton } from './actionButtons';
 import { renderHighlightedCodeInto, renderMarkdownInto, type RenderMarkdownOptions } from './markdown';
+import { shouldRenderMarkdown } from './renderPolicy';
 import type { Activity, ChatImage, ChatMessage } from '../types';
 
 const maxRememberedActivityIds = 1000;
@@ -197,10 +198,6 @@ function getDirectMessageBodyElement(article: HTMLElement): HTMLElement | undefi
 
 function getMessageVariantClass(message: ChatMessage): string {
   return message.variant === 'thinking' ? ' message--thinking' : '';
-}
-
-function shouldRenderMarkdown(message: ChatMessage): boolean {
-  return !message.error;
 }
 
 function createBranchSummaryActivityElement(text: string, messageIndex: number | undefined, options: MessageRenderOptions): HTMLElement {

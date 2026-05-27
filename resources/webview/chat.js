@@ -3718,6 +3718,11 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
     return Array.from(document.querySelectorAll(selector));
   }
 
+  // src/webview/messages/renderPolicy.ts
+  function shouldRenderMarkdown(message) {
+    return !message.error && message.role !== "user";
+  }
+
   // src/webview/messages/renderMessages.ts
   var maxRememberedActivityIds = 1e3;
   var activityExpansion = /* @__PURE__ */ new Map();
@@ -3856,9 +3861,6 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
   }
   function getMessageVariantClass(message) {
     return message.variant === "thinking" ? " message--thinking" : "";
-  }
-  function shouldRenderMarkdown(message) {
-    return !message.error;
   }
   function createBranchSummaryActivityElement(text, messageIndex, options) {
     const body = stripBranchSummaryPrefix(text);
