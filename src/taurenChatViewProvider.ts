@@ -4,9 +4,8 @@ import {
   createWebviewHtml,
   parseWebviewMessage
 } from './sidebar/chatWebview';
-import { parseWebviewCustomUiTheme } from './webviewProtocol/values';
 import type { SettingValue, TaurenSettingId } from './settings/settingsRegistry';
-import type { WebviewCustomUiTheme, WebviewLane, WebviewMessage, WebviewPerfEvent, WebviewSessionItem, WebviewStateMessage } from './webviewProtocol/types';
+import type { WebviewLane, WebviewMessage, WebviewPerfEvent, WebviewSessionItem, WebviewStateMessage } from './webviewProtocol/types';
 import { type PiClientFactory, type PiClient } from './pi/clientTypes';
 import type { PiClientOptions } from './pi/types';
 import { PiSdkClient } from './sdk/piSdkClient';
@@ -20,27 +19,52 @@ import type { PiPromptImageAttachment } from './taurenChatController';
 import { listPiSessions } from './sessions/piSessionList';
 import { runReadyScript } from './readyScript';
 import { createPromptContextFromEditor } from './prompt/editorContext';
+import { supportedPromptImageExtensions } from './prompt/imageAttachments';
 import {
-  getPromptImageTooLargeMessage,
-  getSupportedPromptImageMimeType,
-  getUnsupportedPromptImageMessage,
-  maxPromptImageBytes,
-  supportedPromptImageExtensions
-} from './prompt/imageAttachments';
-import type { PiPromptContextInput, PiPromptTraceOriginLinkedCommit } from './prompt/types';
+  createPromptImageAttachment,
+  createPromptImageAttachmentFromDroppedFile,
+  parseDroppedPromptImageUri
+} from './prompt/imageAttachmentFactory';
 import { findCurrentPathGitCommit, findTraceLinkedGitCommit } from './origin/gitOriginContext';
-import { traceOrigin, type TraceOriginInput, type TraceOriginMatch } from './origin/sessionOriginTracer';
+import { traceOrigin } from './origin/sessionOriginTracer';
+import {
+  createGitOriginPromptContext,
+  createOriginPromptContext,
+  createTraceOriginInputs
+} from './origin/originPromptContext';
 import { readCachedSessionMeta, writeCachedSessionMeta } from './metadata/cache';
 import { readSessionJsonlHeaderCwdSync } from './pi/sessionJsonl';
 import { getPiStartupCwdState, isSafeWorkspaceCwd, getUnsafeCwdReason } from './workspace/cwdSafety';
+import {
+  isSupportedLocalImagePath,
+  isUriInsideWorkspace,
+  resolveWorkspaceFileUri,
+  resolveWorkspaceImageUri
+} from './workspace/workspaceUris';
 import { getAtFileSuggestions } from './fileSuggestions/fileSuggestionProvider';
 import { TaurenPerfRecorder, type TaurenPerfTimer } from './perf/taurenPerf';
+import {
+  affectsAnyTaurenExtensionSetting,
+  getAllowRemoteImagesSetting,
+  getAnimationsEnabledSetting,
+  getConfirmSessionDeletionSetting,
+  getCustomUiThemeSetting,
+  getDebugPerformanceSetting,
+  getOutputColorsSetting,
+  getReadyScriptEnabledSetting,
+  getReadyScriptSetting,
+  getRejectEditWriteOutsideWorkspaceSetting,
+  getShowWelcomeSetting,
+  getTaurenSettingValues,
+  hasConfiguredShowWelcomeSetting,
+  updateTaurenSetting,
+  welcomeDismissedStorageKey
+} from './settings/taurenSettings';
 
 export const taurenChatViewType = 'tauren.chatView';
 export type { PiClient } from './pi/clientTypes';
 
 const currentSessionFileStorageKey = 'tauren.currentSessionFile';
-const welcomeDismissedStorageKey = 'tauren.welcomeDismissed';
 const taurenSidebarFocusContextKey = 'tauren.sidebarFocus';
 const taurenBusyContextKey = 'tauren.busy';
 const contextUsagePollingIntervalMs = 2000;
@@ -550,7 +574,7 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
     const rejected: string[] = [];
 
     for (const uri of uris) {
-      const result = await this.createPromptImageAttachment(uri);
+      const result = await createPromptImageAttachment(uri);
 
       if (typeof result === 'string') {
         rejected.push(result);
@@ -585,47 +609,6 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
     });
   }
 
-  private async createPromptImageAttachment(uri: vscode.Uri): Promise<PiPromptImageAttachment | string> {
-    const mimeType = getSupportedPromptImageMimeType(uri.fsPath);
-    const label = getPathBasename(uri.fsPath);
-
-    if (!mimeType) {
-      return getUnsupportedPromptImageMessage(label);
-    }
-
-    let stat: vscode.FileStat;
-    try {
-      stat = await vscode.workspace.fs.stat(uri);
-    } catch {
-      return `Cannot read attachment: ${label}.`;
-    }
-
-    if (stat.type !== vscode.FileType.File) {
-      return `Unsupported attachment: ${label} is not a file.`;
-    }
-
-    if (stat.size > maxPromptImageBytes) {
-      return getPromptImageTooLargeMessage(label);
-    }
-
-    let data: Uint8Array;
-    try {
-      data = await vscode.workspace.fs.readFile(uri);
-    } catch {
-      return `Cannot read attachment: ${label}.`;
-    }
-
-    return {
-      id: createPromptImageId(),
-      type: 'image',
-      data: Buffer.from(data).toString('base64'),
-      mimeType,
-      label,
-      title: uri.fsPath,
-      sizeBytes: stat.size
-    };
-  }
-
   private async dropPromptImages(message: Extract<WebviewMessage, { type: 'dropPromptImages' }>): Promise<void> {
     if (message.rejections && message.rejections.length > 0) {
       for (const rejection of message.rejections) {
@@ -639,7 +622,7 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
     const rejected: string[] = [];
 
     for (const droppedFile of message.files) {
-      const result = this.createPromptImageAttachmentFromDroppedFile(droppedFile);
+      const result = createPromptImageAttachmentFromDroppedFile(droppedFile);
 
       if (typeof result === 'string') {
         rejected.push(result);
@@ -656,7 +639,7 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
         continue;
       }
 
-      const result = await this.createPromptImageAttachment(uri);
+      const result = await createPromptImageAttachment(uri);
 
       if (typeof result === 'string') {
         rejected.push(result);
@@ -681,29 +664,6 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
     this.controller.addPromptImages(attachments);
     await this.focus();
     this.showToast(`${attachments.length === 1 ? 'Image' : `${attachments.length} images`} attached.`, 'success');
-  }
-
-  private createPromptImageAttachmentFromDroppedFile(file: Extract<WebviewMessage, { type: 'dropPromptImages' }>['files'][number]): PiPromptImageAttachment | string {
-    const label = file.label;
-    const mimeType = getSupportedPromptImageMimeType(label);
-
-    if (!mimeType) {
-      return getUnsupportedPromptImageMessage(label);
-    }
-
-    if (file.sizeBytes > maxPromptImageBytes) {
-      return getPromptImageTooLargeMessage(label);
-    }
-
-    return {
-      id: createPromptImageId(),
-      type: 'image',
-      data: file.data,
-      mimeType,
-      label,
-      title: file.title || label,
-      sizeBytes: file.sizeBytes
-    };
   }
 
   public async sendSelectionToComposer(): Promise<void> {
@@ -1451,304 +1411,11 @@ function clearEditorSelection(editor: vscode.TextEditor): void {
   editor.selections = [new vscode.Selection(active, active)];
 }
 
-function createTraceOriginInputs(context: PiPromptContextInput[], document: vscode.TextDocument): TraceOriginInput[] {
-  const absolutePath = document.uri.scheme === 'file' ? document.uri.fsPath : undefined;
-
-  return context.map((entry) => ({
-    kind: entry.kind,
-    path: entry.path,
-    absolutePath,
-    text: entry.text
-  }));
-}
-
-function createGitOriginPromptContext(
-  context: PiPromptContextInput[],
-  traceLinkedCommit: PiPromptTraceOriginLinkedCommit
-): PiPromptContextInput[] {
-  return context.map((entry) => ({
-    ...entry,
-    source: 'origin',
-    label: `Origin: ${entry.label ?? getPathBasename(entry.path)}`,
-    title: `${entry.title ?? entry.path}\nGit commit: ${traceLinkedCommit.shortSha} ${traceLinkedCommit.subject}`,
-    traceOrigin: {
-      currentRelativePath: entry.path,
-      git: { traceLinkedCommit }
-    }
-  }));
-}
-
-function createOriginPromptContext(
-  context: PiPromptContextInput[],
-  match: TraceOriginMatch,
-  traceLinkedCommit: PiPromptTraceOriginLinkedCommit | undefined
-): PiPromptContextInput[] {
-  return context.map((entry) => ({
-    ...entry,
-    source: 'origin',
-    label: `Origin: ${entry.label ?? getPathBasename(entry.path)}`,
-    title: `${entry.title ?? entry.path}\nTraced to Tauren session: ${match.sessionPath}`,
-    traceOrigin: {
-      historicalPath: match.filePath,
-      currentRelativePath: entry.path,
-      origin: {
-        ...(match.sessionId ? { sessionId: match.sessionId } : {}),
-        toolName: match.toolName,
-        ...(match.recordId ? { recordId: match.recordId } : {}),
-        ...(match.timestamp ? { matchedAt: match.timestamp } : {}),
-        ...(match.sessionEndedAt ? { sessionEndedAt: match.sessionEndedAt } : {})
-      },
-      ...(traceLinkedCommit ? { git: { traceLinkedCommit } } : {})
-    }
-  }));
-}
-
-function getPathBasename(filePath: string): string {
-  const normalizedPath = filePath.replace(/\\/g, '/');
-  const lastSlashIndex = normalizedPath.lastIndexOf('/');
-  return lastSlashIndex === -1 ? normalizedPath : normalizedPath.slice(lastSlashIndex + 1);
-}
-
-function getOutputColorsSetting(): boolean {
-  return vscode.workspace.getConfiguration('tauren').get<boolean>('outputColors', true);
-}
-
-function getAnimationsEnabledSetting(): boolean {
-  return vscode.workspace.getConfiguration('tauren').get<boolean>('animationsEnabled', true);
-}
-
-function getShowWelcomeSetting(globalState?: vscode.Memento): boolean {
-  if (hasConfiguredShowWelcomeSetting()) {
-    return vscode.workspace.getConfiguration('tauren').get<boolean>('showWelcome', true);
-  }
-
-  return globalState?.get<boolean>(welcomeDismissedStorageKey) === true ? false : true;
-}
-
-function hasConfiguredShowWelcomeSetting(): boolean {
-  const inspected = vscode.workspace.getConfiguration('tauren').inspect<boolean>('showWelcome');
-
-  return [
-    inspected?.globalValue,
-    inspected?.workspaceValue,
-    inspected?.workspaceFolderValue,
-    inspected?.globalLanguageValue,
-    inspected?.workspaceLanguageValue,
-    inspected?.workspaceFolderLanguageValue
-  ].some((value) => typeof value === 'boolean');
-}
-
-function getConfirmSessionDeletionSetting(): boolean {
-  return vscode.workspace.getConfiguration('tauren').get<boolean>('confirmSessionDeletion', true);
-}
-
-function getCustomUiThemeSetting(): WebviewCustomUiTheme {
-  const value = vscode.workspace.getConfiguration('tauren').get<string>('customUiTheme', 'default');
-  return parseWebviewCustomUiTheme(value);
-}
-
-function getBlockHttpsImagesSetting(): boolean {
-  return vscode.workspace.getConfiguration('tauren').get<boolean>('blockHttpsImages', true);
-}
-
-function getAllowRemoteImagesSetting(): boolean {
-  return !getBlockHttpsImagesSetting();
-}
-
-function getReadyScriptSetting(): string | undefined {
-  const value = vscode.workspace.getConfiguration('tauren').get<string>('readyScript', '').trim();
-  return value || undefined;
-}
-
-function getReadyScriptEnabledSetting(): boolean {
-  return vscode.workspace.getConfiguration('tauren').get<boolean>('readyScriptEnabled', true);
-}
-
-function getRejectEditWriteOutsideWorkspaceSetting(): boolean {
-  return vscode.workspace.getConfiguration('tauren').get<boolean>('rejectEditWriteOutsideWorkspace', false);
-}
-
-function getDebugPerformanceSetting(): boolean {
-  return vscode.workspace.getConfiguration('tauren').get<boolean>('debugPerformance', false);
-}
-
-function affectsAnyTaurenExtensionSetting(event: vscode.ConfigurationChangeEvent): boolean {
-  return event.affectsConfiguration('tauren.extensions.aboveWidgetsEnabled')
-    || event.affectsConfiguration('tauren.extensions.belowWidgetsEnabled')
-    || event.affectsConfiguration('tauren.extensions.statusBarEnabled')
-    || event.affectsConfiguration('tauren.extensions.backgroundColorsEnabled')
-    || event.affectsConfiguration('tauren.extensions.monospaceFontEnabled');
-}
-
-function getExtensionAboveWidgetsEnabledSetting(): boolean {
-  return vscode.workspace.getConfiguration('tauren').get<boolean>('extensions.aboveWidgetsEnabled', true);
-}
-
-function getExtensionBelowWidgetsEnabledSetting(): boolean {
-  return vscode.workspace.getConfiguration('tauren').get<boolean>('extensions.belowWidgetsEnabled', true);
-}
-
-function getExtensionStatusBarEnabledSetting(): boolean {
-  return vscode.workspace.getConfiguration('tauren').get<boolean>('extensions.statusBarEnabled', true);
-}
-
-function getExtensionBackgroundColorsEnabledSetting(): boolean {
-  return vscode.workspace.getConfiguration('tauren').get<boolean>('extensions.backgroundColorsEnabled', true);
-}
-
-function getExtensionMonospaceFontEnabledSetting(): boolean {
-  return vscode.workspace.getConfiguration('tauren').get<boolean>('extensions.monospaceFontEnabled', true);
-}
-
-function getTaurenSettingValues(globalState?: vscode.Memento): Partial<Record<TaurenSettingId, SettingValue>> {
-  return {
-    'tauren.outputColors': getOutputColorsSetting(),
-    'tauren.animationsEnabled': getAnimationsEnabledSetting(),
-    'tauren.showWelcome': getShowWelcomeSetting(globalState),
-    'tauren.customUiTheme': getCustomUiThemeSetting(),
-    'tauren.extensions.aboveWidgetsEnabled': getExtensionAboveWidgetsEnabledSetting(),
-    'tauren.extensions.belowWidgetsEnabled': getExtensionBelowWidgetsEnabledSetting(),
-    'tauren.extensions.statusBarEnabled': getExtensionStatusBarEnabledSetting(),
-    'tauren.extensions.backgroundColorsEnabled': getExtensionBackgroundColorsEnabledSetting(),
-    'tauren.extensions.monospaceFontEnabled': getExtensionMonospaceFontEnabledSetting(),
-    'tauren.blockHttpsImages': getBlockHttpsImagesSetting(),
-    'tauren.confirmSessionDeletion': getConfirmSessionDeletionSetting(),
-    'tauren.rejectEditWriteOutsideWorkspace': getRejectEditWriteOutsideWorkspaceSetting(),
-    'tauren.debugPerformance': getDebugPerformanceSetting(),
-    'tauren.readyScript': getReadyScriptSetting() ?? '',
-    'tauren.readyScriptEnabled': getReadyScriptEnabledSetting()
-  };
-}
-
-async function updateTaurenSetting(id: TaurenSettingId, value: SettingValue): Promise<void> {
-  const configKey = id.slice('tauren.'.length);
-
-  if (Array.isArray(value)) {
-    throw new Error(`Unsupported Tauren setting value for ${id}.`);
-  }
-
-  await vscode.workspace.getConfiguration('tauren').update(configKey, value, vscode.ConfigurationTarget.Global);
-}
-
-function resolveWorkspaceFileUri(filePath: string): vscode.Uri | undefined {
-  if (path.isAbsolute(filePath)) {
-    return vscode.Uri.file(path.normalize(filePath));
-  }
-
-  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-
-  if (!workspaceFolder) {
-    return undefined;
-  }
-
-  return vscode.Uri.file(path.resolve(workspaceFolder.uri.fsPath, filePath));
-}
-
 function getWebviewLocalResourceRoots(extensionUri: vscode.Uri): vscode.Uri[] {
   return [
     extensionUri,
     ...(vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri)
   ];
-}
-
-function resolveWorkspaceImageUri(src: string): vscode.Uri | undefined {
-  const decodedPath = decodeImagePath(src);
-
-  if (!decodedPath) {
-    return undefined;
-  }
-
-  if (decodedPath.startsWith('file:')) {
-    try {
-      const uri = vscode.Uri.parse(decodedPath);
-      return resolveAbsoluteWorkspaceUri(uri.fsPath) ?? uri;
-    } catch {
-      return undefined;
-    }
-  }
-
-  if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(decodedPath)) {
-    return undefined;
-  }
-
-  if (path.isAbsolute(decodedPath)) {
-    return resolveAbsoluteWorkspaceUri(decodedPath);
-  }
-
-  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-
-  if (!workspaceFolder) {
-    return undefined;
-  }
-
-  return resolveRelativeWorkspaceUri(workspaceFolder, decodedPath);
-}
-
-function decodeImagePath(src: string): string | undefined {
-  const withoutFragment = src.split('#', 1)[0]?.split('?', 1)[0]?.trim() ?? '';
-
-  if (!withoutFragment) {
-    return undefined;
-  }
-
-  try {
-    return decodeURIComponent(withoutFragment);
-  } catch {
-    return withoutFragment;
-  }
-}
-
-function resolveAbsoluteWorkspaceUri(filePath: string): vscode.Uri | undefined {
-  const normalizedPath = path.normalize(filePath);
-  const workspaceFolder = (vscode.workspace.workspaceFolders ?? []).find((folder) => isPathInsidePath(normalizedPath, folder.uri.fsPath));
-
-  if (!workspaceFolder) {
-    return undefined;
-  }
-
-  const relativePath = path.relative(workspaceFolder.uri.fsPath, normalizedPath);
-  return resolveRelativeWorkspaceUri(workspaceFolder, relativePath);
-}
-
-function resolveRelativeWorkspaceUri(workspaceFolder: vscode.WorkspaceFolder, relativePath: string): vscode.Uri {
-  const parts = relativePath.replace(/\\/g, '/').split('/').filter((part) => part.length > 0);
-  return vscode.Uri.joinPath(workspaceFolder.uri, ...parts);
-}
-
-function isSupportedLocalImagePath(filePath: string): boolean {
-  return /\.(?:png|jpe?g|gif|webp)$/i.test(filePath);
-}
-
-function createPromptImageId(): string {
-  return `prompt-image-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function parseDroppedPromptImageUri(value: string): vscode.Uri | undefined {
-  try {
-    if (/^[a-zA-Z]:[\\/]/.test(value) || value.startsWith('/') || value.startsWith('\\\\')) {
-      return vscode.Uri.file(value);
-    }
-
-    const uri = vscode.Uri.parse(value, true);
-    return uri.scheme === 'file' || uri.scheme === 'vscode-remote' ? uri : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function isUriInsideWorkspace(uri: vscode.Uri): boolean {
-  const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
-
-  if (workspaceFolder) {
-    return true;
-  }
-
-  return (vscode.workspace.workspaceFolders ?? []).some((folder) => isPathInsidePath(uri.fsPath, folder.uri.fsPath));
-}
-
-function isPathInsidePath(candidatePath: string, rootPath: string): boolean {
-  const relativePath = path.relative(rootPath, candidatePath);
-  return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
 }
 
 function readCurrentSessionFile(workspaceState: vscode.Memento | undefined): string | undefined {
