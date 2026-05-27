@@ -15,6 +15,16 @@ export function getSessionDisplayName(session: SessionItem): string {
   return firstMessage || shortenPath(session.cwd) || 'Untitled session';
 }
 
+export function getSessionNameEditValue(session: SessionItem): string {
+  const explicitName = typeof session.name === 'string' ? session.name.trim() : '';
+
+  if (explicitName) {
+    return explicitName;
+  }
+
+  return session.metadataState === 'loading' ? '' : getSessionDisplayName(session);
+}
+
 export function buildSessionTreePrefix(session: { depth?: number; ancestorContinues?: boolean[]; isLast?: boolean }): string {
   const depth = Number(session.depth) || 0;
 

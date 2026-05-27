@@ -5128,6 +5128,13 @@ ${after}`;
     const firstMessage = sanitizeSessionTitle(session.firstMessage);
     return firstMessage || shortenPath(session.cwd) || "Untitled session";
   }
+  function getSessionNameEditValue(session) {
+    const explicitName = typeof session.name === "string" ? session.name.trim() : "";
+    if (explicitName) {
+      return explicitName;
+    }
+    return session.metadataState === "loading" ? "" : getSessionDisplayName(session);
+  }
   function buildSessionTreePrefix(session) {
     const depth = Number(session.depth) || 0;
     if (depth <= 0) {
@@ -7404,7 +7411,7 @@ ${after}`;
       }
       this.sessionListSelectedIndex = this.clampSessionIndex(index);
       this.sessionListNameEditPath = session.path;
-      this.sessionListNameEditInitialValue = session.name?.trim() ?? "";
+      this.sessionListNameEditInitialValue = getSessionNameEditValue(session);
       this.sessionListNameEditValue = this.sessionListNameEditInitialValue;
       this.sessionListNameEditShouldSelect = true;
       this.closeSessionItemMenus();

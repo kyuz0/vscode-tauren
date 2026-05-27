@@ -1,6 +1,6 @@
 import { createSessionItemElement } from './sessionElements';
 import type { SessionItemMenuPosition } from './sessionElements';
-import { getSessionDisplayName } from './sessionFormat';
+import { getSessionDisplayName, getSessionNameEditValue } from './sessionFormat';
 import {
   ensureVisibleSessionSelection,
   getVisibleSessionIndexes,
@@ -1091,7 +1091,7 @@ export class SessionViewController {
 
     this.sessionListSelectedIndex = this.clampSessionIndex(index);
     this.sessionListNameEditPath = session.path;
-    this.sessionListNameEditInitialValue = session.name?.trim() ?? '';
+    this.sessionListNameEditInitialValue = getSessionNameEditValue(session);
     this.sessionListNameEditValue = this.sessionListNameEditInitialValue;
     this.sessionListNameEditShouldSelect = true;
     this.closeSessionItemMenus();
