@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Updated the Marketplace display name for better discoverability
+
 ## 1.3.0 - 2026-05-27
 
 - Preserved user-prompt line breaks in transcript bubbles.

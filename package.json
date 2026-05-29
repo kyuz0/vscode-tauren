@@ -1,6 +1,6 @@
 {
   "name": "tauren",
-  "displayName": "Tauren",
+  "displayName": "Tauren - Coding assistant built on top of the Pi agent",
   "description": "Transparent AI coding assistant with code traceability",
   "version": "1.3.0",
   "publisher": "kaiwood",
