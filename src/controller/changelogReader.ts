@@ -15,10 +15,10 @@ export async function readCombinedChangelog(): Promise<string> {
 
   return [
     '# Pi Changelog',
-    normalizeChangelog(piChangelog),
+    reverseChangelogSections(normalizeChangelog(piChangelog)),
     '---',
     '# Tauren Changelog',
-    stripUnreleasedSection(normalizeChangelog(taurenChangelog))
+    reverseChangelogSections(stripUnreleasedSection(normalizeChangelog(taurenChangelog)))
   ].join('\n\n');
 }
 
@@ -56,6 +56,23 @@ function stripUnreleasedSection(changelog: string): string {
   }
 
   return `${changelog.slice(0, sectionStart)}${changelog.slice(afterHeader + nextSectionMatch.index)}`.trim();
+}
+
+function reverseChangelogSections(changelog: string): string {
+  const sectionMatches = [...changelog.matchAll(/^##\s+/gm)];
+
+  if (sectionMatches.length < 2) {
+    return changelog;
+  }
+
+  const intro = changelog.slice(0, sectionMatches[0].index).trim();
+  const sections = sectionMatches.map((match, index) => {
+    const start = match.index;
+    const end = sectionMatches[index + 1]?.index ?? changelog.length;
+    return changelog.slice(start, end).trim();
+  });
+
+  return [intro, ...sections.reverse()].filter(Boolean).join('\n\n');
 }
 
 function isMissingFileError(error: unknown): boolean {
