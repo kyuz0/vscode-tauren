@@ -19,7 +19,7 @@ const localSlashCommandDefinitions: LocalSlashCommandDefinition[] = [
   { name: 'new', description: 'Start a new session', source: 'builtin', supported: true },
   { name: 'settings', description: 'Open Tauren settings', source: 'builtin', supported: true },
   { name: 'scoped-models', description: 'Terminal-only: scoped model cycling is not supported here yet', source: 'unsupported', supported: false },
-  { name: 'import', description: 'Terminal-only: session import is not supported here yet', source: 'unsupported', supported: false },
+  { name: 'import', description: 'Import and resume a JSONL session', source: 'builtin', supported: true },
   { name: 'share', description: 'Not supported here yet', source: 'unsupported', supported: false },
   { name: 'changelog', description: 'Show Pi and Tauren changelogs', source: 'builtin', supported: true },
   { name: 'hotkeys', description: 'Terminal-only: use VS Code keybindings instead', source: 'unsupported', supported: false },

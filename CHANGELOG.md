@@ -5,6 +5,7 @@
 - Updated the Marketplace display name for better discoverability
 - Added `/settings` to open Tauren settings from the composer.
 - Added `/changelog` support that shows the Pi changelog and released Tauren changelog in the transcript.
+- Added `/import <path.jsonl>` support for importing and resuming Pi JSONL sessions.
 
 ## 1.3.0 - 2026-05-27
 

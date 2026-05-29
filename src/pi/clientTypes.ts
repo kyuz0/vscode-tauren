@@ -14,6 +14,7 @@ import type {
   PiForkMessagesResult,
   PiForkResult,
   PiImageContent,
+  PiImportSessionResult,
   PiLastAssistantText,
   PiMessagesResult,
   PiModel,
@@ -50,6 +51,7 @@ export type PiClient = {
   getLastAssistantText(): Promise<PiLastAssistantText>;
   getMessages(): Promise<PiMessagesResult>;
   switchSession(sessionPath: string): Promise<PiSwitchSessionResult>;
+  importFromJsonl(inputPath: string, cwdOverride?: string): Promise<PiImportSessionResult>;
   getSessionTree(): Promise<WebviewTreeItem[]>;
   setTreeEntryLabel(entryId: string, label: string | undefined): Promise<void>;
   navigateTree(entryId: string, options?: { summarize?: boolean; customInstructions?: string }): Promise<PiNavigateTreeResult>;

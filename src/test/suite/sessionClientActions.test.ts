@@ -102,6 +102,9 @@ function createFakeClient(options: FakeClientOptions = {}): FakeClient {
     async switchSession() {
       return {};
     },
+    async importFromJsonl() {
+      return {};
+    },
     async getSessionTree() {
       return [];
     },

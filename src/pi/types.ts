@@ -252,6 +252,10 @@ export type PiSwitchSessionResult = {
   cancelled?: boolean;
 };
 
+export type PiImportSessionResult = {
+  cancelled?: boolean;
+};
+
 export type PiForkMessage = {
   entryId?: string;
   text?: string;

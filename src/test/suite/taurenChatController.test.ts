@@ -2057,6 +2057,125 @@ suite('TaurenChatController', () => {
     harness.controller.dispose();
   });
 
+  test('import slash command without a path shows Pi usage', async () => {
+    const client = new FakePiClient();
+    const harness = createControllerHarness([client]);
+
+    await harness.controller.handleWebviewMessage({ type: 'submit', text: '/import' });
+
+    assert.strictEqual(harness.createCalls, 0);
+    assert.deepStrictEqual(lastState(harness).messages, [
+      { role: 'system', text: 'Usage: /import <path.jsonl>', error: true }
+    ]);
+    harness.controller.dispose();
+  });
+
+  test('import slash command stops when replacement confirmation is cancelled', async () => {
+    const client = new FakePiClient();
+    const harness = createControllerHarness([client], {
+      extensionUi: {
+        notify: () => {},
+        select: async () => undefined,
+        confirm: async () => false,
+        input: async () => undefined
+      }
+    });
+
+    await harness.controller.handleWebviewMessage({ type: 'submit', text: '/import /tmp/imported.jsonl' });
+
+    assert.deepStrictEqual(client.importedSessions, []);
+    assert.deepStrictEqual(harness.states, []);
+    harness.controller.dispose();
+  });
+
+  test('import slash command confirms, imports, and switches to imported messages', async () => {
+    const confirms: Array<{ title: string; message: string | undefined }> = [];
+    const client = new FakePiClient({
+      state: {
+        model: { provider: 'openai', id: 'gpt-test', reasoning: false },
+        thinkingLevel: 'off',
+        sessionFile: '/sessions/imported.jsonl'
+      },
+      messages: [
+        { role: 'user', content: 'Imported prompt' },
+        { role: 'assistant', content: 'Imported response' }
+      ]
+    });
+    const harness = createControllerHarness([client], {
+      extensionUi: {
+        notify: () => {},
+        select: async () => undefined,
+        confirm: async (title, message) => {
+          confirms.push({ title, message });
+          return true;
+        },
+        input: async () => undefined
+      }
+    });
+
+    await harness.controller.handleWebviewMessage({ type: 'submit', text: '/import "/tmp/session with spaces.jsonl"' });
+
+    assert.deepStrictEqual(confirms, [{
+      title: 'Import session',
+      message: 'Replace current session with /tmp/session with spaces.jsonl?'
+    }]);
+    assert.strictEqual(client.importedSessions.length, 1);
+    assert.strictEqual(client.importedSessions[0].inputPath, '/tmp/session with spaces.jsonl');
+    assert.strictEqual(client.importedSessions[0].cwdOverride, undefined);
+    assert.deepStrictEqual(lastState(harness).messages, [
+      { role: 'user', text: 'Imported prompt' },
+      { role: 'assistant', text: 'Imported response' }
+    ]);
+    assert.strictEqual(lastState(harness).currentSessionFile, '/sessions/imported.jsonl');
+    assert.deepStrictEqual(harness.toasts, ['Session imported from: /tmp/session with spaces.jsonl']);
+    harness.controller.dispose();
+  });
+
+  test('import slash command retries with fallback cwd when imported cwd is missing', async () => {
+    const confirms: Array<{ title: string; message: string | undefined }> = [];
+    const client = new FakePiClient({
+      state: {
+        model: { provider: 'openai', id: 'gpt-test', reasoning: false },
+        thinkingLevel: 'off',
+        sessionFile: '/sessions/imported.jsonl'
+      },
+      importError: {
+        name: 'MissingSessionCwdError',
+        issue: {
+          sessionCwd: '/missing/project',
+          fallbackCwd: '/workspace'
+        }
+      }
+    });
+    const harness = createControllerHarness([client], {
+      extensionUi: {
+        notify: () => {},
+        select: async () => undefined,
+        confirm: async (title, message) => {
+          confirms.push({ title, message });
+          return true;
+        },
+        input: async () => undefined
+      }
+    });
+
+    await harness.controller.handleWebviewMessage({ type: 'submit', text: '/import /tmp/imported.jsonl' });
+
+    assert.deepStrictEqual(confirms, [
+      { title: 'Import session', message: 'Replace current session with /tmp/imported.jsonl?' },
+      {
+        title: 'Session cwd not found',
+        message: 'cwd from session file does not exist\n/missing/project\n\ncontinue in current cwd\n/workspace'
+      }
+    ]);
+    assert.deepStrictEqual(client.importedSessions, [
+      { inputPath: '/tmp/imported.jsonl', cwdOverride: undefined },
+      { inputPath: '/tmp/imported.jsonl', cwdOverride: '/workspace' }
+    ]);
+    assert.strictEqual(lastState(harness).currentSessionFile, '/sessions/imported.jsonl');
+    harness.controller.dispose();
+  });
+
   test('clone slash command switches to cloned session messages', async () => {
     const client = new FakePiClient({
       state: {
@@ -2813,6 +2932,8 @@ type FakePiClientOptions = {
   reloadError?: unknown;
   switchSessionResult?: { cancelled?: boolean };
   switchSessionError?: unknown;
+  importResult?: { cancelled?: boolean };
+  importError?: unknown;
   forkMessages?: Array<{ entryId?: string; text?: string }>;
   forkResult?: { text?: string; cancelled?: boolean };
   cloneResult?: { cancelled?: boolean };
@@ -2889,6 +3010,9 @@ class FakePiClient implements PiClient {
   public switchSessionResult: { cancelled?: boolean };
   public switchSessionError: unknown;
   public switchedSessions: string[] = [];
+  public importResult: { cancelled?: boolean };
+  public importError: unknown;
+  public importedSessions: Array<{ inputPath: string; cwdOverride?: string }> = [];
   public forkMessages: Array<{ entryId?: string; text?: string }>;
   public forkMessagesCalls = 0;
   public forkResult: { text?: string; cancelled?: boolean };
@@ -2927,6 +3051,8 @@ class FakePiClient implements PiClient {
     this.reloadError = options.reloadError;
     this.switchSessionResult = options.switchSessionResult ?? { cancelled: false };
     this.switchSessionError = options.switchSessionError;
+    this.importResult = options.importResult ?? { cancelled: false };
+    this.importError = options.importError;
     this.forkMessages = options.forkMessages ?? [];
     this.forkResult = options.forkResult ?? { cancelled: false };
     this.cloneResult = options.cloneResult ?? { cancelled: false };
@@ -3035,6 +3161,18 @@ class FakePiClient implements PiClient {
     }
 
     return this.switchSessionResult;
+  }
+
+  public async importFromJsonl(inputPath: string, cwdOverride?: string): Promise<{ cancelled?: boolean }> {
+    this.importedSessions.push({ inputPath, cwdOverride });
+
+    if (this.importError) {
+      const error = this.importError;
+      this.importError = undefined;
+      throw error;
+    }
+
+    return this.importResult;
   }
 
   public async navigateTree(

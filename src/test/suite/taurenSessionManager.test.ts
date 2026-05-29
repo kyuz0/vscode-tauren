@@ -1155,6 +1155,10 @@ class FakePiClient implements PiClient {
     return { cancelled: false };
   }
 
+  public async importFromJsonl(): Promise<{ cancelled?: boolean }> {
+    return { cancelled: false };
+  }
+
   public async getSessionTree(): Promise<WebviewTreeItem[]> {
     return [];
   }

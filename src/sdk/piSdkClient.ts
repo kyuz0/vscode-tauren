@@ -15,6 +15,7 @@ import type {
   PiForkMessagesResult,
   PiForkResult,
   PiImageContent,
+  PiImportSessionResult,
   PiLastAssistantText,
   PiMessagesResult,
   PiModel,
@@ -517,6 +518,11 @@ export class PiSdkClient implements PiClient {
   public async switchSession(sessionPath: string): Promise<PiSwitchSessionResult> {
     const runtime = await this.ensureRuntime();
     return await runtime.switchSession(sessionPath);
+  }
+
+  public async importFromJsonl(inputPath: string, cwdOverride?: string): Promise<PiImportSessionResult> {
+    const runtime = await this.ensureRuntime();
+    return await runtime.importFromJsonl(inputPath, cwdOverride);
   }
 
   public async getSessionTree() {

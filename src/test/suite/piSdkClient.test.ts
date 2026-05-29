@@ -320,6 +320,19 @@ suite('PiSdkClient', () => {
     harness.client.dispose();
   });
 
+  test('imports a JSONL session through the SDK runtime', async () => {
+    const replacement = new FakeSession({ sessionFile: '/sessions/imported.jsonl' });
+    const harness = createSdkHarness({ replacementSession: replacement });
+
+    await harness.client.getState();
+    const result = await harness.client.importFromJsonl('/tmp/imported.jsonl', '/workspace-fallback');
+
+    assert.deepStrictEqual(result, { cancelled: false });
+    assert.strictEqual(harness.session.bindCount, 1);
+    assert.strictEqual(replacement.bindCount, 1);
+    harness.client.dispose();
+  });
+
   test('clears extension UI state before SDK reload rebinds extensions', async () => {
     let clearStatusesCount = 0;
     let clearWidgetsCount = 0;
@@ -778,6 +791,12 @@ class FakeRuntime {
 
   public async switchSession(_sessionPath: string): Promise<{ cancelled: boolean }> {
     this.session = this.replacementSession ?? new FakeSession({ sessionFile: '/sessions/switched.jsonl' });
+    await this.rebindSession?.();
+    return { cancelled: false };
+  }
+
+  public async importFromJsonl(_inputPath: string, _cwdOverride?: string): Promise<{ cancelled: boolean }> {
+    this.session = this.replacementSession ?? new FakeSession({ sessionFile: '/sessions/imported.jsonl' });
     await this.rebindSession?.();
     return { cancelled: false };
   }

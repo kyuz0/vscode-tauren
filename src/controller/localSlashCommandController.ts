@@ -4,7 +4,7 @@ import type { PiClient } from '../pi/clientTypes';
 import type { PiSessionState, PiSessionStats } from '../pi/types';
 import { SessionMetadataState } from '../metadata/sessionMetadata';
 import { isSupportedBuiltinSlashCommand } from '../commands/slashCommands';
-import { getErrorMessage, isUnsupportedReloadCommandError } from './errors';
+import { getErrorMessage, isMissingSessionCwdError, isSessionImportFileNotFoundError, isUnsupportedReloadCommandError } from './errors';
 import { readCombinedChangelog } from './changelogReader';
 import { filterModelOptions, formatModelOptionLabel } from './modelFormatting';
 import type { SessionViewController } from '../sessions/sessionViewController';
@@ -108,6 +108,9 @@ export class LocalSlashCommandController {
           return;
         case 'export':
           await this.handleExportSlashCommand(command.args);
+          return;
+        case 'import':
+          await this.handleImportSlashCommand(command.args);
           return;
         default:
           return;
@@ -359,6 +362,65 @@ export class LocalSlashCommandController {
     this.options.postState();
   }
 
+  private async handleImportSlashCommand(args: string): Promise<void> {
+    const inputPath = getPathCommandArgument(args);
+
+    if (!inputPath) {
+      this.options.session.addErrorMessage('Usage: /import <path.jsonl>');
+      this.options.postState();
+      return;
+    }
+
+    const confirmed = await this.options.extensionUi?.confirm('Import session', `Replace current session with ${inputPath}?`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    await this.importSessionFromJsonl(inputPath);
+  }
+
+  private async importSessionFromJsonl(inputPath: string, cwdOverride?: string): Promise<void> {
+    try {
+      const result = await this.options.getClient().importFromJsonl(inputPath, cwdOverride);
+
+      if (result.cancelled) {
+        return;
+      }
+
+      await this.options.adoptReplacedSession({ refreshSessions: true });
+      this.options.showToast?.(`Session imported from: ${inputPath}`);
+    } catch (error) {
+      if (!cwdOverride && isMissingSessionCwdError(error)) {
+        const selectedCwd = await this.promptForMissingSessionCwd(error.issue);
+
+        if (!selectedCwd) {
+          return;
+        }
+
+        await this.importSessionFromJsonl(inputPath, selectedCwd);
+        return;
+      }
+
+      if (isSessionImportFileNotFoundError(error)) {
+        this.options.session.addErrorMessage(`Failed to import session: ${getErrorMessage(error)}`);
+        this.options.postState();
+        return;
+      }
+
+      throw error;
+    }
+  }
+
+  private async promptForMissingSessionCwd(issue: { sessionCwd: string; fallbackCwd: string }): Promise<string | undefined> {
+    const confirmed = await this.options.extensionUi?.confirm(
+      'Session cwd not found',
+      `cwd from session file does not exist\n${issue.sessionCwd}\n\ncontinue in current cwd\n${issue.fallbackCwd}`
+    );
+
+    return confirmed ? issue.fallbackCwd : undefined;
+  }
+
   private async handleReloadSlashCommand(): Promise<void> {
     this.options.session.addSystemMessage('Reloading Pi engine resources...');
     this.options.postState();
@@ -393,4 +455,32 @@ export class LocalSlashCommandController {
       : 'Reloaded keybindings, extensions, skills, prompts, and themes.');
     this.options.postState();
   }
+}
+
+function getPathCommandArgument(args: string): string | undefined {
+  const argsString = args.trimStart();
+
+  if (!argsString) {
+    return undefined;
+  }
+
+  const firstChar = argsString[0];
+
+  if (firstChar === '"' || firstChar === "'") {
+    const closingQuoteIndex = argsString.indexOf(firstChar, 1);
+
+    if (closingQuoteIndex < 0) {
+      return undefined;
+    }
+
+    return argsString.slice(1, closingQuoteIndex);
+  }
+
+  const firstWhitespaceIndex = argsString.search(/\s/);
+
+  if (firstWhitespaceIndex < 0) {
+    return argsString;
+  }
+
+  return argsString.slice(0, firstWhitespaceIndex);
 }
