@@ -4,8 +4,10 @@ import * as vscode from 'vscode';
 type PackageJson = {
   name?: unknown;
   contributes?: {
+    commands?: Array<{ command?: unknown; title?: unknown; category?: unknown }>;
     keybindings?: Array<{ command?: unknown; key?: unknown; mac?: unknown; when?: unknown; args?: unknown }>;
     menus?: {
+      commandPalette?: Array<{ command?: unknown; when?: unknown }>;
       'view/title'?: Array<{ command?: unknown; when?: unknown }>;
     };
   };
@@ -44,6 +46,8 @@ suite('Tauren extension', () => {
     assert.ok(commands.includes('tauren.copyLastResponse'));
     assert.ok(commands.includes('tauren.searchTranscript'));
     assert.ok(commands.includes('tauren.scroll'));
+    assert.ok(commands.includes('tauren.scrollLineUp'));
+    assert.ok(commands.includes('tauren.scrollLineDown'));
     assert.ok(commands.includes('tauren.openModelPicker'));
     assert.ok(commands.includes('tauren.toggleSettings'));
     assert.ok(commands.includes('tauren.toggleHelp'));
@@ -82,6 +86,38 @@ suite('Tauren extension', () => {
         direction: 'down',
         amount: 'edge'
       }
+    });
+  });
+
+  test('contributes unbound line scroll wrapper commands hidden from palette', () => {
+    const extension = findTaurenExtension();
+
+    assert.ok(extension, 'Expected the Tauren extension to be available');
+
+    const packageJson = extension.packageJSON as PackageJson;
+    const commands = packageJson.contributes?.commands ?? [];
+    const keybindings = packageJson.contributes?.keybindings ?? [];
+    const commandPalette = packageJson.contributes?.menus?.commandPalette ?? [];
+
+    assert.deepStrictEqual(commands.find((entry) => entry.command === 'tauren.scrollLineUp'), {
+      command: 'tauren.scrollLineUp',
+      title: 'Scroll Active Pane Up One Line',
+      category: 'Tauren'
+    });
+    assert.deepStrictEqual(commands.find((entry) => entry.command === 'tauren.scrollLineDown'), {
+      command: 'tauren.scrollLineDown',
+      title: 'Scroll Active Pane Down One Line',
+      category: 'Tauren'
+    });
+    assert.strictEqual(keybindings.some((entry) => entry.command === 'tauren.scrollLineUp'), false);
+    assert.strictEqual(keybindings.some((entry) => entry.command === 'tauren.scrollLineDown'), false);
+    assert.deepStrictEqual(commandPalette.find((entry) => entry.command === 'tauren.scrollLineUp'), {
+      command: 'tauren.scrollLineUp',
+      when: 'false'
+    });
+    assert.deepStrictEqual(commandPalette.find((entry) => entry.command === 'tauren.scrollLineDown'), {
+      command: 'tauren.scrollLineDown',
+      when: 'false'
     });
   });
 

@@ -30,6 +30,8 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('tauren.copyLastResponse', () => provider.copyLastResponse()),
     vscode.commands.registerCommand('tauren.searchTranscript', () => provider.searchTranscript()),
     vscode.commands.registerCommand('tauren.scroll', (options?: unknown) => provider.scrollPane(options)),
+    vscode.commands.registerCommand('tauren.scrollLineUp', () => provider.scrollPane({ direction: 'up', amount: 'line' })),
+    vscode.commands.registerCommand('tauren.scrollLineDown', () => provider.scrollPane({ direction: 'down', amount: 'line' })),
     vscode.commands.registerCommand('tauren.openModelPicker', () => provider.openModelPicker()),
     vscode.commands.registerCommand('tauren.raiseThinkingLevel', () => provider.raiseThinkingLevel()),
     vscode.commands.registerCommand('tauren.lowerThinkingLevel', () => provider.lowerThinkingLevel()),

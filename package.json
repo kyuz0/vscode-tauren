@@ -109,6 +109,16 @@
         "category": "Tauren"
       },
       {
+        "command": "tauren.scrollLineUp",
+        "title": "Scroll Active Pane Up One Line",
+        "category": "Tauren"
+      },
+      {
+        "command": "tauren.scrollLineDown",
+        "title": "Scroll Active Pane Down One Line",
+        "category": "Tauren"
+      },
+      {
         "command": "tauren.openModelPicker",
         "title": "Open Model Picker",
         "category": "Tauren"
@@ -207,6 +217,14 @@
         },
         {
           "command": "tauren.searchTranscript"
+        },
+        {
+          "command": "tauren.scrollLineUp",
+          "when": "false"
+        },
+        {
+          "command": "tauren.scrollLineDown",
+          "when": "false"
         }
       ],
       "view/title": [

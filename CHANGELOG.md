@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added unbound line-scroll wrapper commands for Tauren panes.
 - Added active-pane PageUp/PageDown scrolling across Tauren lanes and settings, with Ctrl/Cmd+PageUp/PageDown jumping to top or bottom.
 - Added a Tauren docs share viewer for `/share` links, with a setting to fall back to pi.dev.
 - Added Tauren docs-style colors and fonts to HTML exports and shared sessions when the Tauren share/export setting is enabled.
