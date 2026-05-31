@@ -6,7 +6,7 @@ Tauren owns how the sidebar behaves in VS Code. Pi owns how the agent runtime be
 
 ## Open settings
 
-Use the gear icon in the Tauren view toolbar or run:
+Use the gear icon in the Tauren view toolbar, run **Tauren: Toggle Settings**, or type:
 
 ```text
 /settings

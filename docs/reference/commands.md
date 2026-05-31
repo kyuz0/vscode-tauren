@@ -32,6 +32,11 @@ Tauren contributes these VS Code commands. Run them from the Command Palette or 
 | `tauren.traceOrigin` | Trace Origin | Find likely session origin for selected code. |
 | `tauren.showDiagnostics` | Show Diagnostics | Open Tauren diagnostics. |
 
+Notes:
+
+- `tauren.resume` and `tauren.toggleSessionList` are both current commands for opening the Session List Lane.
+- Slash-command equivalents are listed separately in [Slash Commands](./slash-commands.md).
+
 ## Default keybindings
 
 These keybindings apply when the Tauren sidebar has focus:

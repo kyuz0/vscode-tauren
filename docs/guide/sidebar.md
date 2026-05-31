@@ -10,9 +10,9 @@ Tauren uses a three-lane model:
 | Session List | Chat | Session Tree |
 ```
 
-- **Session List Lane:** browse, search, rename, fork, clone, compact, export, or delete sessions.
+- **Session List Lane:** browse, search, rename, fork, clone, compact, export, or delete sessions. Open it with `/resume` or **Tauren: Toggle Session List**.
 - **Chat Lane:** read the transcript, send prompts, use the composer, and open settings.
-- **Session Tree Lane:** navigate the Pi session tree for the active session.
+- **Session Tree Lane:** navigate the Pi session tree for the active session. Open it with `/tree` or **Tauren: Toggle Session Tree**.
 
 The center lane can also show settings. In Tauren's UI language this is the **Settings Face** of the Chat Lane.
 
@@ -30,17 +30,19 @@ Submit is disabled while Pi is streaming. Tauren does not queue follow-up prompt
 
 ## Busy state
 
-When Pi is running, Tauren shows busy state in the chat surface. Use **Stop Current Response** if the run should end early.
+When Pi is running, Tauren shows busy state in the chat surface. Use **Tauren: Stop Current Response** if the run should end early. Use **Tauren: Toggle Steer / Follow-up** to switch steering/follow-up behavior while busy.
 
 If file changes are detected, Tauren can show session diff status so you can review what changed before committing.
 
 ## Settings and help
 
-Use the title toolbar buttons or slash commands:
+Use the title toolbar buttons, VS Code commands, or slash commands:
 
 ```text
 /settings
 /hotkeys
 ```
+
+The matching VS Code commands are **Tauren: Toggle Settings** and **Tauren: Toggle Help**.
 
 Settings are split between Tauren-owned controls and Pi-owned runtime controls. Pi remains the source of truth for model and provider state.

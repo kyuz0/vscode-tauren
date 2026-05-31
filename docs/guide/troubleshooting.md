@@ -20,7 +20,7 @@ Try:
 
 1. Open **Settings → Login** and confirm authentication.
 2. Open **Settings → Runtime** and confirm provider/model defaults.
-3. Run `/reload`.
+3. Run **Tauren: Reload Pi Engine** or `/reload`.
 4. Check diagnostics for provider or SDK errors.
 
 Tauren may show cached model data briefly, but live Pi state should replace it after startup.
@@ -35,7 +35,7 @@ Imported sessions may refer to a working directory that no longer exists. Tauren
 
 Check **Settings → Extensions**. Above widgets, below widgets, status text, background colors, or monospace rendering may be disabled.
 
-After changing Pi extension files, run:
+After changing Pi extension files, run **Tauren: Reload Pi Engine** or:
 
 ```text
 /reload

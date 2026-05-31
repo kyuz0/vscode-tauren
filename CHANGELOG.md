@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Docs: Audited command documentation against current Tauren command registrations and added missing workflow references.
+- Docs: Linked the installation guide to the VS Code Marketplace page.
 - Docs: Added a practical Trace Origin workflow example for reviewing suspicious generated code.
 - Docs: Clarified Tauren-owned versus Pi-owned settings with a comparison table and Settings pane names.
 - Docs: Expanded the Pi Extensions guide with portable status and widget examples plus upstream Pi documentation links.

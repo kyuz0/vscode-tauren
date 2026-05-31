@@ -6,7 +6,7 @@ Tauren is a VS Code extension. Install it like any other extension, then configu
 
 Use the installation path that matches how you received Tauren:
 
-- **Marketplace build:** install Tauren from the VS Code Extensions view.
+- **Marketplace build:** install Tauren from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=kaiwood.tauren) or search for `Tauren` in the VS Code Extensions view.
 - **Local VSIX:** run **Extensions: Install from VSIX...** from the Command Palette and select the `.vsix` file.
 - **Development checkout:** clone the repository, run `npm install`, and launch the VS Code Extension Host from the workspace.
 

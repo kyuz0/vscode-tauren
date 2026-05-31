@@ -70,10 +70,14 @@ or **Tauren: Toggle Session List** to switch sessions.
 
 | Command | Use |
 | --- | --- |
-| `/settings` | Open Tauren settings. |
-| `/model` | Select a model. |
-| `/resume` | Open the session list. |
-| `/tree` | Open the Pi session tree. |
+| `/settings` or **Tauren: Toggle Settings** | Open Tauren settings. |
+| `/model` or **Tauren: Open Model Picker** | Select a model. |
+| `/resume` or **Tauren: Toggle Session List** | Open the session list. |
+| `/tree` or **Tauren: Toggle Session Tree** | Open the Pi session tree. |
+| `/reload` or **Tauren: Reload Pi Engine** | Reload Pi runtime resources after extension, skill, prompt, or theme changes. |
+| **Tauren: Send Selection to Composer** | Put the active editor selection into the composer. |
+| **Tauren: Trace Origin** | Find the likely Tauren session origin for selected code. |
+| **Tauren: Show Diagnostics** | Open diagnostics for startup, SDK, extension, or performance issues. |
 | `/hotkeys` | Show keyboard shortcuts. |
 | `/session` | Print session information and stats. |
 

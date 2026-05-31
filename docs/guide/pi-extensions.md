@@ -124,7 +124,7 @@ Press `Esc` to leave or close many Tauren surfaces. Exact behavior depends on wh
 
 ## Reloading extensions
 
-After changing Pi extension files or configuration, reload runtime resources:
+After changing Pi extension files or configuration, reload runtime resources with **Tauren: Reload Pi Engine** or:
 
 ```text
 /reload

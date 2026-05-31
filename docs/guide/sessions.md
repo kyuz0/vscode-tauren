@@ -4,7 +4,7 @@ Sessions are the core Tauren workflow. A session keeps the conversation, runtime
 
 ## Start a new session
 
-Use the title toolbar or run:
+Use **Tauren: New Session** from the title toolbar or run:
 
 ```text
 /new
@@ -26,7 +26,7 @@ The session list lets you move between current and previous Pi sessions. Backgro
 
 ## Name sessions
 
-Names make session history easier to scan. Use the title toolbar rename command or:
+Names make session history easier to scan. Use **Tauren: Rename Session** from the title toolbar or:
 
 ```text
 /name Investigate login failure
@@ -44,13 +44,13 @@ Use:
 /fork
 ```
 
-or the session list fork action. Tauren asks which message to fork from when the runtime supports that flow.
+or **Tauren: Fork Session** / the session list fork action. Tauren asks which message to fork from when the runtime supports that flow.
 
 ## Clone a session
 
 Cloning duplicates the current session so you can try a different direction without losing the existing thread.
 
-Use:
+Use **Tauren: Clone Session** or:
 
 ```text
 /clone
@@ -60,7 +60,7 @@ Use:
 
 Compaction reduces context while preserving the important state of the conversation.
 
-Use:
+Use **Tauren: Compact Session** or:
 
 ```text
 /compact
@@ -74,7 +74,7 @@ You can also pass custom compaction instructions:
 
 ## Export and share
 
-Export creates an HTML copy of the session:
+Export creates an HTML copy of the session. Use **Tauren: Export as HTML** or:
 
 ```text
 /export
@@ -96,7 +96,7 @@ The `gh` CLI must be installed and authenticated for sharing.
 
 ## Delete sessions
 
-Use **Move to Trash** from the session list or view toolbar. Tauren asks for confirmation by default. You can change that with `tauren.confirmSessionDeletion`.
+Use **Tauren: Move to Trash** from the session list or view toolbar. Tauren asks for confirmation by default. You can change that with `tauren.confirmSessionDeletion`.
 
 ## Practical habits
 
