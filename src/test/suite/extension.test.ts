@@ -57,6 +57,23 @@ suite('Tauren extension', () => {
     assert.ok(commands.includes('tauren.traceOrigin'));
   });
 
+  test('contributes model picker keybinding scoped to sidebar focus', () => {
+    const extension = findTaurenExtension();
+
+    assert.ok(extension, 'Expected the Tauren extension to be available');
+
+    const packageJson = extension.packageJSON as PackageJson;
+    const keybindings = packageJson.contributes?.keybindings ?? [];
+    const modelPickerKeybinding = keybindings.find((entry) => entry.command === 'tauren.openModelPicker');
+
+    assert.deepStrictEqual(modelPickerKeybinding, {
+      command: 'tauren.openModelPicker',
+      key: 'ctrl+alt+.',
+      mac: 'alt+cmd+.',
+      when: 'tauren.sidebarFocus'
+    });
+  });
+
   test('contributes active pane scroll keybindings scoped to sidebar focus', () => {
     const extension = findTaurenExtension();
 

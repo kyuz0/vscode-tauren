@@ -289,6 +289,12 @@
         "when": "tauren.sidebarFocus"
       },
       {
+        "command": "tauren.openModelPicker",
+        "key": "ctrl+alt+.",
+        "mac": "alt+cmd+.",
+        "when": "tauren.sidebarFocus"
+      },
+      {
         "command": "tauren.scroll",
         "key": "ctrl+pageup",
         "mac": "cmd+pageup",

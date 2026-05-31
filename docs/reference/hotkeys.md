@@ -33,6 +33,7 @@ This is expected: Tauren sets the key dynamically at runtime with VS Code's `set
 | `Ctrl+PageUp / Ctrl+PageDown` | Scroll transcript by line. |
 | `Ctrl/Cmd+↑ / Ctrl/Cmd+↓` | Scroll transcript to top or bottom. |
 | `Ctrl/Cmd+F` | Open transcript search. |
+| `Ctrl+Alt+.` / `Alt+Cmd+.` | Open the model picker. |
 | `Search: Enter / Shift+Enter` | Move to next or previous search match. |
 | `Search: Esc` | Close transcript search. |
 | `Ctrl+O` | Toggle tool output details. |
