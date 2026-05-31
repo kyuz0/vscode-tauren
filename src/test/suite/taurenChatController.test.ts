@@ -1506,9 +1506,9 @@ suite('TaurenChatController', () => {
     assert.notStrictEqual(oldestPiIndex, -1);
     assert.notStrictEqual(newestPiIndex, -1);
     assert.ok(oldestPiIndex < newestPiIndex);
-    assert.match(message.text, /\n\n---\n\n# Tauren Changelog\n\n## 1\.0\.0/);
-    assert.ok(message.text.indexOf('## 1.0.0') < message.text.indexOf('## 1.3.0'));
-    assert.doesNotMatch(message.text, /# Tauren Changelog[\s\S]*## Unreleased/);
+    assert.match(message.text, /\n\n---\n\n# Tauren Changelog\n\n## \[1\.0\.0\]/);
+    assert.ok(message.text.indexOf('## [1.0.0]') < message.text.indexOf('## [1.3.0]'));
+    assert.doesNotMatch(message.text, /# Tauren Changelog[\s\S]*## \[?Unreleased\]?/);
     harness.controller.dispose();
   });
 

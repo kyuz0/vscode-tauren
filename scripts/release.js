@@ -175,9 +175,9 @@ function checkTools() {
 }
 
 function getUnreleasedSection(changelogText) {
-  const headerMatch = /^## Unreleased\s*$/m.exec(changelogText);
+  const headerMatch = /^## \[Unreleased\]\s*$/m.exec(changelogText);
   if (!headerMatch) {
-    fail('CHANGELOG.md must contain a "## Unreleased" section.');
+    fail('CHANGELOG.md must contain a "## [Unreleased]" section.');
   }
 
   const bodyStart = headerMatch.index + headerMatch[0].length;
@@ -230,8 +230,8 @@ function promoteChangelog(version) {
   const section = getUnreleasedSection(changelogText);
   const date = new Date().toISOString().slice(0, 10);
   const notesBody = section.body.trim();
-  const releaseHeading = `## ${version} - ${date}`;
-  const replacement = `## Unreleased\n\n${releaseHeading}\n\n${notesBody}\n\n`;
+  const releaseHeading = `## [${version}] - ${date}`;
+  const replacement = `## [Unreleased]\n\n${releaseHeading}\n\n${notesBody}\n\n`;
   const nextText = `${changelogText.slice(0, section.headerStart)}${replacement}${changelogText.slice(section.bodyEnd)}`;
   fs.writeFileSync(changelogPath, nextText);
   return `${releaseHeading}\n\n${notesBody}\n`;

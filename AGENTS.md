@@ -76,7 +76,7 @@ For Pi SDK docs, prefer local package docs before web links:
 
 ## Development Workflow
 
-- For user-facing changes, add a concise `Unreleased` entry to `CHANGELOG.md`.
+- For user-facing changes, add a concise entry under `## [Unreleased]` in `CHANGELOG.md`.
 - Tests live in `src/test/suite` and run through `vscode-test`.
 - Keep automated tests independent from the real `pi` CLI; use local helpers or fixtures.
 - Run `npm run compile` after TypeScript changes.
