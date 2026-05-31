@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Docs: Added a practical Trace Origin workflow example for reviewing suspicious generated code.
 - Docs: Clarified Tauren-owned versus Pi-owned settings with a comparison table and Settings pane names.
 - Docs: Expanded the Pi Extensions guide with portable status and widget examples plus upstream Pi documentation links.
 - Docs: Added a Feature Tour guide for new users comparing Tauren workflows to generic AI chat panels.
