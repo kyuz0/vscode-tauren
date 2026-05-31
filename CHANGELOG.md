@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed mouse wheel, trackpad, and keyboard scrolling in large virtualized Session Lists so scroll renders no longer snap back to the top.
+
 ## [1.6.0] - 2026-05-31
 
 ### New Features

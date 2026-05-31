@@ -204,6 +204,8 @@ export class SessionViewController {
     const visibleIndexes = this.getVisibleSessionIndexes();
     const filtersActive = this.hasActiveSessionListFilters();
     this.sessionListSelectedIndex = ensureVisibleSessionSelection(this.sessionListSelectedIndex, visibleIndexes);
+    const preservedScrollTop = this.options.sessionsElement.scrollTop;
+    const renderWindow = this.getSessionRenderWindow(visibleIndexes);
     this.suppressSessionListNameInputBlur = Boolean(this.sessionListNameEditPath);
     this.options.sessionsElement.replaceChildren();
     this.suppressSessionListNameInputBlur = false;
@@ -213,7 +215,6 @@ export class SessionViewController {
 
     const header = document.createElement('div');
     header.className = 'sessions__header';
-    const renderWindow = this.getSessionRenderWindow(visibleIndexes);
     if (this.openSessionListMenuIndex !== undefined && !visibleIndexes.includes(this.openSessionListMenuIndex)) {
       this.openSessionListMenuIndex = undefined;
       this.openSessionListMenuPosition = undefined;
@@ -276,6 +277,10 @@ export class SessionViewController {
 
       this.appendSessionVirtualSpacer(renderWindow.bottomPadding, 'bottom');
       this.updateSessionVirtualItemHeight();
+
+      if (renderWindow.virtualized) {
+        this.options.sessionsElement.scrollTop = preservedScrollTop;
+      }
     }
 
     if (this.sessionListNameEditPath) {
