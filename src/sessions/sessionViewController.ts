@@ -26,6 +26,8 @@ import {
 } from './sessionFormatting';
 import { SessionSearchIndex } from './sessionSearchIndex';
 
+const sessionSearchBackgroundIndexDelayMs = 150;
+
 export type SessionViewState = {
   sessions: WebviewSessionItem[];
   refreshing: boolean;
@@ -79,6 +81,7 @@ export class SessionViewController {
   private readonly sessionSearchIndex = new SessionSearchIndex();
   private sessionSearchState: WebviewSessionSearchState | undefined;
   private pendingSessionSearchProgressPost: ReturnType<typeof setTimeout> | undefined;
+  private pendingSessionSearchIndexStart: ReturnType<typeof setTimeout> | undefined;
   private readonly pendingSessionItemNames = new Map<string, string | undefined>();
   private readonly fallbackSessionPaths = new Set<string>();
   private readonly sessionItemNameRenameSequences = new Map<string, number>();
@@ -148,6 +151,7 @@ export class SessionViewController {
     this.sessionsError = '';
     this.refreshSessionSearchState({ post: false });
     this.options.postState();
+    this.scheduleSessionSearchIndexing();
 
     if (!hasCachedSessions) {
       void this.refreshSessions();
@@ -157,6 +161,7 @@ export class SessionViewController {
   public showTree(): void {
     this.options.navigation.showLane('tree', { post: false });
     this.treeError = '';
+    this.cancelPendingSessionSearchIndexing();
     this.options.postState();
     void this.refreshTree();
   }
@@ -181,6 +186,7 @@ export class SessionViewController {
 
   public showChat(options: { clearSessionsError?: boolean; clearTreeError?: boolean; post?: boolean } = {}): void {
     this.options.navigation.showChatMain({ post: false });
+    this.cancelPendingSessionSearchIndexing();
 
     if (options.clearSessionsError) {
       this.sessionsError = '';
@@ -205,6 +211,7 @@ export class SessionViewController {
 
   public startNewSession(lane: WebviewLane = 'chat'): void {
     this.options.navigation.showLane(lane, { post: false });
+    this.cancelPendingSessionSearchIndexing();
     this.sessionsError = '';
     this.treeRefreshSequence += 1;
     this.treeItems = [];
@@ -221,6 +228,7 @@ export class SessionViewController {
     const refreshId = ++this.sessionsRefreshSequence;
     this.sessionsRefreshing = true;
     this.sessionsError = '';
+    this.cancelPendingSessionSearchIndexing();
     this.options.postState();
 
     try {
@@ -249,10 +257,12 @@ export class SessionViewController {
     } finally {
       if (refreshId === this.sessionsRefreshSequence) {
         this.sessionsRefreshing = false;
+        this.options.postState();
         if (this.sessionSearchState?.query) {
           this.startSessionSearchIndexing();
+        } else {
+          this.scheduleSessionSearchIndexing();
         }
-        this.options.postState();
       }
     }
   }
@@ -684,7 +694,30 @@ export class SessionViewController {
     }
   }
 
+  private scheduleSessionSearchIndexing(): void {
+    if (this.pendingSessionSearchIndexStart || (this.options.navigation.lane !== 'sessions' && !this.sessionSearchState?.query)) {
+      return;
+    }
+
+    this.pendingSessionSearchIndexStart = setTimeout(() => {
+      this.pendingSessionSearchIndexStart = undefined;
+      this.startSessionSearchIndexing();
+      this.options.postState();
+    }, sessionSearchBackgroundIndexDelayMs);
+  }
+
+  private cancelPendingSessionSearchIndexing(): void {
+    if (!this.pendingSessionSearchIndexStart) {
+      return;
+    }
+
+    clearTimeout(this.pendingSessionSearchIndexStart);
+    this.pendingSessionSearchIndexStart = undefined;
+  }
+
   private startSessionSearchIndexing(): void {
+    this.cancelPendingSessionSearchIndexing();
+
     if (this.options.navigation.lane !== 'sessions' && !this.sessionSearchState?.query) {
       return;
     }
@@ -765,7 +798,11 @@ export class SessionViewController {
       return 'idle';
     }
 
-    return progress.indexing || progress.indexedCount < progress.totalCount ? 'indexing' : 'ready';
+    if (progress.indexing) {
+      return 'indexing';
+    }
+
+    return progress.indexedCount >= progress.totalCount ? 'ready' : 'idle';
   }
 
   private applyPendingSessionItemNames(sessions: WebviewSessionItem[]): WebviewSessionItem[] {
