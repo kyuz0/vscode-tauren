@@ -29,9 +29,9 @@ This is expected: Tauren sets the key dynamically at runtime with VS Code's `set
 | `Slash menu: ↑ / ↓` | Move through slash commands or file suggestions. |
 | `Slash menu: Tab / Enter` | Accept active slash command or file suggestion. |
 | `Slash menu: Esc` | Dismiss slash menu. |
-| `PageUp / PageDown` | Scroll transcript by page. |
-| `Ctrl+PageUp / Ctrl+PageDown` | Scroll transcript by line. |
-| `Ctrl/Cmd+↑ / Ctrl/Cmd+↓` | Scroll transcript to top or bottom. |
+| `PageUp / PageDown` | Scroll active pane by page. |
+| `Cmd+PageUp / Cmd+PageDown` on macOS; `Alt+PageUp / Alt+PageDown` elsewhere | Scroll active pane by page. |
+| `Cmd+↑ / Cmd+↓` on macOS; `Ctrl+Home / Ctrl+End` elsewhere | Scroll active pane to top or bottom. |
 | `Ctrl/Cmd+F` | Open transcript search. |
 | `Ctrl+Alt+.` / `Alt+Cmd+.` | Open the model picker. |
 | `Search: Enter / Shift+Enter` | Move to next or previous search match. |

@@ -967,11 +967,9 @@ function parsePaneScrollCommand(value: unknown): WebviewScrollCommand | undefine
 }
 
 function handlePaneScrollShortcut(event: KeyboardEvent): boolean {
-  if (event.key !== 'PageUp' && event.key !== 'PageDown') {
-    return false;
-  }
+  const command = getPaneScrollCommandForEvent(event);
 
-  if (event.altKey || event.shiftKey) {
+  if (!command) {
     return false;
   }
 
@@ -985,15 +983,11 @@ function handlePaneScrollShortcut(event: KeyboardEvent): boolean {
     return false;
   }
 
-  const amount = getPaneScrollAmountForEvent(event);
-
-  if (!amount) {
+  if (target === textarea && shouldPreserveComposerTextNavigation(event)) {
     return false;
   }
 
-  const direction = event.key === 'PageUp' ? 'up' : 'down';
-
-  if (!scrollActivePane({ direction, amount })) {
+  if (!scrollActivePane(command)) {
     return false;
   }
 
@@ -1002,16 +996,42 @@ function handlePaneScrollShortcut(event: KeyboardEvent): boolean {
   return true;
 }
 
-function getPaneScrollAmountForEvent(event: KeyboardEvent): WebviewScrollCommand['amount'] | undefined {
-  if (!event.ctrlKey && !event.metaKey) {
-    return 'page';
+function getPaneScrollCommandForEvent(event: KeyboardEvent): WebviewScrollCommand | undefined {
+  if (event.shiftKey) {
+    return undefined;
   }
 
-  if (isMacPlatform) {
-    return event.metaKey && !event.ctrlKey ? 'edge' : undefined;
+  if (event.key === 'PageUp' || event.key === 'PageDown') {
+    const direction = event.key === 'PageUp' ? 'up' : 'down';
+
+    if (!event.ctrlKey && !event.metaKey && !event.altKey) {
+      return { direction, amount: 'page' };
+    }
+
+    if (isMacPlatform) {
+      return event.metaKey && !event.ctrlKey && !event.altKey ? { direction, amount: 'page' } : undefined;
+    }
+
+    return event.altKey && !event.ctrlKey && !event.metaKey ? { direction, amount: 'page' } : undefined;
   }
 
-  return event.ctrlKey && !event.metaKey ? 'edge' : undefined;
+  if (!isMacPlatform && (event.key === 'Home' || event.key === 'End')) {
+    if (event.ctrlKey && !event.metaKey && !event.altKey) {
+      return { direction: event.key === 'Home' ? 'up' : 'down', amount: 'edge' };
+    }
+  }
+
+  if (isMacPlatform && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+    if (event.metaKey && !event.ctrlKey && !event.altKey) {
+      return { direction: event.key === 'ArrowUp' ? 'up' : 'down', amount: 'edge' };
+    }
+  }
+
+  return undefined;
+}
+
+function shouldPreserveComposerTextNavigation(event: KeyboardEvent): boolean {
+  return event.key === 'Home' || event.key === 'End' || event.key === 'ArrowUp' || event.key === 'ArrowDown';
 }
 
 function scrollActivePane(command: WebviewScrollCommand): boolean {

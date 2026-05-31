@@ -81,23 +81,41 @@ suite('Tauren extension', () => {
 
     const packageJson = extension.packageJSON as PackageJson;
     const keybindings = packageJson.contributes?.keybindings ?? [];
-    const scrollTopKeybinding = keybindings.find((entry) => entry.command === 'tauren.scroll' && entry.key === 'ctrl+pageup');
-    const scrollBottomKeybinding = keybindings.find((entry) => entry.command === 'tauren.scroll' && entry.key === 'ctrl+pagedown');
 
-    assert.deepStrictEqual(scrollTopKeybinding, {
+    assert.deepStrictEqual(keybindings.find((entry) => entry.command === 'tauren.scroll' && entry.key === 'alt+pageup'), {
       command: 'tauren.scroll',
-      key: 'ctrl+pageup',
+      key: 'alt+pageup',
       mac: 'cmd+pageup',
+      when: 'tauren.sidebarFocus',
+      args: {
+        direction: 'up',
+        amount: 'page'
+      }
+    });
+    assert.deepStrictEqual(keybindings.find((entry) => entry.command === 'tauren.scroll' && entry.key === 'alt+pagedown'), {
+      command: 'tauren.scroll',
+      key: 'alt+pagedown',
+      mac: 'cmd+pagedown',
+      when: 'tauren.sidebarFocus',
+      args: {
+        direction: 'down',
+        amount: 'page'
+      }
+    });
+    assert.deepStrictEqual(keybindings.find((entry) => entry.command === 'tauren.scroll' && entry.key === 'ctrl+home'), {
+      command: 'tauren.scroll',
+      key: 'ctrl+home',
+      mac: 'cmd+up',
       when: 'tauren.sidebarFocus',
       args: {
         direction: 'up',
         amount: 'edge'
       }
     });
-    assert.deepStrictEqual(scrollBottomKeybinding, {
+    assert.deepStrictEqual(keybindings.find((entry) => entry.command === 'tauren.scroll' && entry.key === 'ctrl+end'), {
       command: 'tauren.scroll',
-      key: 'ctrl+pagedown',
-      mac: 'cmd+pagedown',
+      key: 'ctrl+end',
+      mac: 'cmd+down',
       when: 'tauren.sidebarFocus',
       args: {
         direction: 'down',

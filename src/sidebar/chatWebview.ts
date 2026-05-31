@@ -532,8 +532,8 @@ ${chatWebviewStyles}
               <tr><td><kbd>Shift</kbd>+<kbd>Enter</kbd></td><td>Insert newline</td></tr>
               <tr><td><kbd>/</kbd></td><td>Show slash commands</td></tr>
               <tr><td><kbd>Esc</kbd></td><td>Open session list</td></tr>
-              <tr><td><kbd>PageUp</kbd> / <kbd>PageDown</kbd></td><td>Scroll active pane by page</td></tr>
-              <tr><td><kbd>Cmd</kbd>+<kbd>PageUp</kbd> / <kbd>Cmd</kbd>+<kbd>PageDown</kbd> on mac; <kbd>Ctrl</kbd>+<kbd>PageUp</kbd> / <kbd>Ctrl</kbd>+<kbd>PageDown</kbd> elsewhere</td><td>Scroll active pane to top or bottom</td></tr>
+              <tr><td><kbd>PageUp</kbd> / <kbd>PageDown</kbd>; <kbd>Cmd</kbd>+<kbd>PageUp</kbd> / <kbd>Cmd</kbd>+<kbd>PageDown</kbd> on mac; <kbd>Alt</kbd>+<kbd>PageUp</kbd> / <kbd>Alt</kbd>+<kbd>PageDown</kbd> elsewhere</td><td>Scroll active pane by page</td></tr>
+              <tr><td><kbd>Cmd</kbd>+<kbd>↑</kbd> / <kbd>Cmd</kbd>+<kbd>↓</kbd> on mac; <kbd>Ctrl</kbd>+<kbd>Home</kbd> / <kbd>Ctrl</kbd>+<kbd>End</kbd> elsewhere</td><td>Scroll active pane to top or bottom</td></tr>
               <tr><td>Model button</td><td>Change model or thinking</td></tr>
               <tr><td>Changes</td><td>Show session changes</td></tr>
               <tr><td>Stop</td><td>Stop current response</td></tr>

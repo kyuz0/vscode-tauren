@@ -5,8 +5,7 @@
 - Added Home/End navigation for Session List and Session Tree, plus parent/last-child arrow navigation in Session Tree.
 - Added a sidebar-scoped model picker keybinding: Ctrl+Alt+. / Alt+Cmd+.
 - Docs: Documented manual use of `tauren.sidebarFocus` for custom VS Code keybindings.
-- Added unbound line-scroll wrapper commands for Tauren panes.
-- Added active-pane PageUp/PageDown scrolling across Tauren lanes and settings, with Ctrl/Cmd+PageUp/PageDown jumping to top or bottom.
+- Added VS Code-style active-pane scroll bindings across Tauren lanes and settings, with Alt+PageUp/PageDown paging on Windows/Linux, Cmd+PageUp/PageDown paging on macOS, and default-style top/bottom shortcuts.
 - Added a Tauren docs share viewer for `/share` links, with a setting to fall back to pi.dev.
 - Added Tauren docs-style colors and fonts to HTML exports and shared sessions when the Tauren share/export setting is enabled.
 - Docs: Audited command documentation against current Tauren command registrations and added missing workflow references.

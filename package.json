@@ -296,8 +296,28 @@
       },
       {
         "command": "tauren.scroll",
-        "key": "ctrl+pageup",
+        "key": "alt+pageup",
         "mac": "cmd+pageup",
+        "when": "tauren.sidebarFocus",
+        "args": {
+          "direction": "up",
+          "amount": "page"
+        }
+      },
+      {
+        "command": "tauren.scroll",
+        "key": "alt+pagedown",
+        "mac": "cmd+pagedown",
+        "when": "tauren.sidebarFocus",
+        "args": {
+          "direction": "down",
+          "amount": "page"
+        }
+      },
+      {
+        "command": "tauren.scroll",
+        "key": "ctrl+home",
+        "mac": "cmd+up",
         "when": "tauren.sidebarFocus",
         "args": {
           "direction": "up",
@@ -306,8 +326,8 @@
       },
       {
         "command": "tauren.scroll",
-        "key": "ctrl+pagedown",
-        "mac": "cmd+pagedown",
+        "key": "ctrl+end",
+        "mac": "cmd+down",
         "when": "tauren.sidebarFocus",
         "args": {
           "direction": "down",
