@@ -6,7 +6,7 @@ import {
 } from './sidebar/chatWebview';
 import type { SettingValue, TaurenSettingId } from './settings/settingsRegistry';
 import type { SessionListProgressOptions } from './controller/types';
-import type { WebviewLane, WebviewMessage, WebviewPerfEvent, WebviewSessionItem, WebviewStateMessage } from './webviewProtocol/types';
+import type { WebviewLane, WebviewMessage, WebviewPerfEvent, WebviewScrollCommand, WebviewSessionItem, WebviewStateMessage } from './webviewProtocol/types';
 import { type PiClientFactory, type PiClient } from './pi/clientTypes';
 import type { PiClientOptions } from './pi/types';
 import { PiSdkClient } from './sdk/piSdkClient';
@@ -516,12 +516,8 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
     this.postTranscriptSearchOpenSoon();
   }
 
-  public scrollTranscriptToTop(): void {
-    this.postTranscriptScroll('top');
-  }
-
-  public scrollTranscriptToBottom(): void {
-    this.postTranscriptScroll('bottom');
+  public scrollPane(options?: unknown): void {
+    this.postPaneScroll(parseScrollCommand(options));
   }
 
   public async toggleSettings(): Promise<void> {
@@ -1237,12 +1233,12 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
     setTimeout(() => this.postTranscriptSearchOpen(), 0);
   }
 
-  private postTranscriptScroll(position: 'top' | 'bottom'): void {
+  private postPaneScroll(command: WebviewScrollCommand): void {
     if (!this.webviewView?.visible || !this.webviewReady) {
       return;
     }
 
-    void this.webviewView.webview.postMessage({ type: 'scrollTranscript', position });
+    void this.webviewView.webview.postMessage({ type: 'scrollPane', ...command });
   }
 
   private postStreamingBehaviorToggle(): void {
@@ -1441,6 +1437,18 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
     void vscode.commands.executeCommand('setContext', taurenBusyContextKey, busy).then(undefined, () => undefined);
   }
 
+}
+
+function parseScrollCommand(options: unknown): WebviewScrollCommand {
+  const record = isRecord(options) ? options : {};
+  const direction = record.direction === 'up' || record.direction === 'down' ? record.direction : 'down';
+  const amount = record.amount === 'page' || record.amount === 'line' || record.amount === 'edge' ? record.amount : 'page';
+
+  return { direction, amount };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 function getEditorLineTextForComposer(editor: vscode.TextEditor): string {

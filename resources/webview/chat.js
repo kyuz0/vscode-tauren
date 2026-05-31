@@ -4364,26 +4364,6 @@ ${after}`;
       this.renderMessageList();
       return nextExpanded;
     }
-    handleChatPageScroll(event) {
-      const state2 = this.options.getState();
-      if (state2.lane !== "chat" || state2.chatFace === "settings" || event.key !== "PageUp" && event.key !== "PageDown") {
-        return false;
-      }
-      if (event.altKey || event.metaKey || event.shiftKey) {
-        return false;
-      }
-      const target = eventTargetElement2(event);
-      if (target instanceof HTMLSelectElement || target instanceof HTMLInputElement) {
-        return false;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      const direction = event.key === "PageUp" ? -1 : 1;
-      const amount = event.ctrlKey ? this.getTranscriptLineScrollAmount() : Math.max(80, Math.floor(this.options.messagesElement.clientHeight * 0.85));
-      this.options.messagesElement.scrollBy({ top: direction * amount, behavior: "auto" });
-      this.handleMessagesScroll();
-      return true;
-    }
     handleMessagesScroll() {
       updateScrollFollowStateForScroll(
         this.scrollFollowState,
@@ -4695,9 +4675,6 @@ ${after}`;
       }
       return void 0;
     }
-    getTranscriptLineScrollAmount() {
-      return parseCssPixelValue2(getComputedStyle(this.options.messagesContentElement).lineHeight) || parseCssPixelValue2(getComputedStyle(this.options.messagesElement).lineHeight) || 20;
-    }
     scrollMessagesToBottomIfFollowingChat() {
       if (this.options.getState().lane === "chat" && this.shouldFollowOutput()) {
         this.scrollMessagesToBottom();
@@ -4890,9 +4867,6 @@ ${after}`;
     } catch {
       return false;
     }
-  }
-  function parseCssPixelValue2(value) {
-    return Number.parseFloat(value) || 0;
   }
   function eventTargetElement2(event) {
     return event.target instanceof Element ? event.target : null;
@@ -9148,6 +9122,7 @@ ${after}`;
   var sessionsController;
   var settingsController;
   var transcriptSearchController;
+  var isMacPlatform = /mac|iphone|ipad|ipod/i.test(navigator.platform);
   var customUiController = new CustomUiController({
     vscode,
     customUiElement,
@@ -9276,13 +9251,10 @@ ${after}`;
       composerController.openModelPicker();
       return;
     }
-    if (event.data?.type === "scrollTranscript") {
-      if (isChatTranscriptScrollable()) {
-        if (event.data.position === "top") {
-          messagesController.scrollMessagesToTop();
-        } else if (event.data.position === "bottom") {
-          messagesController.scrollMessagesToBottom();
-        }
+    if (event.data?.type === "scrollPane") {
+      const command = parsePaneScrollCommand(event.data);
+      if (command) {
+        scrollActivePane(command);
       }
       return;
     }
@@ -9404,13 +9376,10 @@ ${after}`;
     if (event.key === "Escape" && handleChatEscape(event)) {
       return;
     }
-    if (handleTranscriptEdgeScrollShortcut(event)) {
+    if (handlePaneScrollShortcut(event)) {
       return;
     }
     if (handleToolDetailShortcut(event)) {
-      return;
-    }
-    if (messagesController.handleChatPageScroll(event)) {
       return;
     }
   }, true);
@@ -9825,8 +9794,100 @@ ${after}`;
   function closeHelpOverlay() {
     helpOverlayElement.hidden = true;
   }
-  function isChatTranscriptScrollable() {
-    return state.lane === "chat" && state.chatFace !== "settings" && !hasHelpOverlayOpen() && !customUiController.isActive() && !extensionEditorDialogController.isActive();
+  function parsePaneScrollCommand(value) {
+    if (!isRecord7(value)) {
+      return void 0;
+    }
+    const direction = value.direction === "up" || value.direction === "down" ? value.direction : void 0;
+    const amount = value.amount === "page" || value.amount === "line" || value.amount === "edge" ? value.amount : void 0;
+    return direction && amount ? { direction, amount } : void 0;
+  }
+  function handlePaneScrollShortcut(event) {
+    if (event.key !== "PageUp" && event.key !== "PageDown") {
+      return false;
+    }
+    if (event.altKey || event.shiftKey) {
+      return false;
+    }
+    const target = eventTargetElement4(event);
+    if (target instanceof HTMLSelectElement || target instanceof HTMLInputElement) {
+      return false;
+    }
+    if (target instanceof HTMLTextAreaElement && target !== textarea) {
+      return false;
+    }
+    const amount = getPaneScrollAmountForEvent(event);
+    if (!amount) {
+      return false;
+    }
+    const direction = event.key === "PageUp" ? "up" : "down";
+    if (!scrollActivePane({ direction, amount })) {
+      return false;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  }
+  function getPaneScrollAmountForEvent(event) {
+    if (!event.ctrlKey && !event.metaKey) {
+      return "page";
+    }
+    if (isMacPlatform) {
+      return event.metaKey && !event.ctrlKey ? "edge" : void 0;
+    }
+    return event.ctrlKey && !event.metaKey ? "edge" : void 0;
+  }
+  function scrollActivePane(command) {
+    const element = getActiveScrollElement();
+    if (!element) {
+      return false;
+    }
+    if (command.amount === "edge") {
+      scrollElementToEdge(element, command.direction);
+      return true;
+    }
+    const multiplier = command.direction === "up" ? -1 : 1;
+    const amount = command.amount === "line" ? getLineScrollAmount(element) : Math.max(80, Math.floor(element.clientHeight * 0.85));
+    element.scrollBy({ top: multiplier * amount, behavior: "auto" });
+    afterScrollElement(element);
+    return true;
+  }
+  function getActiveScrollElement() {
+    if (hasHelpOverlayOpen() || customUiController.isActive() || extensionEditorDialogController.isActive()) {
+      return void 0;
+    }
+    if (state.lane === "sessions") {
+      return sessionsElement;
+    }
+    if (state.lane === "tree") {
+      return sessionTreeElement;
+    }
+    if (state.chatFace === "settings") {
+      return settingsBodyElement.querySelector(".settings-surface__panel") ?? settingsBodyElement;
+    }
+    return messagesElement;
+  }
+  function scrollElementToEdge(element, direction) {
+    if (element === messagesElement) {
+      direction === "up" ? messagesController.scrollMessagesToTop() : messagesController.scrollMessagesToBottom();
+      return;
+    }
+    element.scrollTop = direction === "up" ? 0 : element.scrollHeight;
+    afterScrollElement(element);
+  }
+  function afterScrollElement(element) {
+    if (element === messagesElement) {
+      messagesController.handleMessagesScroll();
+    }
+  }
+  function getLineScrollAmount(element) {
+    return parseCssPixelValue2(getComputedStyle(element).lineHeight) || 20;
+  }
+  function parseCssPixelValue2(value) {
+    return Number.parseFloat(value) || 0;
+  }
+  function isRecord7(value) {
+    return typeof value === "object" && value !== null;
   }
   function handleToolDetailShortcut(event) {
     if (state.lane !== "chat" || state.chatFace === "settings" || event.key.toLowerCase() !== "o") {
@@ -9847,22 +9908,6 @@ ${after}`;
     }
     if (expanded !== void 0) {
       vscode.postMessage({ type: "setToolsExpanded", expanded: toolsExpanded });
-    }
-    return true;
-  }
-  function handleTranscriptEdgeScrollShortcut(event) {
-    if (event.key !== "ArrowUp" && event.key !== "ArrowDown" || !(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) {
-      return false;
-    }
-    if (!isChatTranscriptScrollable()) {
-      return false;
-    }
-    event.preventDefault();
-    event.stopPropagation();
-    if (event.key === "ArrowUp") {
-      messagesController.scrollMessagesToTop();
-    } else {
-      messagesController.scrollMessagesToBottom();
     }
     return true;
   }

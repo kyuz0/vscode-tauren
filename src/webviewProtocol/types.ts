@@ -4,6 +4,12 @@ import type { SettingId, SettingValue, TaurenSettingsSection } from '../settings
 export type WebviewStreamingBehavior = 'steer' | 'followUp';
 export type WebviewComposerTextMode = 'replace' | 'append';
 export type WebviewCustomUiTheme = 'default' | 'modern' | 'crt' | 'amber' | 'matrix';
+export type WebviewScrollDirection = 'up' | 'down';
+export type WebviewScrollAmount = 'page' | 'line' | 'edge';
+export type WebviewScrollCommand = {
+  direction: WebviewScrollDirection;
+  amount: WebviewScrollAmount;
+};
 
 export type WebviewPromptContextAttachment = {
   id: string;

@@ -24,6 +24,7 @@ import {
   parseWebviewStateMessage,
   type ProvisionalExtensionUiSnapshot
 } from './state';
+import type { WebviewScrollCommand } from '../webviewProtocol/types';
 import type { WebviewState } from './types';
 
 const vscode = acquireVsCodeApi();
@@ -120,6 +121,7 @@ let startupResourcesCache = createStartupResourcesCache();
 let sessionsController: SessionViewController;
 let settingsController: SettingsPaneController;
 let transcriptSearchController: TranscriptSearchController;
+const isMacPlatform = /mac|iphone|ipad|ipod/i.test(navigator.platform);
 
 const customUiController = new CustomUiController({
   vscode,
@@ -266,13 +268,11 @@ window.addEventListener('message', (event) => {
     return;
   }
 
-  if (event.data?.type === 'scrollTranscript') {
-    if (isChatTranscriptScrollable()) {
-      if (event.data.position === 'top') {
-        messagesController.scrollMessagesToTop();
-      } else if (event.data.position === 'bottom') {
-        messagesController.scrollMessagesToBottom();
-      }
+  if (event.data?.type === 'scrollPane') {
+    const command = parsePaneScrollCommand(event.data);
+
+    if (command) {
+      scrollActivePane(command);
     }
     return;
   }
@@ -431,15 +431,11 @@ window.addEventListener('keydown', (event) => {
     return;
   }
 
-  if (handleTranscriptEdgeScrollShortcut(event)) {
+  if (handlePaneScrollShortcut(event)) {
     return;
   }
 
   if (handleToolDetailShortcut(event)) {
-    return;
-  }
-
-  if (messagesController.handleChatPageScroll(event)) {
     return;
   }
 }, true);
@@ -959,12 +955,133 @@ function closeHelpOverlay(): void {
   helpOverlayElement.hidden = true;
 }
 
-function isChatTranscriptScrollable(): boolean {
-  return state.lane === 'chat'
-    && state.chatFace !== 'settings'
-    && !hasHelpOverlayOpen()
-    && !customUiController.isActive()
-    && !extensionEditorDialogController.isActive();
+function parsePaneScrollCommand(value: unknown): WebviewScrollCommand | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const direction = value.direction === 'up' || value.direction === 'down' ? value.direction : undefined;
+  const amount = value.amount === 'page' || value.amount === 'line' || value.amount === 'edge' ? value.amount : undefined;
+
+  return direction && amount ? { direction, amount } : undefined;
+}
+
+function handlePaneScrollShortcut(event: KeyboardEvent): boolean {
+  if (event.key !== 'PageUp' && event.key !== 'PageDown') {
+    return false;
+  }
+
+  if (event.altKey || event.shiftKey) {
+    return false;
+  }
+
+  const target = eventTargetElement(event);
+
+  if (target instanceof HTMLSelectElement || target instanceof HTMLInputElement) {
+    return false;
+  }
+
+  if (target instanceof HTMLTextAreaElement && target !== textarea) {
+    return false;
+  }
+
+  const amount = getPaneScrollAmountForEvent(event);
+
+  if (!amount) {
+    return false;
+  }
+
+  const direction = event.key === 'PageUp' ? 'up' : 'down';
+
+  if (!scrollActivePane({ direction, amount })) {
+    return false;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  return true;
+}
+
+function getPaneScrollAmountForEvent(event: KeyboardEvent): WebviewScrollCommand['amount'] | undefined {
+  if (!event.ctrlKey && !event.metaKey) {
+    return 'page';
+  }
+
+  if (isMacPlatform) {
+    return event.metaKey && !event.ctrlKey ? 'edge' : undefined;
+  }
+
+  return event.ctrlKey && !event.metaKey ? 'edge' : undefined;
+}
+
+function scrollActivePane(command: WebviewScrollCommand): boolean {
+  const element = getActiveScrollElement();
+
+  if (!element) {
+    return false;
+  }
+
+  if (command.amount === 'edge') {
+    scrollElementToEdge(element, command.direction);
+    return true;
+  }
+
+  const multiplier = command.direction === 'up' ? -1 : 1;
+  const amount = command.amount === 'line'
+    ? getLineScrollAmount(element)
+    : Math.max(80, Math.floor(element.clientHeight * 0.85));
+
+  element.scrollBy({ top: multiplier * amount, behavior: 'auto' });
+  afterScrollElement(element);
+  return true;
+}
+
+function getActiveScrollElement(): HTMLElement | undefined {
+  if (hasHelpOverlayOpen() || customUiController.isActive() || extensionEditorDialogController.isActive()) {
+    return undefined;
+  }
+
+  if (state.lane === 'sessions') {
+    return sessionsElement;
+  }
+
+  if (state.lane === 'tree') {
+    return sessionTreeElement;
+  }
+
+  if (state.chatFace === 'settings') {
+    return settingsBodyElement.querySelector<HTMLElement>('.settings-surface__panel') ?? settingsBodyElement;
+  }
+
+  return messagesElement;
+}
+
+function scrollElementToEdge(element: HTMLElement, direction: WebviewScrollCommand['direction']): void {
+  if (element === messagesElement) {
+    direction === 'up' ? messagesController.scrollMessagesToTop() : messagesController.scrollMessagesToBottom();
+    return;
+  }
+
+  element.scrollTop = direction === 'up' ? 0 : element.scrollHeight;
+  afterScrollElement(element);
+}
+
+function afterScrollElement(element: HTMLElement): void {
+  if (element === messagesElement) {
+    messagesController.handleMessagesScroll();
+  }
+}
+
+function getLineScrollAmount(element: HTMLElement): number {
+  return parseCssPixelValue(getComputedStyle(element).lineHeight) || 20;
+}
+
+function parseCssPixelValue(value: string): number {
+  return Number.parseFloat(value) || 0;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 function handleToolDetailShortcut(event: KeyboardEvent): boolean {
@@ -992,27 +1109,6 @@ function handleToolDetailShortcut(event: KeyboardEvent): boolean {
 
   if (expanded !== undefined) {
     vscode.postMessage({ type: 'setToolsExpanded', expanded: toolsExpanded });
-  }
-
-  return true;
-}
-
-function handleTranscriptEdgeScrollShortcut(event: KeyboardEvent): boolean {
-  if ((event.key !== 'ArrowUp' && event.key !== 'ArrowDown') || !(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) {
-    return false;
-  }
-
-  if (!isChatTranscriptScrollable()) {
-    return false;
-  }
-
-  event.preventDefault();
-  event.stopPropagation();
-
-  if (event.key === 'ArrowUp') {
-    messagesController.scrollMessagesToTop();
-  } else {
-    messagesController.scrollMessagesToBottom();
   }
 
   return true;

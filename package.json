@@ -104,13 +104,8 @@
         "category": "Tauren"
       },
       {
-        "command": "tauren.scrollTranscriptToTop",
-        "title": "Scroll Transcript to Top",
-        "category": "Tauren"
-      },
-      {
-        "command": "tauren.scrollTranscriptToBottom",
-        "title": "Scroll Transcript to Bottom",
+        "command": "tauren.scroll",
+        "title": "Scroll Active Pane",
         "category": "Tauren"
       },
       {
@@ -212,12 +207,6 @@
         },
         {
           "command": "tauren.searchTranscript"
-        },
-        {
-          "command": "tauren.scrollTranscriptToTop"
-        },
-        {
-          "command": "tauren.scrollTranscriptToBottom"
         }
       ],
       "view/title": [
@@ -282,16 +271,24 @@
         "when": "tauren.sidebarFocus"
       },
       {
-        "command": "tauren.scrollTranscriptToTop",
-        "key": "ctrl+up",
-        "mac": "cmd+up",
-        "when": "tauren.sidebarFocus"
+        "command": "tauren.scroll",
+        "key": "ctrl+pageup",
+        "mac": "cmd+pageup",
+        "when": "tauren.sidebarFocus",
+        "args": {
+          "direction": "up",
+          "amount": "edge"
+        }
       },
       {
-        "command": "tauren.scrollTranscriptToBottom",
-        "key": "ctrl+down",
-        "mac": "cmd+down",
-        "when": "tauren.sidebarFocus"
+        "command": "tauren.scroll",
+        "key": "ctrl+pagedown",
+        "mac": "cmd+pagedown",
+        "when": "tauren.sidebarFocus",
+        "args": {
+          "direction": "down",
+          "amount": "edge"
+        }
       }
     ],
     "configuration": {

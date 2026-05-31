@@ -120,34 +120,6 @@ export class MessageListController {
     return nextExpanded;
   }
 
-  public handleChatPageScroll(event: KeyboardEvent): boolean {
-    const state = this.options.getState();
-
-    if (state.lane !== 'chat' || state.chatFace === 'settings' || (event.key !== 'PageUp' && event.key !== 'PageDown')) {
-      return false;
-    }
-
-    if (event.altKey || event.metaKey || event.shiftKey) {
-      return false;
-    }
-
-    const target = eventTargetElement(event);
-
-    if (target instanceof HTMLSelectElement || target instanceof HTMLInputElement) {
-      return false;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-    const direction = event.key === 'PageUp' ? -1 : 1;
-    const amount = event.ctrlKey
-      ? this.getTranscriptLineScrollAmount()
-      : Math.max(80, Math.floor(this.options.messagesElement.clientHeight * 0.85));
-    this.options.messagesElement.scrollBy({ top: direction * amount, behavior: 'auto' });
-    this.handleMessagesScroll();
-    return true;
-  }
-
   public handleMessagesScroll(): void {
     updateScrollFollowStateForScroll(
       this.scrollFollowState,
@@ -556,12 +528,6 @@ export class MessageListController {
     return undefined;
   }
 
-  private getTranscriptLineScrollAmount(): number {
-    return parseCssPixelValue(getComputedStyle(this.options.messagesContentElement).lineHeight)
-      || parseCssPixelValue(getComputedStyle(this.options.messagesElement).lineHeight)
-      || 20;
-  }
-
   private scrollMessagesToBottomIfFollowingChat(): void {
     if (this.options.getState().lane === 'chat' && this.shouldFollowOutput()) {
       this.scrollMessagesToBottom();
@@ -822,10 +788,6 @@ function isHttpUrl(value: string): boolean {
   } catch {
     return false;
   }
-}
-
-function parseCssPixelValue(value: string): number {
-  return Number.parseFloat(value) || 0;
 }
 
 function eventTargetElement(event: Event): Element | null {
