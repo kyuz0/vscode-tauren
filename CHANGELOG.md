@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Added a styled local VitePress documentation scaffold for Tauren docs.
+- Added a styled local VitePress documentation scaffold and first-pass Tauren documentation structure.
 - Fixed busy session-list items so their command menu still opens while blocked commands stay disabled.
 
 ## 1.5.0 - 2026-05-31

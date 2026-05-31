@@ -13,32 +13,32 @@ title: Tauren Docs
         visible tool use, and IDE-native workflows.
       </p>
       <div class="tauren-actions">
-        <a class="tauren-button tauren-button--primary" href="/architecture/ui-language">Explore the architecture</a>
+        <a class="tauren-button tauren-button--primary" href="/getting-started/quick-start">Start using Tauren</a>
         <a class="tauren-button tauren-button--secondary" href="https://github.com/kaiwood/vscode-tauren">View on GitHub</a>
       </div>
     </div>
   </div>
 
   <div class="tauren-card-grid" aria-label="Documentation areas">
-    <a class="tauren-card" href="/architecture/ui-language">
-      <span class="tauren-card__icon">⌘</span>
-      <strong>UI Language</strong>
-      <span>Names and boundaries for Tauren's main UI surfaces.</span>
+    <a class="tauren-card" href="/getting-started/">
+      <span class="tauren-card__icon">→</span>
+      <strong>Getting Started</strong>
+      <span>Install Tauren, connect a provider, and send your first prompt.</span>
     </a>
-    <a class="tauren-card" href="/decisions/0001-sdk-over-rpc">
-      <span class="tauren-card__icon">◇</span>
-      <strong>SDK Integration</strong>
-      <span>Why Tauren runs Pi through the in-process SDK transport.</span>
-    </a>
-    <a class="tauren-card" href="/decisions/0002-three-lane-model">
+    <a class="tauren-card" href="/guide/sessions">
       <span class="tauren-card__icon">☰</span>
-      <strong>Three-lane Model</strong>
-      <span>The interaction model behind sessions, transcript, and context.</span>
+      <strong>Sessions</strong>
+      <span>Work with resumable sessions, background runs, forks, and clones.</span>
     </a>
-    <a class="tauren-card" href="/decisions/0003-plugin-ui-bridge">
+    <a class="tauren-card" href="/guide/session-diffs">
+      <span class="tauren-card__icon">◇</span>
+      <strong>Session Diffs</strong>
+      <span>Review what changed during an agent session before you commit it.</span>
+    </a>
+    <a class="tauren-card" href="/guide/pi-extensions">
       <span class="tauren-card__icon">✦</span>
-      <strong>Plugin UI Bridge</strong>
-      <span>How Pi extension UI reaches the VS Code sidebar.</span>
+      <strong>Pi Extensions</strong>
+      <span>Use Pi extension widgets, status lines, dialogs, and custom UI surfaces.</span>
     </a>
   </div>
 
@@ -47,6 +47,6 @@ title: Tauren Docs
       <p class="tauren-footer__brand"><span class="tauren-mark" aria-hidden="true"></span>Tauren</p>
       <p>Transparent AI coding assistance for VS Code.</p>
     </div>
-    <a href="https://github.com/kaiwood/vscode-tauren">GitHub</a>
+    <a href="/development/architecture">Architecture</a>
   </footer>
 </section>
