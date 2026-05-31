@@ -52,12 +52,12 @@ Tauren-owned settings are listed in the [settings reference](../reference/settin
 
 Tauren-owned settings affect the VS Code extension host and webview. Examples:
 
-- `tauren.outputColors`
-- `tauren.animationsEnabled`
-- `tauren.customUiTheme`
-- `tauren.blockHttpsImages`
-- `tauren.restrictFileReferencesToWorkspace`
-- `tauren.rejectEditWriteOutsideWorkspace`
+- `tauren.outputColors` — Appearance → Output colors
+- `tauren.animationsEnabled` — Appearance → Animations
+- `tauren.customUiTheme` — Appearance → Custom UI theme
+- `tauren.blockHttpsImages` — Safety → Block HTTPS images
+- `tauren.restrictFileReferencesToWorkspace` — Safety → Restrict file links
+- `tauren.rejectEditWriteOutsideWorkspace` — Safety → Reject external edits
 
 Most Tauren-owned UI settings apply immediately.
 
@@ -71,13 +71,13 @@ Pi remains the source of truth for those values. Tauren may show cached metadata
 
 Two settings are especially important:
 
-- `tauren.restrictFileReferencesToWorkspace`: only open sidebar file references that resolve inside the workspace.
-- `tauren.rejectEditWriteOutsideWorkspace`: reject Pi edit/write tool mutations outside the active workspace folder.
+- `tauren.restrictFileReferencesToWorkspace` — Safety → Restrict file links: only open sidebar file references that resolve inside the workspace.
+- `tauren.rejectEditWriteOutsideWorkspace` — Safety → Reject external edits: reject Pi edit/write tool mutations outside the active workspace folder.
 
 The second setting does not restrict arbitrary shell commands. Treat it as a guardrail, not a sandbox.
 
 ## Ready script
 
-`tauren.readyScript` points to an executable script Tauren runs when the Pi engine becomes ready. Relative paths resolve from the workspace folder.
+`tauren.readyScript` — Advanced → Ready script: executable script Tauren runs when the Pi engine becomes ready. Relative paths resolve from the workspace folder.
 
 Use it for lightweight workspace preparation. Avoid long-running scripts because they can make the runtime feel stuck.
