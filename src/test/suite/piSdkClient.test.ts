@@ -302,21 +302,34 @@ suite('PiSdkClient', () => {
     harness.client.dispose();
   });
 
-  test('derives auth providers from runtime model and OAuth providers', async () => {
+  test('derives auth providers with Pi login parity', async () => {
     const harness = createSdkHarness();
+    harness.session.providerDisplayNames.set('anthropic', 'Anthropic');
     harness.session.providerDisplayNames.set('custom-runtime', 'Custom Runtime');
-    harness.session.availableModels.push({ provider: 'custom-runtime', id: 'model', name: 'Custom', reasoning: false });
-    harness.session.authStorage.oauthProviders.push(createFakeOAuthProvider({
-      id: 'runtime-oauth',
-      name: 'Runtime OAuth',
-      usesCallbackServer: true
-    }));
+    harness.session.availableModels.push(
+      { provider: 'anthropic', id: 'claude-test', name: 'Claude Test', reasoning: false },
+      { provider: 'custom-runtime', id: 'model', name: 'Custom', reasoning: false },
+      { provider: 'runtime-oauth', id: 'oauth-model', name: 'OAuth Model', reasoning: false },
+      { provider: 'github-copilot', id: 'gpt-copilot', name: 'Copilot', reasoning: false },
+      { provider: 'openai-codex', id: 'gpt-codex', name: 'Codex', reasoning: false }
+    );
+    harness.session.authStorage.oauthProviders.push(
+      createFakeOAuthProvider({ id: 'anthropic', name: 'Anthropic', usesCallbackServer: true }),
+      createFakeOAuthProvider({ id: 'runtime-oauth', name: 'Runtime OAuth' }),
+      createFakeOAuthProvider({ id: 'github-copilot', name: 'GitHub Copilot' }),
+      createFakeOAuthProvider({ id: 'openai-codex', name: 'OpenAI Codex' })
+    );
 
     const result = await harness.client.getAuthProviders();
+    const providerKeys = result.providers.map((provider) => `${provider.authType}:${provider.id}`).sort();
 
-    assert.deepStrictEqual(result.providers.map((provider) => `${provider.authType}:${provider.id}`), [
+    assert.deepStrictEqual(providerKeys, [
+      'api_key:anthropic',
       'api_key:custom-runtime',
       'api_key:openai',
+      'oauth:anthropic',
+      'oauth:github-copilot',
+      'oauth:openai-codex',
       'oauth:runtime-oauth'
     ]);
     assert.deepStrictEqual(result.providers.find((provider) => provider.id === 'custom-runtime'), {
@@ -331,18 +344,26 @@ suite('PiSdkClient', () => {
       name: 'Runtime OAuth',
       authType: 'oauth',
       configured: false,
-      canLogout: false,
-      usesCallbackServer: true
+      canLogout: false
     });
     assert.strictEqual(harness.session.authStorage.reloadCount, 1);
+    assert.strictEqual(harness.session.modelRegistryRefreshCount, 1);
     harness.client.dispose();
   });
 
-  test('logs in to runtime auth providers and rejects unknown providers', async () => {
+  test('logs in to runtime auth providers and rejects ineligible providers', async () => {
     const harness = createSdkHarness();
+    harness.session.providerDisplayNames.set('anthropic', 'Anthropic');
     harness.session.providerDisplayNames.set('custom-runtime', 'Custom Runtime');
-    harness.session.availableModels.push({ provider: 'custom-runtime', id: 'model', name: 'Custom', reasoning: false });
-    harness.session.authStorage.oauthProviders.push(createFakeOAuthProvider({ id: 'runtime-oauth', name: 'Runtime OAuth' }));
+    harness.session.availableModels.push(
+      { provider: 'anthropic', id: 'claude-test', name: 'Claude Test', reasoning: false },
+      { provider: 'custom-runtime', id: 'model', name: 'Custom', reasoning: false },
+      { provider: 'runtime-oauth', id: 'oauth-model', name: 'OAuth Model', reasoning: false }
+    );
+    harness.session.authStorage.oauthProviders.push(
+      createFakeOAuthProvider({ id: 'anthropic', name: 'Anthropic' }),
+      createFakeOAuthProvider({ id: 'runtime-oauth', name: 'Runtime OAuth' })
+    );
 
     assert.deepStrictEqual(
       await harness.client.loginWithApiKey('custom-runtime', ' secret '),
@@ -350,6 +371,16 @@ suite('PiSdkClient', () => {
     );
     assert.deepStrictEqual(harness.session.authStorage.get('custom-runtime'), { type: 'api_key', key: 'secret' });
 
+    assert.deepStrictEqual(
+      await harness.client.loginWithApiKey('anthropic', ' anthropic-secret '),
+      { providerId: 'anthropic', message: 'Saved API key for Anthropic.' }
+    );
+    assert.deepStrictEqual(harness.session.authStorage.get('anthropic'), { type: 'api_key', key: 'anthropic-secret' });
+
+    await assert.rejects(
+      harness.client.loginWithApiKey('runtime-oauth', 'secret'),
+      /API-key login is not supported for provider: runtime-oauth/
+    );
     await assert.rejects(
       harness.client.loginWithApiKey('missing-provider', 'secret'),
       /API-key login is not supported for provider: missing-provider/
@@ -380,7 +411,7 @@ suite('PiSdkClient', () => {
       }),
       /Subscription login is not supported for provider: missing-oauth/
     );
-    assert.strictEqual(harness.session.modelRegistryRefreshCount, 2);
+    assert.strictEqual(harness.session.modelRegistryRefreshCount, 3);
     harness.client.dispose();
   });
 

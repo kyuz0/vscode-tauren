@@ -9,6 +9,7 @@
 ### Fixed
 
 - Reduced session diff file watcher subprocess churn by ignoring generated/vendor paths and directories during live workspace tracking.
+- Fixed Login settings so API-key providers are shown and filtered with Pi `/login` parity.
 - Fixed session changes so command-generated files and mixed reconstructable/non-reconstructable edits are included more reliably.
 - Fixed external VS Code setting changes so every Tauren-owned setting refreshes the sidebar state immediately.
 - Restricted `@` file suggestions to the active workspace cwd so absolute, home, or traversal prefixes cannot browse outside it.

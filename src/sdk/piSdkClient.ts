@@ -41,6 +41,7 @@ import { createWorkspaceMutationGuardTools } from './workspaceMutationGuard';
 
 const sdkDisposedMessage = 'Pi SDK client disposed.';
 const sessionDirEnvVar = 'PI_CODING_AGENT_SESSION_DIR';
+const piDualAuthProviderIds = new Set(['anthropic']);
 
 export type PiSdkClientOptions = PiClientOptions & {
   extensionUi?: ExtensionUi;
@@ -271,8 +272,10 @@ export class PiSdkClient implements PiClient {
     const { session } = await this.ensureRuntime();
     const { authStorage } = session.modelRegistry;
     authStorage.reload();
+    session.modelRegistry.refresh();
 
     const oauthProviders = authStorage.getOAuthProviders();
+    const oauthProviderIds = new Set(oauthProviders.map((provider) => provider.id));
     const providers: PiAuthProvider[] = oauthProviders.map((provider) => this.createAuthProvider({
       id: provider.id,
       name: provider.name,
@@ -283,7 +286,7 @@ export class PiSdkClient implements PiClient {
     const seenApiKeyProviders = new Set<string>();
     for (const model of session.modelRegistry.getAll()) {
       const providerId = typeof model.provider === 'string' ? model.provider : '';
-      if (!providerId || seenApiKeyProviders.has(providerId)) {
+      if (!providerId || seenApiKeyProviders.has(providerId) || !isPiApiKeyLoginProvider(providerId, oauthProviderIds)) {
         continue;
       }
 
@@ -302,7 +305,7 @@ export class PiSdkClient implements PiClient {
   public async loginWithApiKey(providerId: string, apiKey: string): Promise<PiAuthActionResult> {
     const { session } = await this.ensureRuntime();
 
-    if (!this.hasRuntimeModelProvider(session, providerId)) {
+    if (!this.hasRuntimeApiKeyProvider(session, providerId)) {
       throw new Error(`API-key login is not supported for provider: ${providerId}`);
     }
 
@@ -337,8 +340,11 @@ export class PiSdkClient implements PiClient {
     };
   }
 
-  private hasRuntimeModelProvider(session: AgentSessionRuntime['session'], providerId: string): boolean {
-    return session.modelRegistry.getAll().some((model) => model.provider === providerId);
+  private hasRuntimeApiKeyProvider(session: AgentSessionRuntime['session'], providerId: string): boolean {
+    const oauthProviderIds = new Set(session.modelRegistry.authStorage.getOAuthProviders().map((provider) => provider.id));
+    return session.modelRegistry.getAll().some((model) => (
+      model.provider === providerId && isPiApiKeyLoginProvider(providerId, oauthProviderIds)
+    ));
   }
 
   public async logoutAuthProvider(providerId: string): Promise<PiAuthActionResult> {
@@ -1091,6 +1097,10 @@ function callOptionalSettingGetter<T>(settingsManager: SettingsManager, methodNa
   const candidate = settingsManager as unknown as Record<string, unknown>;
   const method = candidate[methodName];
   return typeof method === 'function' ? method.call(settingsManager) as T : undefined;
+}
+
+function isPiApiKeyLoginProvider(providerId: string, oauthProviderIds: ReadonlySet<string>): boolean {
+  return !oauthProviderIds.has(providerId) || piDualAuthProviderIds.has(providerId);
 }
 
 function isPiAuthSource(value: unknown): value is PiAuthSource {
