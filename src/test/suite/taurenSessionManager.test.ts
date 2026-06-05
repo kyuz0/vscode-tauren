@@ -826,6 +826,96 @@ suite('TaurenSessionManager', () => {
     harness.manager.dispose();
   });
 
+  test('refreshes cached session list when opening it from an empty unnamed Kward session', async () => {
+    let listCalls = 0;
+    const harness = createManagerHarness([new FakePiClient()], {
+      taurenSettings: { 'tauren.backend': 'kward' },
+      listSessions: async (_cwd, currentSessionFile) => {
+        listCalls += 1;
+        return createSessionItems(currentSessionFile);
+      }
+    });
+
+    await harness.manager.handleWebviewMessage({ type: 'showLane', lane: 'sessions' });
+    await flushPromises();
+    assert.strictEqual(listCalls, 1);
+
+    await harness.manager.handleWebviewMessage({ type: 'showLane', lane: 'chat' });
+    await harness.manager.handleWebviewMessage({ type: 'showLane', lane: 'sessions' });
+    await flushPromises();
+
+    assert.strictEqual(listCalls, 2);
+    harness.manager.dispose();
+  });
+
+  test('does not refresh cached session list when opening it from an empty unnamed Pi session', async () => {
+    let listCalls = 0;
+    const harness = createManagerHarness([new FakePiClient()], {
+      listSessions: async (_cwd, currentSessionFile) => {
+        listCalls += 1;
+        return createSessionItems(currentSessionFile);
+      }
+    });
+
+    await harness.manager.handleWebviewMessage({ type: 'showLane', lane: 'sessions' });
+    await flushPromises();
+    assert.strictEqual(listCalls, 1);
+
+    await harness.manager.handleWebviewMessage({ type: 'showLane', lane: 'chat' });
+    await harness.manager.handleWebviewMessage({ type: 'showLane', lane: 'sessions' });
+    await flushPromises();
+
+    assert.strictEqual(listCalls, 1);
+    harness.manager.dispose();
+  });
+
+  test('does not persist empty unnamed Kward sessions for startup reconnection', async () => {
+    const sessionFiles: Array<string | undefined> = [];
+    const harness = createManagerHarness([new FakePiClient({ state: { sessionFile: '/sessions/empty.jsonl' } })], {
+      initialSessionFile: '/sessions/empty.jsonl',
+      taurenSettings: { 'tauren.backend': 'kward' },
+      onSessionFileChange: (sessionFile) => sessionFiles.push(sessionFile)
+    });
+
+    await harness.manager.handleWebviewMessage({ type: 'ready' });
+    await flushPromises();
+    await flushPromises();
+
+    assert.strictEqual(sessionFiles.at(-1), undefined);
+    harness.manager.dispose();
+  });
+
+  test('persists named Kward sessions for startup reconnection', async () => {
+    const sessionFiles: Array<string | undefined> = [];
+    const harness = createManagerHarness([new FakePiClient({ state: { sessionFile: '/sessions/named.jsonl', sessionName: 'Named' } })], {
+      initialSessionFile: '/sessions/named.jsonl',
+      taurenSettings: { 'tauren.backend': 'kward' },
+      onSessionFileChange: (sessionFile) => sessionFiles.push(sessionFile)
+    });
+
+    await harness.manager.handleWebviewMessage({ type: 'ready' });
+    await flushPromises();
+    await flushPromises();
+
+    assert.strictEqual(sessionFiles.at(-1), '/sessions/named.jsonl');
+    harness.manager.dispose();
+  });
+
+  test('persists non-empty unnamed Kward sessions for startup reconnection', async () => {
+    const sessionFiles: Array<string | undefined> = [];
+    const harness = createManagerHarness([new FakePiClient({ state: { sessionFile: '/sessions/non-empty.jsonl' } })], {
+      initialSessionFile: '/sessions/non-empty.jsonl',
+      taurenSettings: { 'tauren.backend': 'kward' },
+      onSessionFileChange: (sessionFile) => sessionFiles.push(sessionFile)
+    });
+
+    await harness.manager.handleWebviewMessage({ type: 'submit', text: 'keep this' });
+    await flushPromises();
+
+    assert.strictEqual(sessionFiles.at(-1), '/sessions/non-empty.jsonl');
+    harness.manager.dispose();
+  });
+
   test('moves unsent prompt context to a new session', async () => {
     const client = new FakePiClient();
     const harness = createManagerHarness([client]);

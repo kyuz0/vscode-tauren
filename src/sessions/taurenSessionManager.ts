@@ -940,7 +940,10 @@ export class TaurenSessionManager {
   }
 
   private updateActivePersistence(session: OpenSession): void {
-    this.options.onSessionFileChange?.(session.state?.currentSessionFile || undefined);
+    const sessionFile = this.isEmptyUnnamedKwardSession(session)
+      ? undefined
+      : session.state?.currentSessionFile || undefined;
+    this.options.onSessionFileChange?.(sessionFile);
   }
 
   private movePromptContext(from: OpenSession, to: OpenSession): void {
@@ -964,8 +967,17 @@ export class TaurenSessionManager {
     }
 
     if (id === this.activeSessionId) {
-      this.options.onSessionFileChange?.(sessionFile);
+      this.options.onSessionFileChange?.(session && this.isEmptyUnnamedKwardSession(session) ? undefined : sessionFile);
     }
+  }
+
+  private isEmptyUnnamedKwardSession(session: OpenSession): boolean {
+    const state = session.state;
+    return this.options.getTaurenSettingValues?.()['tauren.backend'] === 'kward'
+      && state !== undefined
+      && state.sessionLoading !== true
+      && (state.messages?.length ?? 0) === 0
+      && !state.currentSessionName?.trim();
   }
 
   private postActiveState(): void {

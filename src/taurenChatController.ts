@@ -121,6 +121,7 @@ export class TaurenChatController {
         this.sessionHistory.setLoading(value);
       },
       hasStartedCurrentSession: () => !this.session.isEmpty,
+      shouldRefreshSessionsOnShow: () => this.isEmptyUnnamedKwardSession(),
       startNewSession: (sessionOptions) => this.startNewSession(sessionOptions)
     });
 
@@ -1238,6 +1239,12 @@ export class TaurenChatController {
 
   private getBackend(): unknown {
     return this.options.getTaurenSettingValues?.()['tauren.backend'];
+  }
+
+  private isEmptyUnnamedKwardSession(): boolean {
+    return this.getBackend() === 'kward'
+      && this.session.isEmpty
+      && !this.sessionView.currentSessionName.trim();
   }
 
   public hasSessionDiffStatsTarget(): boolean {

@@ -27,7 +27,7 @@ export async function listKwardSessions(options: {
 
   const names = await readdir(sessionDir).catch(() => []);
   const files = names.filter((name) => name.endsWith('.jsonl')).map((name) => join(sessionDir, name));
-  const sessions = (await Promise.all(files.map(readKwardSessionItem))).filter((item): item is WebviewSessionItem => Boolean(item));
+  const sessions = (await Promise.all(files.map(readKwardSessionItem))).filter(isVisibleKwardSessionItem);
 
   sessions.sort((a, b) => Date.parse(b.modified || '') - Date.parse(a.modified || ''));
   return decorateSessions(sessions, options.currentSessionFile);
@@ -46,7 +46,7 @@ async function listKwardSessionsViaRpc(options: {
     await transport.request('initialize');
     const result = await transport.request('sessions/list', { workspaceRoot: options.cwd, limit: 100 });
     return isRecord(result) && Array.isArray(result.sessions)
-      ? result.sessions.map(readKwardSessionItemFromRpc).filter((item): item is WebviewSessionItem => Boolean(item))
+      ? result.sessions.map(readKwardSessionItemFromRpc).filter(isKwardSessionItem)
       : [];
   } finally {
     transport.dispose();
@@ -64,15 +64,23 @@ function readKwardSessionItemFromRpc(value: unknown): WebviewSessionItem | undef
     return undefined;
   }
 
+  const name = getString(value, 'name');
+  const messageCount = getNumber(value, 'messageCount');
+  const firstMessage = getString(value, 'firstMessage');
+
+  if (isEmptyUnnamedKwardSessionFields(messageCount, name, firstMessage)) {
+    return undefined;
+  }
+
   return {
     path: file,
     id,
     cwd: getString(value, 'cwd') ?? getString(value, 'workspaceRoot') ?? '',
-    ...(getString(value, 'name') ? { name: getString(value, 'name') } : {}),
+    ...(name ? { name } : {}),
     created: getString(value, 'createdAt') ?? '',
     modified: getString(value, 'modifiedAt') ?? '',
-    messageCount: getNumber(value, 'messageCount') ?? 0,
-    firstMessage: getString(value, 'firstMessage') ?? '',
+    messageCount: messageCount ?? 0,
+    firstMessage: firstMessage ?? '',
     depth: 0,
     isLast: false,
     ancestorContinues: [],
@@ -173,6 +181,24 @@ function getString(record: Record<string, unknown>, key: string): string | undef
 function getNumber(record: Record<string, unknown>, key: string): number | undefined {
   const value = record[key];
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function isKwardSessionItem(session: WebviewSessionItem | undefined): session is WebviewSessionItem {
+  return session !== undefined;
+}
+
+function isVisibleKwardSessionItem(session: WebviewSessionItem | undefined): session is WebviewSessionItem {
+  return isKwardSessionItem(session) && !isEmptyUnnamedKwardSessionItem(session);
+}
+
+function isEmptyUnnamedKwardSessionItem(session: WebviewSessionItem): boolean {
+  return isEmptyUnnamedKwardSessionFields(session.messageCount, session.name, session.firstMessage);
+}
+
+function isEmptyUnnamedKwardSessionFields(messageCount: number | undefined, name: string | undefined, firstMessage: string | undefined): boolean {
+  return messageCount === 0
+    && !name?.trim()
+    && !firstMessage?.trim();
 }
 
 function decorateSessions(sessions: WebviewSessionItem[], currentSessionFile: string | undefined): WebviewSessionItem[] {
