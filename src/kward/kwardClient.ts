@@ -33,6 +33,7 @@ import type {
 import type { PiSettingId, SettingValue } from '../settings/settingsRegistry';
 import type { WebviewTreeItem } from '../webviewProtocol/types';
 import { isRecord } from '../shared/typeGuards';
+import { KwardCapabilityResolver } from './capabilities';
 import { KwardRpcTransport, type KwardJsonRpcNotification } from './rpcTransport';
 import { KwardTurnEventNormalizer } from './eventMapper';
 import type {
@@ -80,6 +81,7 @@ export class KwardClient implements PiClient {
   private session: KwardSession | undefined;
   private sessionPromise: Promise<KwardSession> | undefined;
   private capabilities: KwardCapabilities = {};
+  private capabilityResolver = new KwardCapabilityResolver(this.capabilities);
   private currentTurnId: string | undefined;
   private kwardFooterText: string | undefined;
   private readonly eventNormalizer = new KwardTurnEventNormalizer();
@@ -106,14 +108,14 @@ export class KwardClient implements PiClient {
 
   public async prompt(message: string, streamingBehavior?: PiPromptStreamingBehavior, images?: PiImageContent[]): Promise<void> {
     await this.ensureInitialized();
-    if (streamingBehavior === 'steer' && !this.isBusyInputModeSupported('steer')) {
+    if (streamingBehavior === 'steer' && !this.capabilityResolver.isBusyInputModeSupported('steer')) {
       throw new Error('Kward backend does not support steering while busy yet.');
     }
-    if (streamingBehavior === 'followUp' && !this.isBusyInputModeSupported('followUp')) {
+    if (streamingBehavior === 'followUp' && !this.capabilityResolver.isBusyInputModeSupported('followUp')) {
       throw new Error('Kward backend does not support queued follow-up prompts yet.');
     }
     if (images && images.length > 0) {
-      this.requireCapability('attachments.input', this.isAttachmentInputSupported(), 'Kward backend does not support image attachments yet.');
+      this.requireCapability('attachments.input', this.capabilityResolver.isAttachmentInputSupported(), 'Kward backend does not support image attachments yet.');
     }
 
     const session = await this.ensureSession();
@@ -149,7 +151,7 @@ export class KwardClient implements PiClient {
 
   public async reload(): Promise<void> {
     await this.ensureInitialized();
-    this.requireCapability('runtime.reload', this.isMethodSupported('runtimeSettings', 'runtime/reload'), 'Kward backend does not support runtime reload yet.');
+    this.requireCapability('runtime.reload', this.capabilityResolver.isMethodSupported('runtimeSettings', 'runtime/reload'), 'Kward backend does not support runtime reload yet.');
     const session = await this.ensureSession();
     await this.request('runtime/reload', { sessionId: requiredString(session.id, 'Kward session id') });
     this.clearExtensionFooter();
@@ -178,7 +180,7 @@ export class KwardClient implements PiClient {
 
   public async getCommands(): Promise<PiAvailableCommands> {
     await this.ensureInitialized();
-    if (!this.isSupportedCapability('commands')) {
+    if (!this.capabilityResolver.isGroupSupported('commands')) {
       return { commands: [] };
     }
     const session = await this.ensureSession();
@@ -188,7 +190,7 @@ export class KwardClient implements PiClient {
 
   public async getStartupResources(): Promise<PiStartupResources> {
     await this.ensureInitialized();
-    if (!this.isSupportedCapability('startupResources')) {
+    if (!this.capabilityResolver.isGroupSupported('startupResources')) {
       return { sections: [] };
     }
     const session = await this.ensureSession();
@@ -198,7 +200,7 @@ export class KwardClient implements PiClient {
 
   public async getAuthProviders(): Promise<PiAuthProvidersResult> {
     await this.ensureInitialized();
-    if (!this.isSupportedCapability('auth')) {
+    if (!this.capabilityResolver.isGroupSupported('auth')) {
       return { providers: [] };
     }
     const result = normalizeAuthProvidersResult(await this.request('auth/providers'));
@@ -207,14 +209,14 @@ export class KwardClient implements PiClient {
 
   public async loginWithApiKey(providerId: string, apiKey: string): Promise<PiAuthActionResult> {
     await this.ensureInitialized();
-    this.requireCapability('auth.loginWithApiKey', this.isMethodSupported('auth', 'auth/loginWithApiKey'), 'Kward backend does not support API-key login yet.');
+    this.requireCapability('auth.loginWithApiKey', this.capabilityResolver.isMethodSupported('auth', 'auth/loginWithApiKey'), 'Kward backend does not support API-key login yet.');
     const result = await this.request('auth/loginWithApiKey', { providerId, apiKey });
     return normalizeAuthActionResult(result, providerId, `Saved API key for ${providerId}.`);
   }
 
   public async loginWithOAuth(providerId: string, callbacks: PiOAuthLoginCallbacks): Promise<PiAuthActionResult> {
     await this.ensureInitialized();
-    this.requireCapability('auth.loginWithOAuth', this.isMethodSupported('auth', 'auth/loginWithOAuth'), 'Kward backend does not support OAuth login yet.');
+    this.requireCapability('auth.loginWithOAuth', this.capabilityResolver.isMethodSupported('auth', 'auth/loginWithOAuth'), 'Kward backend does not support OAuth login yet.');
     const start = normalizeOAuthLoginStart(await this.request('auth/loginWithOAuth', { providerId, timeoutSeconds: authLoginTimeoutSeconds }));
     const loginId = requiredString(start.loginId, 'Kward auth login id');
     const authorizationUrl = requiredString(start.authorizationUrl, 'Kward authorization URL');
@@ -238,7 +240,7 @@ export class KwardClient implements PiClient {
 
   public async logoutAuthProvider(providerId: string): Promise<PiAuthActionResult> {
     await this.ensureInitialized();
-    this.requireCapability('auth.logoutProvider', this.isMethodSupported('auth', 'auth/logoutProvider'), 'Kward backend does not support auth logout yet.');
+    this.requireCapability('auth.logoutProvider', this.capabilityResolver.isMethodSupported('auth', 'auth/logoutProvider'), 'Kward backend does not support auth logout yet.');
     const result = await this.request('auth/logoutProvider', { providerId });
     return normalizeAuthActionResult(result, providerId, `Logged out of ${providerId}.`);
   }
@@ -256,7 +258,7 @@ export class KwardClient implements PiClient {
 
   public async updateRuntimeSetting(settingId: PiSettingId, value: SettingValue): Promise<{ applied: 'live' | 'reload'; message?: string }> {
     await this.ensureInitialized();
-    this.requireCapability('runtimeSettings', this.isRuntimeSettingSupported(settingId), `Kward backend does not support runtime setting: ${settingId}.`);
+    this.requireCapability('runtimeSettings', this.capabilityResolver.isRuntimeSettingSupported(settingId), `Kward backend does not support runtime setting: ${settingId}.`);
     const session = await this.ensureSession();
     const result = normalizeRuntimeSettingResult(await this.request('runtime/updateSetting', {
       sessionId: requiredString(session.id, 'Kward session id'),
@@ -277,7 +279,7 @@ export class KwardClient implements PiClient {
 
   public async compact(customInstructions?: string): Promise<PiCompactResult> {
     await this.ensureInitialized();
-    this.requireCapability('sessions.compact', this.isSessionFeatureSupported('compact'), 'Kward backend does not support compaction from Tauren yet.');
+    this.requireCapability('sessions.compact', this.capabilityResolver.isSessionFeatureSupported('compact'), 'Kward backend does not support compaction from Tauren yet.');
     const session = await this.ensureSession();
     const result = normalizeCompactResult(await this.request('sessions/compact', {
       sessionId: requiredString(session.id, 'Kward session id'),
@@ -333,7 +335,7 @@ export class KwardClient implements PiClient {
 
   public async importFromJsonl(inputPath: string, cwdOverride?: string): Promise<PiImportSessionResult> {
     await this.ensureInitialized();
-    this.requireCapability('sessions.import', this.isSessionFeatureSupported('import'), 'Kward backend does not support Tauren session import yet.');
+    this.requireCapability('sessions.import', this.capabilityResolver.isSessionFeatureSupported('import'), 'Kward backend does not support Tauren session import yet.');
     const result = normalizeImportResult(await this.request('sessions/import', {
       path: inputPath,
       workspaceRoot: this.options.cwd,
@@ -349,7 +351,7 @@ export class KwardClient implements PiClient {
 
   public async getSessionTree(): Promise<WebviewTreeItem[]> {
     await this.ensureInitialized();
-    if (!this.isSessionFeatureSupported('tree')) {
+    if (!this.capabilityResolver.isSessionFeatureSupported('tree')) {
       return this.getSessionAncestryTree();
     }
 
@@ -360,7 +362,7 @@ export class KwardClient implements PiClient {
 
   public async setTreeEntryLabel(entryId: string, label: string | undefined): Promise<void> {
     await this.ensureInitialized();
-    this.requireCapability('sessions.tree.labels', this.isTreeFeatureSupported('labels'), 'Kward backend does not support session tree labels yet.');
+    this.requireCapability('sessions.tree.labels', this.capabilityResolver.isTreeFeatureSupported('labels'), 'Kward backend does not support session tree labels yet.');
     const session = await this.ensureSession();
     await this.request('sessions/tree/setLabel', {
       sessionId: requiredString(session.id, 'Kward session id'),
@@ -371,7 +373,7 @@ export class KwardClient implements PiClient {
 
   public async navigateTree(entryId: string, options: { summarize?: boolean; customInstructions?: string } = {}): Promise<PiNavigateTreeResult> {
     await this.ensureInitialized();
-    if (!this.isTreeFeatureSupported('navigate')) {
+    if (!this.capabilityResolver.isTreeFeatureSupported('navigate')) {
       if (options.summarize || options.customInstructions) {
         throw new Error('Kward backend does not support summarized session tree navigation yet.');
       }
@@ -381,7 +383,7 @@ export class KwardClient implements PiClient {
     }
 
     if (options.summarize) {
-      this.requireCapability('sessions.tree.summarize', this.isTreeFeatureSupported('summarize'), 'Kward backend does not support summarized session tree navigation yet.');
+      this.requireCapability('sessions.tree.summarize', this.capabilityResolver.isTreeFeatureSupported('summarize'), 'Kward backend does not support summarized session tree navigation yet.');
     }
 
     const session = await this.ensureSession();
@@ -405,7 +407,7 @@ export class KwardClient implements PiClient {
 
   public async getForkMessages(): Promise<PiForkMessagesResult> {
     await this.ensureInitialized();
-    this.requireCapability('sessions.fork', this.isSessionFeatureSupported('fork'), 'Kward backend does not support session forking yet.');
+    this.requireCapability('sessions.fork', this.capabilityResolver.isSessionFeatureSupported('fork'), 'Kward backend does not support session forking yet.');
     const session = await this.ensureSession();
     const result = await this.request('sessions/forkMessages', { sessionId: requiredString(session.id, 'Kward session id') });
     return normalizeForkMessagesResult(result);
@@ -413,7 +415,7 @@ export class KwardClient implements PiClient {
 
   public async fork(entryId: string): Promise<PiForkResult> {
     await this.ensureInitialized();
-    this.requireCapability('sessions.fork', this.isSessionFeatureSupported('fork'), 'Kward backend does not support session forking yet.');
+    this.requireCapability('sessions.fork', this.capabilityResolver.isSessionFeatureSupported('fork'), 'Kward backend does not support session forking yet.');
     const session = await this.ensureSession();
     const result = normalizeForkResult(await this.request('sessions/fork', {
       sessionId: requiredString(session.id, 'Kward session id'),
@@ -449,6 +451,7 @@ export class KwardClient implements PiClient {
     this.session = undefined;
     this.sessionPromise = undefined;
     this.capabilities = {};
+    this.capabilityResolver = new KwardCapabilityResolver(this.capabilities);
     this.currentTurnId = undefined;
     this.clearExtensionFooter();
     this.eventListeners.clear();
@@ -542,6 +545,7 @@ export class KwardClient implements PiClient {
     this.transport = transport;
     this.initializePromise = this.request('initialize').then((result) => {
       this.capabilities = normalizeInitializeResult(result).capabilities ?? {};
+      this.capabilityResolver = new KwardCapabilityResolver(this.capabilities);
       this.showStartupWarning();
     });
 
@@ -700,55 +704,6 @@ export class KwardClient implements PiClient {
     }
   }
 
-  private isSupportedCapability(groupName: string): boolean {
-    const group = getCapabilityGroup(this.capabilities, groupName);
-    return group === true || (isRecord(group) && group.supported === true);
-  }
-
-  private isMethodSupported(groupName: string, method: string): boolean {
-    const group = getCapabilityGroup(this.capabilities, groupName);
-    if (!isRecord(group)) {
-      return false;
-    }
-
-    const methods = group.methods;
-    return group.supported === true && Array.isArray(methods) && methods.includes(method);
-  }
-
-  private isSessionFeatureSupported(featureName: string): boolean {
-    const sessions = getCapabilityGroup(this.capabilities, 'sessions');
-    const feature = isRecord(sessions) ? sessions[featureName] : undefined;
-    return isRecord(feature) && feature.supported === true;
-  }
-
-  private isTreeFeatureSupported(featureName: 'labels' | 'navigate' | 'summarize'): boolean {
-    const sessions = getCapabilityGroup(this.capabilities, 'sessions');
-    const tree = isRecord(sessions) ? sessions.tree : undefined;
-    return isRecord(tree) && tree.supported === true && tree[featureName] === true;
-  }
-
-  private isRuntimeSettingSupported(settingId: PiSettingId): boolean {
-    const runtimeSettings = getCapabilityGroup(this.capabilities, 'runtimeSettings');
-    if (!isRecord(runtimeSettings) || runtimeSettings.supported !== true) {
-      return false;
-    }
-
-    const settings = runtimeSettings.settings;
-    return Array.isArray(settings) && settings.includes(settingId);
-  }
-
-  private isBusyInputModeSupported(mode: 'steer' | 'followUp'): boolean {
-    const turns = getCapabilityGroup(this.capabilities, 'turns');
-    const busyInput = isRecord(turns) ? turns.busyInput : undefined;
-    const value = isRecord(busyInput) ? busyInput[mode] : undefined;
-    return typeof value === 'string' && value !== 'unsupported';
-  }
-
-  private isAttachmentInputSupported(): boolean {
-    const attachments = getCapabilityGroup(this.capabilities, 'attachments');
-    const input = isRecord(attachments) ? attachments.input : undefined;
-    return isRecord(input) && input.supported === true;
-  }
 
   private async waitForOAuthLogin(loginId: string, callbacks: PiOAuthLoginCallbacks): Promise<KwardOAuthLoginStart> {
     const startedAt = Date.now();
@@ -1313,10 +1268,6 @@ function requiredString(value: string | undefined, label: string): string {
 function isUnknownSessionError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /Unknown session:/i.test(message);
-}
-
-function getCapabilityGroup(capabilities: KwardCapabilities, groupName: string): unknown {
-  return capabilities[groupName];
 }
 
 function getString(record: Record<string, unknown>, key: string): string | undefined {
