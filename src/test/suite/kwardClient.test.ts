@@ -498,6 +498,44 @@ suite('KwardClient', () => {
     }
   });
 
+  test('ignores enabledModels from Kward state when scoped models are unsupported', async () => {
+    const child = new FakeChildProcess();
+    const client = new KwardClient({ kwardPath: createKwardPath() });
+    const spawned = require('node:child_process') as { spawn: unknown };
+    const originalSpawn = spawned.spawn;
+
+    try {
+      spawned.spawn = () => child;
+
+      const statePromise = client.getState();
+
+      await waitForWriteCount(child, 1);
+      assertWrittenRequest(child.writes[0], { method: 'initialize' });
+      respond(client, 1, { capabilities: { models: { supported: true, scopedModels: false } } });
+
+      await waitForWriteCount(child, 2);
+      assertWrittenRequest(child.writes[1], { method: 'sessions/create' });
+      respond(client, 2, { id: 'rpc-session', persistentId: 'persist-session', path: '/tmp/session.jsonl' });
+
+      await waitForWriteCount(child, 3);
+      assertWrittenRequest(child.writes[2], {
+        method: 'runtime/state',
+        params: { sessionId: 'rpc-session' }
+      });
+      respond(client, 3, {
+        rpcSessionId: 'rpc-session',
+        persistentSessionId: 'persist-session',
+        sessionFile: '/tmp/session.jsonl',
+        enabledModels: []
+      });
+
+      assert.strictEqual((await statePromise).enabledModels, undefined);
+    } finally {
+      spawned.spawn = originalSpawn;
+      client.dispose();
+    }
+  });
+
   test('maps active persona label from runtime state', async () => {
     const child = new FakeChildProcess();
     const client = new KwardClient({ kwardPath: createKwardPath() });

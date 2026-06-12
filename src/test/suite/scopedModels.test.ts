@@ -21,6 +21,15 @@ suite('Scoped model webview helpers', () => {
     assert.deepStrictEqual(getScopedModelPickerOptions(state), []);
   });
 
+  test('treats unsupported scoped models as all models enabled', () => {
+    const state = createState(undefined);
+
+    assert.deepStrictEqual(getScopedModelPickerOptions(state).map((model) => `${model.provider}/${model.id}`), [
+      'openai/gpt-test',
+      'anthropic/claude-test'
+    ]);
+  });
+
   test('filters picker options to selected scoped models', () => {
     const state = createState(['anthropic/claude-test']);
 

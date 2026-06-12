@@ -164,7 +164,7 @@ export class KwardClient implements PiClient {
     const session = await this.ensureSession();
     const result = await this.requestForSession('runtime/state', session);
     this.refreshSessionIdentityFromRuntime(result, session);
-    return normalizeSessionState(result, this.session ?? session);
+    return normalizeSessionState(result, this.session ?? session, this.capabilityResolver.isScopedModelsSupported());
   }
 
   public async getSessionStats(): Promise<PiSessionStats> {
@@ -886,7 +886,7 @@ function normalizePromptExpansion(value: unknown): { input?: string } {
   };
 }
 
-function normalizeSessionState(value: unknown, fallbackSession: KwardSession): PiSessionState {
+function normalizeSessionState(value: unknown, fallbackSession: KwardSession, scopedModelsSupported: boolean): PiSessionState {
   if (!isRecord(value)) {
     return {
       sessionFile: fallbackSession.path,
@@ -917,7 +917,7 @@ function normalizeSessionState(value: unknown, fallbackSession: KwardSession): P
     transport: getString(value, 'transport') ?? 'kward-rpc',
     imageAutoResize: getBoolean(value, 'imageAutoResize'),
     blockImages: getBoolean(value, 'blockImages'),
-    enabledModels: getStringArray(value.enabledModels),
+    enabledModels: scopedModelsSupported ? getStringArray(value.enabledModels) : undefined,
     enableSkillCommands: getBoolean(value, 'enableSkillCommands'),
     activePersonaLabel: getString(value, 'activePersonaLabel'),
     messageCount: getNumber(value, 'messageCount'),

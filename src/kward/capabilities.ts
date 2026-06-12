@@ -42,6 +42,11 @@ export class KwardCapabilityResolver {
     return Array.isArray(settings) && settings.includes(settingId);
   }
 
+  public isScopedModelsSupported(): boolean {
+    const models = this.getGroup('models');
+    return isRecord(models) && models.scopedModels === true;
+  }
+
   public isBusyInputModeSupported(mode: 'steer' | 'followUp'): boolean {
     const turns = this.getGroup('turns');
     const busyInput = isRecord(turns) ? turns.busyInput : undefined;
