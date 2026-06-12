@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { Buffer } from 'node:buffer';
+import { resolveKwardLaunch } from './launch';
 
 export type KwardJsonRpcRequest = {
   jsonrpc: '2.0';
@@ -57,8 +58,9 @@ export class KwardRpcTransport {
       throw new Error('Kward RPC transport disposed.');
     }
 
-    const child = spawn('bundle', ['exec', 'ruby', 'lib/main.rb', 'rpc'], {
-      cwd: this.options.cwd,
+    const launch = resolveKwardLaunch(this.options.cwd);
+    const child = spawn(launch.command, launch.args, {
+      cwd: launch.cwd,
       stdio: ['pipe', 'pipe', 'pipe']
     });
     this.process = child;
