@@ -296,6 +296,7 @@ suite('KwardClient', () => {
   test('surfaces Kward footer notifications through the extension footer bridge', async () => {
     const child = new FakeChildProcess();
     const footers: Array<unknown> = [];
+    const footerTexts: Array<string | undefined> = [];
     const client = new KwardClient({
       kwardPath: createKwardPath(),
       extensionUi: {
@@ -303,7 +304,8 @@ suite('KwardClient', () => {
         select: async () => undefined,
         confirm: async () => undefined,
         input: async () => undefined,
-        setFooter: (factory) => footers.push(factory)
+        setFooter: (factory) => footers.push(factory),
+        setFooterText: (text) => footerTexts.push(text)
       }
     });
     const spawned = require('node:child_process') as { spawn: unknown };
@@ -316,18 +318,27 @@ suite('KwardClient', () => {
       await waitForWriteCount(child, 1);
       respond(client, 1, { capabilities: {} });
       await waitForWriteCount(child, 2);
+
+      notify(client, 'ui/footer', { sessionId: 'session-1', text: 'Early Kward footer' });
+      assert.deepStrictEqual(footerTexts, []);
+      assert.deepStrictEqual(footers, []);
+
       respond(client, 2, { id: 'session-1', persistentId: 'persisted-1', path: '/tmp/session.jsonl' });
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.deepStrictEqual(footerTexts, ['Early Kward footer']);
+      assert.deepStrictEqual(footers, []);
+
       await waitForWriteCount(child, 3);
 
       notify(client, 'ui/footer', { sessionId: 'other-session', text: 'Ignored footer' });
-      assert.deepStrictEqual(footers, []);
+      assert.deepStrictEqual(footerTexts, ['Early Kward footer']);
 
       notify(client, 'ui/footer', { sessionId: 'session-1', text: 'Kward footer' });
-      assert.strictEqual(footers.length, 1);
-      assert.deepStrictEqual((footers[0] as () => { render(): string[] })().render(), ['Kward footer']);
+      assert.deepStrictEqual(footerTexts, ['Early Kward footer', 'Kward footer']);
+      assert.deepStrictEqual(footers, []);
 
       notify(client, 'ui/footer', { sessionId: 'session-1', text: '' });
-      assert.deepStrictEqual(footers.slice(1), [undefined]);
+      assert.deepStrictEqual(footerTexts, ['Early Kward footer', 'Kward footer', undefined]);
 
       respond(client, 3, { sessionId: 'persisted-1' });
       await statePromise;

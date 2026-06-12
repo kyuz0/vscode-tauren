@@ -34,6 +34,7 @@ export type ExtensionUi = {
   setStatus?(key: string, text: string | undefined): void;
   clearStatuses?(): void;
   setFooter?(factory: ExtensionFooterFactory | undefined): void;
+  setFooterText?(text: string | undefined): void;
   setWidget?(key: string, content: ExtensionWidgetContent | undefined, options?: ExtensionWidgetSetOptions): void;
   clearWidgets?(): void;
   onTerminalInput?(handler: TerminalInputHandler): () => void;

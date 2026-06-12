@@ -307,6 +307,26 @@ suite('TaurenSessionManager', () => {
     harness.manager.dispose();
   });
 
+  test('updates extension footer text without recreating footer state', async () => {
+    const harness = createManagerHarness([new FakePiClient()]);
+
+    await harness.manager.handleWebviewMessage({ type: 'submit', text: 'hello' });
+
+    const extensionUi = harness.clientOptions[0].extensionUi;
+    assert.ok(extensionUi);
+
+    extensionUi.setFooterText?.('Clock 12:00:01');
+    assert.deepStrictEqual(lastState(harness).extensionFooter, { line: 'Clock 12:00:01' });
+
+    extensionUi.setFooterText?.('Clock 12:00:02');
+    assert.deepStrictEqual(lastState(harness).extensionFooter, { line: 'Clock 12:00:02' });
+    assert.ok(!harness.states.some((state) => state.extensionFooter?.line === ''), 'Footer text updates should not post an empty intermediate footer.');
+
+    extensionUi.setFooterText?.(undefined);
+    assert.strictEqual(lastState(harness).extensionFooter, undefined);
+    harness.manager.dispose();
+  });
+
   test('surfaces extension widgets for the active session', async () => {
     const harness = createManagerHarness([new FakePiClient()]);
 

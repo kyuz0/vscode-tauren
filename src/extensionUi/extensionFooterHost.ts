@@ -22,6 +22,7 @@ type StoredFooter = {
   terminal: ExtensionTerminalDimensions;
   renderTimer: ReturnType<typeof setTimeout> | undefined;
   version: number;
+  textOnly: boolean;
 };
 
 export type ExtensionFooterHostOptions = {
@@ -74,7 +75,8 @@ export class ExtensionFooterHost {
       line: '',
       terminal,
       renderTimer: undefined,
-      version
+      version,
+      textOnly: false
     };
 
     this.footer = footer;
@@ -100,6 +102,37 @@ export class ExtensionFooterHost {
           this.clearFooter();
         }
       });
+  }
+
+  public setText(text: string | undefined): void {
+    if (!text) {
+      this.clearFooter();
+      return;
+    }
+
+    const previous = this.footer;
+    if (previous?.textOnly) {
+      if (previous.line === text) {
+        return;
+      }
+
+      previous.line = text;
+      this.options.onChange();
+      return;
+    }
+
+    const terminal = previous?.terminal ?? { ...defaultTerminalDimensions };
+    this.disposeFooter(previous);
+    this.footerData.stop();
+    this.footer = {
+      component: undefined,
+      line: text,
+      terminal,
+      renderTimer: undefined,
+      version: this.nextVersion++,
+      textOnly: true
+    };
+    this.options.onChange();
   }
 
   public updateDimensions(columns: number, rows: number, cellWidthPx?: number, cellHeightPx?: number): void {

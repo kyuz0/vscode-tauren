@@ -657,6 +657,7 @@ export class TaurenSessionManager {
         }
       },
       setFooter: (factory) => extensionFooterHost.setFooter(factory),
+      setFooterText: (text) => extensionFooterHost.setText(text),
       setWidget: (key, content, options) => {
         if (content === undefined || this.isExtensionWidgetPlacementEnabled(options?.placement)) {
           extensionWidgetHost.setWidget(key, content, options);
