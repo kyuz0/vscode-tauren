@@ -38,6 +38,7 @@
 - Filtered Pi-owned settings from the Kward Settings view unless Kward reports current values for them.
 - Added an empty state for Kward Settings sections with no Kward-supported settings.
 - Added coverage for Kward-specific Settings filtering.
+- Documented experimental Kward backend setup and trusted-local behavior.
 
 ## [1.6.1] - 2026-05-31
 
