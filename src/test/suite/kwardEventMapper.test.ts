@@ -109,8 +109,55 @@ suite('Kward event mapper', () => {
   });
 
   test('maps turn lifecycle events', () => {
+    assert.deepStrictEqual(mapKwardTurnEvent({ type: 'turnQueued', turnId: 'turn-1', payload: { status: 'queued' } }), {
+      type: 'queue_update',
+      turnId: 'turn-1',
+      status: 'queued'
+    });
     assert.deepStrictEqual(mapKwardTurnEvent({ type: 'turnStarted', turnId: 'turn-1' }), { type: 'agent_start', turnId: 'turn-1' });
     assert.deepStrictEqual(mapKwardTurnEvent({ type: 'turnFinished', payload: { status: 'completed' } }), { type: 'agent_end' });
+  });
+
+  test('maps non-streaming Kward turn metadata events without changing transcript text', () => {
+    assert.deepStrictEqual(
+      mapKwardTurnEvent({ type: 'assistantMessage', payload: { message: { role: 'assistant', content: 'Final answer' } } }),
+      {
+        type: 'message_end',
+        message: { role: 'assistant', content: 'Final answer' }
+      }
+    );
+
+    assert.deepStrictEqual(
+      mapKwardTurnEvent({ type: 'modelRetry', payload: { provider: 'Codex', model: 'fake-model', attempt: 2, maxAttempts: 3, delaySeconds: 1, error: '503' } }),
+      {
+        type: 'kward_model_retry',
+        provider: 'Codex',
+        model: 'fake-model',
+        attempt: 2,
+        maxAttempts: 3,
+        delaySeconds: 1,
+        error: '503'
+      }
+    );
+
+    assert.deepStrictEqual(
+      mapKwardTurnEvent({ type: 'turnSteered', payload: { input: 'steer me', createdAt: '2026-06-12T00:00:00Z' } }),
+      {
+        type: 'kward_turn_steered',
+        input: 'steer me',
+        createdAt: '2026-06-12T00:00:00Z'
+      }
+    );
+
+    assert.deepStrictEqual(
+      mapKwardTurnEvent({ type: 'turnCancelRequested', turnId: 'turn-1' }),
+      { type: 'kward_turn_cancel_requested', turnId: 'turn-1' }
+    );
+
+    assert.deepStrictEqual(
+      mapKwardTurnEvent({ type: 'answer', payload: { content: 'Final answer' } }),
+      { type: 'kward_answer', content: 'Final answer' }
+    );
   });
 
   test('maps compaction lifecycle events', () => {

@@ -29,6 +29,7 @@
 - Fixed Kward compaction status updates from the current `session/event` RPC notification channel.
 - Routed Kward Session List deletion through the backend `sessions/delete` RPC method.
 - Closed temporary Kward background RPC sessions through `sessions/close` when supported.
+- Mapped newer Kward turn lifecycle and metadata RPC events into Tauren-compatible events.
 
 ## [1.6.1] - 2026-05-31
 

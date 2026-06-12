@@ -67,6 +67,12 @@ export function mapKwardTurnEvent(event: KwardTurnEvent): PiEvent | undefined {
   const turnId = typeof event.turnId === 'string' ? event.turnId : undefined;
 
   switch (event.type) {
+    case 'turnQueued':
+      return {
+        type: 'queue_update',
+        ...(turnId ? { turnId } : {}),
+        status: getString(payload, 'status') ?? undefined
+      };
     case 'turnStarted':
       return { type: 'agent_start', ...(turnId ? { turnId } : {}) };
     case 'assistantDelta':
@@ -85,6 +91,31 @@ export function mapKwardTurnEvent(event: KwardTurnEvent): PiEvent | undefined {
           contentIndex: 0,
           delta: getString(payload, 'delta') ?? ''
         }
+      };
+    case 'assistantMessage':
+      return {
+        type: 'message_end',
+        message: payload.message
+      };
+    case 'modelRetry':
+      return {
+        type: 'kward_model_retry',
+        ...payload
+      };
+    case 'turnSteered':
+      return {
+        type: 'kward_turn_steered',
+        ...payload
+      };
+    case 'turnCancelRequested':
+      return {
+        type: 'kward_turn_cancel_requested',
+        ...(turnId ? { turnId } : {})
+      };
+    case 'answer':
+      return {
+        type: 'kward_answer',
+        ...payload
       };
     case 'toolCall':
       return mapKwardToolEvent(payload, 'tool_execution_start');
