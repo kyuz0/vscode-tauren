@@ -58,6 +58,44 @@ suite('KwardClient', () => {
     }
   });
 
+  test('warns when Kward initializes with a different RPC protocol version', async () => {
+    const child = new FakeChildProcess();
+    const notifications: Array<{ message: string; notifyType: string }> = [];
+    const client = new KwardClient({
+      kwardPath: createKwardPath(),
+      showNotification: (message, notifyType) => notifications.push({ message, notifyType })
+    });
+    const spawned = require('node:child_process') as { spawn: unknown };
+    const originalSpawn = spawned.spawn;
+
+    try {
+      spawned.spawn = () => child;
+
+      const modelsPromise = client.getAvailableModels();
+      await waitForWriteCount(child, 1);
+      assertWrittenRequest(child.writes[0], { method: 'initialize' });
+      respond(client, 1, { protocolVersion: 2, capabilities: {} });
+
+      await waitForWriteCount(child, 2);
+      respond(client, 2, { models: [] });
+      await modelsPromise;
+
+      assert.deepStrictEqual(notifications, [
+        {
+          message: "Kward RPC protocol version 2 differs from Tauren's supported version 1. Some Kward features may not work as expected.",
+          notifyType: 'warning'
+        },
+        {
+          message: 'Kward backend is experimental. Tauren will warn but will not gate Kward file or shell mutations.',
+          notifyType: 'warning'
+        }
+      ]);
+    } finally {
+      spawned.spawn = originalSpawn;
+      client.dispose();
+    }
+  });
+
   test('answerQuestion initializes and sends ui/answerQuestion without requiring an existing session', async () => {
     const child = new FakeChildProcess();
     const client = new KwardClient({ kwardPath: createKwardPath() });

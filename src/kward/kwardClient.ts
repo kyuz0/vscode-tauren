@@ -66,6 +66,7 @@ export type KwardClientOptions = {
 };
 
 const defaultKwardPath = '/Users/kwood/Repositories/github.com/kaiwood/kward';
+const supportedKwardProtocolVersion = 1;
 const authLoginPollIntervalMs = 1000;
 const authLoginTimeoutSeconds = 120;
 
@@ -88,6 +89,7 @@ export class KwardClient implements PiClient {
   private readonly eventNormalizer = new KwardTurnEventNormalizer();
   private disposed = false;
   private startupWarningShown = false;
+  private protocolWarningShown = false;
   private readonly eventListeners = new Set<(event: PiEvent) => void>();
   private readonly errorListeners = new Set<(message: string) => void>();
 
@@ -495,6 +497,7 @@ export class KwardClient implements PiClient {
     this.capabilities = {};
     this.capabilityResolver = new KwardCapabilityResolver(this.capabilities);
     this.currentTurnId = undefined;
+    this.protocolWarningShown = false;
     this.clearExtensionFooter();
     this.eventListeners.clear();
     this.errorListeners.clear();
@@ -586,8 +589,10 @@ export class KwardClient implements PiClient {
     });
     this.transport = transport;
     this.initializePromise = this.request('initialize').then((result) => {
-      this.capabilities = normalizeInitializeResult(result).capabilities ?? {};
+      const initializeResult = normalizeInitializeResult(result);
+      this.capabilities = initializeResult.capabilities ?? {};
       this.capabilityResolver = new KwardCapabilityResolver(this.capabilities);
+      this.showProtocolWarning(initializeResult);
       this.showStartupWarning();
     });
 
@@ -759,6 +764,18 @@ export class KwardClient implements PiClient {
     }
 
     throw new Error('Login timed out.');
+  }
+
+  private showProtocolWarning(result: KwardInitializeResult): void {
+    if (this.protocolWarningShown || result.protocolVersion === undefined || result.protocolVersion === supportedKwardProtocolVersion) {
+      return;
+    }
+
+    this.protocolWarningShown = true;
+    this.options.showNotification?.(
+      `Kward RPC protocol version ${result.protocolVersion} differs from Tauren's supported version ${supportedKwardProtocolVersion}. Some Kward features may not work as expected.`,
+      'warning'
+    );
   }
 
   private showStartupWarning(): void {
