@@ -8356,7 +8356,9 @@ ${after}`;
         this.appendAuthCards(cards, state2);
       } else {
         for (const definition of getSettingsForSection(section.id)) {
-          cards.append(this.createSettingCard(definition, state2));
+          if (isSettingVisible(definition, state2)) {
+            cards.append(this.createSettingCard(definition, state2));
+          }
         }
       }
       panel.append(cards);
@@ -8717,6 +8719,12 @@ ${after}`;
   function getSettingValue(definition, state2) {
     return state2.settings.values[definition.id] ?? definition.defaultValue;
   }
+  function isSettingVisible(definition, state2) {
+    if (state2.settings.values["tauren.backend"] !== "kward" || definition.owner !== "pi") {
+      return true;
+    }
+    return definition.id in state2.settings.values;
+  }
   function getSettingOptions(definition, state2) {
     if (definition.id === "defaultProvider") {
       const providers = Array.from(new Set(state2.modelOptions.map((model) => model.provider).filter(Boolean)));
@@ -8752,7 +8760,7 @@ ${after}`;
     return providerFilter ? selection.orderedModels.filter((model) => model.provider === providerFilter) : selection.orderedModels;
   }
   function createSettingsSignature(sectionId, state2, scopedModelsProviderFilter) {
-    const values = getSettingsForSection(sectionId).map((definition) => [definition.id, state2.settings.values[definition.id]]);
+    const values = getSettingsForSection(sectionId).filter((definition) => isSettingVisible(definition, state2)).map((definition) => [definition.id, state2.settings.values[definition.id]]);
     const modelOptions = sectionId === "runtime" || sectionId === "scopedModels" ? state2.modelOptions.map((model) => `${model.provider}/${model.id}:${model.name}`).join("|") : "";
     const auth = sectionId === "login" ? state2.auth : void 0;
     const providerFilter = sectionId === "scopedModels" ? scopedModelsProviderFilter : void 0;

@@ -35,6 +35,7 @@
 - Extracted Kward RPC launch resolution in preparation for additional Kward launch modes.
 - Allowed Kward path to point at an executable file launched directly with `rpc`.
 - Clarified Kward path setting copy for source-directory and executable launch modes.
+- Filtered Pi-owned settings from the Kward Settings view unless Kward reports current values for them.
 
 ## [1.6.1] - 2026-05-31
 

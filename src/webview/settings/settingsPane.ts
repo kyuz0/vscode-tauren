@@ -322,7 +322,9 @@ export class SettingsPaneController {
       this.appendAuthCards(cards, state);
     } else {
       for (const definition of getSettingsForSection(section.id)) {
-        cards.append(this.createSettingCard(definition, state));
+        if (isSettingVisible(definition, state)) {
+          cards.append(this.createSettingCard(definition, state));
+        }
       }
     }
 
@@ -775,6 +777,14 @@ function getSettingValue(definition: SettingDefinition, state: WebviewState): Se
   return state.settings.values[definition.id] ?? definition.defaultValue;
 }
 
+function isSettingVisible(definition: SettingDefinition, state: WebviewState): boolean {
+  if (state.settings.values['tauren.backend'] !== 'kward' || definition.owner !== 'pi') {
+    return true;
+  }
+
+  return definition.id in state.settings.values;
+}
+
 function getSettingOptions(definition: SettingDefinition, state: WebviewState): SettingOption[] {
   if (definition.id === 'defaultProvider') {
     const providers = Array.from(new Set(state.modelOptions.map((model) => model.provider).filter(Boolean)));
@@ -829,7 +839,9 @@ function getVisibleScopedModels(
 }
 
 function createSettingsSignature(sectionId: SettingsSection, state: WebviewState, scopedModelsProviderFilter: string | undefined): string {
-  const values = getSettingsForSection(sectionId).map((definition) => [definition.id, state.settings.values[definition.id]]);
+  const values = getSettingsForSection(sectionId)
+    .filter((definition) => isSettingVisible(definition, state))
+    .map((definition) => [definition.id, state.settings.values[definition.id]]);
   const modelOptions = sectionId === 'runtime' || sectionId === 'scopedModels'
     ? state.modelOptions.map((model) => `${model.provider}/${model.id}:${model.name}`).join('|')
     : '';
