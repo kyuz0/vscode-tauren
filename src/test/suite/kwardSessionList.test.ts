@@ -4,7 +4,128 @@ import { tmpdir } from 'os';
 import { join, resolve } from 'path';
 import { listKwardSessions } from '../../kward/sessionList';
 
+type WrittenRequest = {
+  id?: number;
+  method?: string;
+  params?: unknown;
+};
+
+class FakeChildProcess {
+  public readonly stdin = {
+    write: (chunk: Buffer, callback?: (error?: Error | null) => void) => {
+      this.writes.push(chunk);
+      callback?.();
+      return true;
+    },
+    end: () => {}
+  };
+  public readonly stdout = {
+    on: (event: string, handler: (chunk: Buffer) => void) => {
+      if (event === 'data') {
+        this.stdoutDataHandler = handler;
+      }
+    }
+  };
+  public readonly stderr = { on: () => {} };
+  public readonly writes: Buffer[] = [];
+  public killed = false;
+  private stdoutDataHandler: ((chunk: Buffer) => void) | undefined;
+
+  public on(): void {}
+  public kill(): void {
+    this.killed = true;
+  }
+
+  public respond(id: number, result: unknown): void {
+    const body = JSON.stringify({ jsonrpc: '2.0', id, result });
+    this.stdoutDataHandler?.(Buffer.from(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`, 'utf8'));
+  }
+}
+
 suite('Kward session list', () => {
+  test('uses RPC sessions/list when capability is supported', async () => {
+    const child = new FakeChildProcess();
+    const spawned = require('node:child_process') as { spawn: unknown };
+    const originalSpawn = spawned.spawn;
+
+    try {
+      spawned.spawn = () => child;
+
+      const sessionsPromise = listKwardSessions({ cwd: '/workspace', currentSessionFile: '/sessions/one.jsonl', kwardPath: tmpdir() });
+
+      await waitForWriteCount(child, 1);
+      assertWrittenRequest(child.writes[0], { method: 'initialize' });
+      child.respond(1, { capabilities: { sessions: { supported: true, methods: ['sessions/list'] } } });
+
+      await waitForWriteCount(child, 2);
+      assertWrittenRequest(child.writes[1], {
+        method: 'sessions/list',
+        params: { workspaceRoot: '/workspace', limit: 100 }
+      });
+      child.respond(2, {
+        sessions: [
+          {
+            path: '/sessions/one.jsonl',
+            id: 'one',
+            workspaceRoot: '/workspace',
+            createdAt: '2026-01-01T00:00:00Z',
+            modifiedAt: '2026-01-01T00:00:01Z',
+            messageCount: 1,
+            firstMessage: 'Hello'
+          }
+        ]
+      });
+
+      const sessions = await sessionsPromise;
+      assert.deepStrictEqual(sessions.map((session) => ({ path: session.path, current: session.current })), [
+        { path: '/sessions/one.jsonl', current: true }
+      ]);
+    } finally {
+      spawned.spawn = originalSpawn;
+    }
+  });
+
+  test('falls back to local Kward session files when RPC sessions/list is unsupported', async () => {
+    const child = new FakeChildProcess();
+    const dir = await mkdtemp(join(tmpdir(), 'tauren-kward-rpc-list-fallback-'));
+    const originalConfigPath = process.env.KWARD_CONFIG_PATH;
+    const spawned = require('node:child_process') as { spawn: unknown };
+    const originalSpawn = spawned.spawn;
+
+    try {
+      spawned.spawn = () => child;
+      const cwd = join(dir, 'workspace');
+      const configPath = join(dir, '.kward', 'config.json');
+      const sessionDir = join(dir, '.kward', 'sessions', safeCwd(cwd));
+      await mkdir(sessionDir, { recursive: true });
+      process.env.KWARD_CONFIG_PATH = configPath;
+
+      const sessionPath = join(sessionDir, 'local.jsonl');
+      await writeFile(sessionPath, [
+        JSON.stringify({ type: 'session', id: 'local', timestamp: '2026-01-01T00:00:00.000Z', cwd }),
+        JSON.stringify({ type: 'message', message: { role: 'user', content: 'Local fallback' } })
+      ].join('\n') + '\n');
+
+      const sessionsPromise = listKwardSessions({ cwd, kwardPath: tmpdir() });
+
+      await waitForWriteCount(child, 1);
+      assertWrittenRequest(child.writes[0], { method: 'initialize' });
+      child.respond(1, { capabilities: { sessions: { supported: true, methods: [] } } });
+
+      const sessions = await sessionsPromise;
+      assert.deepStrictEqual(sessions.map((session) => session.path), [sessionPath]);
+      assert.strictEqual(child.writes.length, 1);
+    } finally {
+      spawned.spawn = originalSpawn;
+      if (originalConfigPath === undefined) {
+        delete process.env.KWARD_CONFIG_PATH;
+      } else {
+        process.env.KWARD_CONFIG_PATH = originalConfigPath;
+      }
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   test('structures local sessions by parent path', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'tauren-kward-session-tree-'));
     const originalConfigPath = process.env.KWARD_CONFIG_PATH;
@@ -94,6 +215,31 @@ suite('Kward session list', () => {
     }
   });
 });
+
+function assertWrittenRequest(chunk: Buffer, expected: { method: string; params?: unknown }): void {
+  const request = parseWrittenRequest(chunk);
+  assert.strictEqual(request.method, expected.method);
+  if ('params' in expected) {
+    assert.deepStrictEqual(request.params, expected.params);
+  }
+}
+
+function parseWrittenRequest(chunk: Buffer): WrittenRequest {
+  const text = chunk.toString('utf8');
+  const [, body] = text.split('\r\n\r\n');
+  return JSON.parse(body) as WrittenRequest;
+}
+
+async function waitForWriteCount(child: FakeChildProcess, count: number): Promise<void> {
+  for (let index = 0; index < 20; index += 1) {
+    if (child.writes.length >= count) {
+      return;
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  assert.fail(`Expected ${count} writes, saw ${child.writes.length}.`);
+}
 
 function safeCwd(cwd: string): string {
   return `--${resolve(cwd).replace(/^[/\\]/, '').replace(/[/\\:]/g, '-')}--`;

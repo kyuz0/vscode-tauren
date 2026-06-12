@@ -31,6 +31,7 @@
 - Closed temporary Kward background RPC sessions through `sessions/close` when supported.
 - Mapped newer Kward turn lifecycle and metadata RPC events into Tauren-compatible events.
 - Warn when Kward reports an unexpected RPC protocol version during initialization.
+- Capability-gated Kward RPC session listing before falling back to local session files.
 
 ## [1.6.1] - 2026-05-31
 

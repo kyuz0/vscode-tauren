@@ -6,6 +6,7 @@ import type { WebviewSessionItem } from '../webviewProtocol/types';
 import type { SessionListProgressOptions } from '../controller/types';
 import type { RawSessionInfo, SessionTreeNode } from '../sessions/types';
 import { isRecord } from '../shared/typeGuards';
+import { KwardCapabilityResolver } from './capabilities';
 import { KwardRpcTransport } from './rpcTransport';
 
 const defaultKwardPath = '/Users/kwood/Repositories/github.com/kaiwood/kward';
@@ -44,7 +45,13 @@ async function listKwardSessionsViaRpc(options: {
 
   const transport = new KwardRpcTransport({ cwd: resolveKwardPath(options.kwardPath) });
   try {
-    await transport.request('initialize');
+    const initializeResult = await transport.request('initialize');
+    const capabilities = isRecord(initializeResult) && isRecord(initializeResult.capabilities) ? initializeResult.capabilities : {};
+    const capabilityResolver = new KwardCapabilityResolver(capabilities);
+    if (!capabilityResolver.isMethodSupported('sessions', 'sessions/list')) {
+      return undefined;
+    }
+
     const result = await transport.request('sessions/list', { workspaceRoot: options.cwd, limit: 100 });
     return isRecord(result) && Array.isArray(result.sessions)
       ? result.sessions.map(readKwardSessionItemFromRpc).filter(isKwardSessionItem)
