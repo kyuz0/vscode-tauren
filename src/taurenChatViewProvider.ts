@@ -106,6 +106,7 @@ function createConfiguredPiClient(
   if (getBackendSetting() === 'kward') {
     return new KwardClient({
       ...options,
+      extensionUi: options.extensionUi ?? dependencies.extensionUi,
       kwardPath: getKwardPathSetting(),
       showNotification: dependencies.showNotification
     });

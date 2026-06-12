@@ -23,6 +23,7 @@
 - Fixed Kward RPC session switching to use active RPC session IDs and ignore stale old-session responses.
 - Fixed Kward startup session restore so concurrent metadata/history requests share one resumed RPC session.
 - Fixed empty unnamed Kward sessions so they refresh the Session List Lane when left and are not remembered for startup reconnection.
+- Added Tauren bridge handling for Kward RPC footer notifications so Kward plugin footers can render in the Footer.
 
 ## [1.6.1] - 2026-05-31
 

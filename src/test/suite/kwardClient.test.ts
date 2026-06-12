@@ -90,6 +90,50 @@ suite('KwardClient', () => {
     }
   });
 
+  test('surfaces Kward footer notifications through the extension footer bridge', async () => {
+    const child = new FakeChildProcess();
+    const footers: Array<unknown> = [];
+    const client = new KwardClient({
+      kwardPath: createKwardPath(),
+      extensionUi: {
+        notify: () => undefined,
+        select: async () => undefined,
+        confirm: async () => undefined,
+        input: async () => undefined,
+        setFooter: (factory) => footers.push(factory)
+      }
+    });
+    const spawned = require('node:child_process') as { spawn: unknown };
+    const originalSpawn = spawned.spawn;
+
+    try {
+      spawned.spawn = () => child;
+
+      const statePromise = client.getState();
+      await waitForWriteCount(child, 1);
+      respond(client, 1, { capabilities: {} });
+      await waitForWriteCount(child, 2);
+      respond(client, 2, { id: 'session-1', persistentId: 'persisted-1', path: '/tmp/session.jsonl' });
+      await waitForWriteCount(child, 3);
+
+      notify(client, 'ui/footer', { sessionId: 'other-session', text: 'Ignored footer' });
+      assert.deepStrictEqual(footers, []);
+
+      notify(client, 'ui/footer', { sessionId: 'session-1', text: 'Kward footer' });
+      assert.strictEqual(footers.length, 1);
+      assert.deepStrictEqual((footers[0] as () => { render(): string[] })().render(), ['Kward footer']);
+
+      notify(client, 'ui/footer', { sessionId: 'session-1', text: '' });
+      assert.deepStrictEqual(footers.slice(1), [undefined]);
+
+      respond(client, 3, { sessionId: 'persisted-1' });
+      await statePromise;
+    } finally {
+      spawned.spawn = originalSpawn;
+      client.dispose();
+    }
+  });
+
   test('prompt command expansion calls prompts/expand before prompt sends turns/start', async () => {
     const child = new FakeChildProcess();
     const client = new KwardClient({ kwardPath: createKwardPath() });
@@ -446,6 +490,12 @@ function respond(client: KwardClient, id: number, result: unknown): void {
 
 function respondError(client: KwardClient, id: number, messageText: string): void {
   const body = JSON.stringify({ jsonrpc: '2.0', id, error: { message: messageText } });
+  const message = Buffer.from(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`, 'utf8');
+  (client as unknown as { transport: { handleStdout(chunk: Buffer): void } }).transport.handleStdout(message);
+}
+
+function notify(client: KwardClient, method: string, params: unknown): void {
+  const body = JSON.stringify({ jsonrpc: '2.0', method, params });
   const message = Buffer.from(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`, 'utf8');
   (client as unknown as { transport: { handleStdout(chunk: Buffer): void } }).transport.handleStdout(message);
 }

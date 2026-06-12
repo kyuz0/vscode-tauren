@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { PiClient } from '../pi/clientTypes';
+import type { ExtensionUi } from '../extensionUi/types';
 import type {
   PiAvailableCommands,
   PiAgentMessage,
@@ -59,6 +60,7 @@ export type KwardClientOptions = {
   sessionFile?: string;
   kwardPath?: string;
   showNotification?: (message: string, notifyType: string) => void;
+  extensionUi?: ExtensionUi;
 };
 
 const defaultKwardPath = '/Users/kwood/Repositories/github.com/kaiwood/kward';
@@ -79,6 +81,7 @@ export class KwardClient implements PiClient {
   private sessionPromise: Promise<KwardSession> | undefined;
   private capabilities: KwardCapabilities = {};
   private currentTurnId: string | undefined;
+  private kwardFooterText: string | undefined;
   private readonly eventNormalizer = new KwardTurnEventNormalizer();
   private disposed = false;
   private startupWarningShown = false;
@@ -149,6 +152,7 @@ export class KwardClient implements PiClient {
     this.requireCapability('runtime.reload', this.isMethodSupported('runtimeSettings', 'runtime/reload'), 'Kward backend does not support runtime reload yet.');
     const session = await this.ensureSession();
     await this.request('runtime/reload', { sessionId: requiredString(session.id, 'Kward session id') });
+    this.clearExtensionFooter();
   }
 
   public async getState(): Promise<PiSessionState> {
@@ -323,6 +327,7 @@ export class KwardClient implements PiClient {
     const result = await this.request('sessions/resume', { path: sessionPath, workspaceRoot: this.options.cwd });
     this.session = normalizeSession(result);
     this.currentTurnId = undefined;
+    this.clearExtensionFooter();
     return {};
   }
 
@@ -337,6 +342,7 @@ export class KwardClient implements PiClient {
     if (result.session) {
       this.session = result.session;
       this.currentTurnId = undefined;
+      this.clearExtensionFooter();
     }
     return { cancelled: result.cancelled };
   }
@@ -377,6 +383,7 @@ export class KwardClient implements PiClient {
     if (result.session) {
       this.session = result.session;
       this.currentTurnId = undefined;
+      this.clearExtensionFooter();
     }
     return {
       ...(result.editorText ? { editorText: result.editorText } : {}),
@@ -404,6 +411,7 @@ export class KwardClient implements PiClient {
     if (result.session) {
       this.session = result.session;
       this.currentTurnId = undefined;
+      this.clearExtensionFooter();
     }
     return { text: result.text, cancelled: result.cancelled };
   }
@@ -413,6 +421,7 @@ export class KwardClient implements PiClient {
     const result = await this.request('sessions/clone', { sessionId: requiredString(session.id, 'Kward session id') });
     this.session = normalizeSession(result);
     this.currentTurnId = undefined;
+    this.clearExtensionFooter();
     return {};
   }
 
@@ -430,6 +439,7 @@ export class KwardClient implements PiClient {
     this.sessionPromise = undefined;
     this.capabilities = {};
     this.currentTurnId = undefined;
+    this.clearExtensionFooter();
     this.eventListeners.clear();
     this.errorListeners.clear();
   }
@@ -574,6 +584,14 @@ export class KwardClient implements PiClient {
       return;
     }
 
+    if (notification.method === 'ui/footer') {
+      const footer = normalizeFooterUpdate(notification.params);
+      if (footer && (!footer.sessionId || this.isCurrentRpcSession(footer.sessionId))) {
+        this.setExtensionFooter(footer.text);
+      }
+      return;
+    }
+
     if (notification.method === 'auth/loginFinished') {
       return;
     }
@@ -581,6 +599,32 @@ export class KwardClient implements PiClient {
 
   private isCurrentRpcSession(sessionId: string): boolean {
     return this.session?.id === sessionId;
+  }
+
+  private setExtensionFooter(text: string): void {
+    if (!text) {
+      this.clearExtensionFooter();
+      return;
+    }
+
+    if (this.kwardFooterText === text) {
+      return;
+    }
+
+    this.kwardFooterText = text;
+    this.options.extensionUi?.setFooter?.(() => ({
+      render: () => [text],
+      invalidate: () => undefined
+    }));
+  }
+
+  private clearExtensionFooter(): void {
+    if (this.kwardFooterText === undefined) {
+      return;
+    }
+
+    this.kwardFooterText = undefined;
+    this.options.extensionUi?.setFooter?.(undefined);
   }
 
   private refreshSessionIdentityFromRuntime(value: unknown, fallbackSession: KwardSession): void {
@@ -1124,6 +1168,26 @@ function normalizeQuestion(value: unknown): KwardQuestionRequest['questions'][nu
     : [];
 
   return question && header && options.length >= 2 ? { question, header, options } : undefined;
+}
+
+function normalizeFooterUpdate(value: unknown): { sessionId?: string; text: string } | undefined {
+  if (typeof value === 'string') {
+    return { text: value };
+  }
+
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const text = getString(value, 'text') ?? getString(value, 'footer') ?? getString(value, 'line');
+  if (text === undefined) {
+    return undefined;
+  }
+
+  return {
+    sessionId: getString(value, 'sessionId'),
+    text
+  };
 }
 
 function isDefined<T>(value: T | undefined): value is T {
