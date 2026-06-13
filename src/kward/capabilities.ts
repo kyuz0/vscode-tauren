@@ -17,7 +17,7 @@ export class KwardCapabilityResolver {
     }
 
     const methods = group.methods;
-    return group.supported === true && Array.isArray(methods) && methods.includes(method);
+    return group.supported !== false && Array.isArray(methods) && methods.includes(method);
   }
 
   public isSessionFeatureSupported(featureName: string): boolean {

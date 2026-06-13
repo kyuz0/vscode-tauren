@@ -33,6 +33,7 @@
 - Fixed Kward startup session restore so concurrent metadata/history requests share one resumed RPC session.
 - Fixed empty unnamed Kward sessions so they refresh the Session List Lane when left and are not remembered for startup reconnection.
 - Fixed Kward Session List RPC loading to request the full backend list instead of the previous 100-session cap.
+- Fixed Kward session deletion when RPC capabilities list `sessions/delete` without a top-level supported flag.
 - Added Tauren bridge handling for Kward RPC footer notifications so Kward plugin footers can render in the Footer.
 - Fixed Kward compaction status updates from the current `session/event` RPC notification channel.
 - Routed Kward Session List deletion through the backend `sessions/delete` RPC method.

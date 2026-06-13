@@ -15,8 +15,11 @@ suite('KwardCapabilityResolver', () => {
     assert.strictEqual(resolver.isGroupSupported('missing'), false);
   });
 
-  test('requires method lists on supported method groups', () => {
+  test('detects listed methods unless the group is explicitly unsupported', () => {
     const resolver = new KwardCapabilityResolver({
+      sessions: {
+        methods: ['sessions/list', 'sessions/delete']
+      },
       auth: {
         supported: true,
         methods: ['auth/providers', 'auth/loginWithApiKey']
@@ -27,6 +30,8 @@ suite('KwardCapabilityResolver', () => {
       }
     });
 
+    assert.strictEqual(resolver.isMethodSupported('sessions', 'sessions/delete'), true);
+    assert.strictEqual(resolver.isMethodSupported('sessions', 'sessions/rename'), false);
     assert.strictEqual(resolver.isMethodSupported('auth', 'auth/loginWithApiKey'), true);
     assert.strictEqual(resolver.isMethodSupported('auth', 'auth/loginWithOAuth'), false);
     assert.strictEqual(resolver.isMethodSupported('runtimeSettings', 'runtime/reload'), false);

@@ -865,7 +865,7 @@ suite('KwardClient', () => {
 
       await waitForWriteCount(child, 1);
       assertWrittenRequest(child.writes[0], { method: 'initialize' });
-      respond(client, 1, { capabilities: { sessions: { supported: true, methods: ['sessions/delete'] } } });
+      respond(client, 1, { capabilities: { sessions: { methods: ['sessions/delete'] } } });
 
       await waitForWriteCount(child, 2);
       assertWrittenRequest(child.writes[1], {
