@@ -52,9 +52,11 @@ Open-session coordination lives in `src/sessions/taurenSessionManager.ts`, with 
 
 ## Pi transport
 
-Tauren uses the bundled Pi SDK runtime. SDK loading, event mapping, and bridge code live under `src/sdk/` and `src/pi/`.
+Tauren uses a backend-neutral `AgentClient` contract for chat orchestration. The Pi SDK adapter maps Pi runtime behavior into that contract, and the experimental Kward adapter maps Kward RPC behavior into the same contract.
 
-Do not reintroduce `pi --mode rpc` for the main chat UI. The SDK transport is the supported architecture.
+Pi SDK loading, event mapping, and bridge code live under `src/sdk/` and `src/pi/`. Kward RPC transport and protocol adaptation live under `src/kward/`. Shared Tauren-facing backend types live under `src/agent/`.
+
+Do not reintroduce `pi --mode rpc` for the main chat UI. The SDK transport is the supported Pi architecture.
 
 ## Diff lifecycle
 
@@ -69,4 +71,6 @@ Session diff behavior lives under `src/diff/`. Tauren tracks session-specific ch
 
 ## Design rule
 
-Keep ownership boundaries clear. Extension-host code should own VS Code integration, browser code should own DOM interaction, and Pi should remain the source of truth for agent runtime behavior.
+Keep ownership boundaries clear. Extension-host code should own VS Code integration, browser code should own DOM interaction, and the selected backend should remain the source of truth for agent runtime behavior.
+
+Controller and UI code should depend on `AgentClient`/`AgentEvent` rather than concrete Pi or Kward protocol shapes. Pi and Kward protocol adapters should normalize backend-specific events before they leave the adapter.
