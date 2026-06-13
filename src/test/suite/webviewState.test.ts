@@ -210,14 +210,14 @@ suite('Webview state helpers', () => {
     assert.deepStrictEqual(optimistic.extensionWidgets, [{ key: 'widget-1', placement: 'aboveEditor', lines: ['Widget line'] }]);
   });
 
-  test('reserves an empty provisional footer even before live footer content exists', () => {
+  test('does not reserve a provisional footer when no footer UI is present', () => {
     const snapshot = createProvisionalExtensionUiSnapshot(parseWebviewStateMessage({ messages: [], busy: false }));
     const liveWithoutFooter = parseWebviewStateMessage({ messages: [], busy: false });
 
     const preserved = applyProvisionalExtensionUiSnapshot(liveWithoutFooter, snapshot);
 
-    assert.strictEqual(hasPendingProvisionalExtensionUi(preserved.snapshot), true);
-    assert.deepStrictEqual(preserved.state.extensionFooter, { line: '' });
+    assert.strictEqual(hasPendingProvisionalExtensionUi(preserved.snapshot), false);
+    assert.strictEqual(preserved.state.extensionFooter, undefined);
     assert.deepStrictEqual(preserved.state.extensionStatus, []);
   });
 

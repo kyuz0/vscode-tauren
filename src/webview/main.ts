@@ -1353,7 +1353,8 @@ function syncExtensionStatus(hiddenBySurface: boolean, options: { reserveLayout?
         .filter(Boolean)
         .join('  •  ')
     : '';
-  const hasStatusSlot = statusEnabled && (!hiddenBySurface || reserveLayout);
+  const hasStatusContent = placeholderFooter || footerLine !== undefined || text.length > 0;
+  const hasStatusSlot = statusEnabled && hasStatusContent && (!hiddenBySurface || reserveLayout);
   const hasAccessibleText = !hiddenBySurface && text.length > 0 && !placeholderFooter;
 
   composerStatusTextElement.replaceChildren();

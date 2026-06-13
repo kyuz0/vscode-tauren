@@ -131,8 +131,10 @@ export function createOptimisticNewSessionState(previousState: WebviewState): We
 }
 
 export function createProvisionalExtensionUiSnapshot(state: WebviewState): ProvisionalExtensionUiSnapshot {
+  const hasFooterUi = hasExtensionFooterUi(state);
+
   return {
-    extensionFooter: state.extensionFooter ? { ...state.extensionFooter } : { line: '' },
+    extensionFooter: hasFooterUi && state.extensionFooter ? { ...state.extensionFooter } : undefined,
     extensionStatus: state.extensionStatus.map((entry) => ({ ...entry })),
     extensionWidgets: state.extensionWidgets.map((widget) => ({
       ...widget,
@@ -187,7 +189,7 @@ function hasExtensionFooterUi(state: Pick<WebviewState, 'extensionFooter' | 'ext
 }
 
 function shouldReserveExtensionFooter(state: WebviewState): boolean {
-  return state.settings.values['tauren.extensions.statusBarEnabled'] !== false;
+  return state.settings.values['tauren.extensions.statusBarEnabled'] !== false && hasExtensionFooterUi(state);
 }
 
 export function parseWebviewStateMessage(data: unknown, previousState?: WebviewState): WebviewState {

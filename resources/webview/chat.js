@@ -9224,8 +9224,9 @@ ${after}`;
     };
   }
   function createProvisionalExtensionUiSnapshot(state2) {
+    const hasFooterUi = hasExtensionFooterUi(state2);
     return {
-      extensionFooter: state2.extensionFooter ? { ...state2.extensionFooter } : { line: "" },
+      extensionFooter: hasFooterUi && state2.extensionFooter ? { ...state2.extensionFooter } : void 0,
       extensionStatus: state2.extensionStatus.map((entry) => ({ ...entry })),
       extensionWidgets: state2.extensionWidgets.map((widget) => ({
         ...widget,
@@ -9270,7 +9271,7 @@ ${after}`;
     return state2.extensionFooter !== void 0 || state2.extensionStatus.length > 0;
   }
   function shouldReserveExtensionFooter(state2) {
-    return state2.settings.values["tauren.extensions.statusBarEnabled"] !== false;
+    return state2.settings.values["tauren.extensions.statusBarEnabled"] !== false && hasExtensionFooterUi(state2);
   }
   function parseWebviewStateMessage(data, previousState) {
     const record = isRecord(data) ? data : {};
@@ -10717,7 +10718,8 @@ ${after}`;
     const placeholderFooter = provisionalExtensionUiSnapshot?.footerPending === true;
     const footerLine = statusEnabled ? state.extensionFooter?.line : void 0;
     const text = statusEnabled && !placeholderFooter ? footerLine !== void 0 ? footerLine : state.extensionStatus.map((entry) => entry.text.trim()).filter(Boolean).join("  \u2022  ") : "";
-    const hasStatusSlot = statusEnabled && (!hiddenBySurface || reserveLayout);
+    const hasStatusContent = placeholderFooter || footerLine !== void 0 || text.length > 0;
+    const hasStatusSlot = statusEnabled && hasStatusContent && (!hiddenBySurface || reserveLayout);
     const hasAccessibleText = !hiddenBySurface && text.length > 0 && !placeholderFooter;
     composerStatusTextElement.replaceChildren();
     renderAnsiTextInto(composerStatusTextElement, text, state.outputColors, { suppressBackgrounds: true });
