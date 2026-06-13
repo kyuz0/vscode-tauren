@@ -12,7 +12,7 @@ import type { AgentClientOptions } from './agent/types';
 import { PiSdkClient } from './sdk/piSdkClient';
 import { KwardClient } from './kward/kwardClient';
 import type { KwardMemoryAction } from './kward/memoryActions';
-import { listKwardSessions } from './kward/sessionList';
+import { listAgentSessions } from './sessions/agentSessionList';
 import type { CustomUiHostMessage } from './extensionUi/customUiHost';
 import type { ExtensionEditorHostMessage, ExtensionUi } from './extensionUi/types';
 import { createSessionDiffStatsFileWatcher, readSessionDiffSnapshot, writeSessionDiffSnapshot } from './diff/sessionDiffStorage';
@@ -20,7 +20,6 @@ import { SessionDiffViewer } from './diff/sessionDiffViewer';
 import { ShikiCodeRenderer } from './highlighting/shikiCodeRenderer';
 import { TaurenSessionManager } from './sessions/taurenSessionManager';
 import type { PiPromptImageAttachment } from './taurenChatController';
-import { listPiSessions } from './sessions/piSessionList';
 import { runReadyScript } from './readyScript';
 import { createPromptContextFromEditor } from './prompt/editorContext';
 import { supportedPromptImageExtensions } from './prompt/imageAttachments';
@@ -311,20 +310,19 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
   ): Promise<WebviewSessionItem[]> {
     const timer = this.perf.start('sessionList.load');
     let metrics: { sessionCount: number; totalBytes: number; cacheHits: number; cacheMisses: number } | undefined;
-    const sessions = getBackendSetting() === 'kward'
-      ? await listKwardSessions({ cwd, currentSessionFile, kwardPath: getKwardPathSetting(), progress: options })
-      : await listPiSessions({
-        cwd,
-        currentSessionFile,
-        sessionMetadataCacheFile: getSessionMetadataCacheFile(this.sessionMetadataStorageUri),
-        onProgress: options?.onProgress,
-        previousSessions: options?.previousSessions,
-        ...(this.perf.enabled ? {
-          onMetrics: (nextMetrics) => {
-            metrics = nextMetrics;
-          }
-        } : {})
-      });
+    const sessions = await listAgentSessions({
+      backend: getBackendSetting() === 'kward' ? 'kward' : 'pi',
+      cwd,
+      currentSessionFile,
+      sessionMetadataCacheFile: getSessionMetadataCacheFile(this.sessionMetadataStorageUri),
+      onProgress: options?.onProgress,
+      previousSessions: options?.previousSessions,
+      ...(this.perf.enabled ? {
+        onMetrics: (nextMetrics) => {
+          metrics = nextMetrics;
+        }
+      } : {})
+    });
 
     this.perf.finish(timer, {
       sessionCount: metrics?.sessionCount ?? sessions.length,
