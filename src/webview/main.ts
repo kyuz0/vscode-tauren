@@ -682,7 +682,11 @@ function render(): void {
 
     if (!sessionsController.isSessionListNameEditing() && !sessionsController.isSessionSearchFocused()) {
       const activeSessionPane = state.lane === 'tree' ? sessionTreeElement : sessionsElement;
-      requestAnimationFrame(() => activeSessionPane.focus({ preventScroll: true }));
+      requestAnimationFrame(() => {
+        if (document.hasFocus()) {
+          activeSessionPane.focus({ preventScroll: true });
+        }
+      });
     }
 
     return;
