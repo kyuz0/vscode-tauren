@@ -328,7 +328,8 @@ export class SuggestionMenuController {
 
   private getAllSlashCommands(): SlashCommand[] {
     const state = this.options.getState();
-    const commands = [...webviewLocalSlashCommands];
+    const backend = state.settings.values['tauren.backend'];
+    const commands = webviewLocalSlashCommands.filter((command) => command.name !== 'memory' || backend === 'kward');
     const names = new Set([
       ...commands.map((command) => command.name),
       ...webviewHiddenLocalSlashCommandNames

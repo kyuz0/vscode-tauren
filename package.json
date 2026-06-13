@@ -275,6 +275,58 @@
       ],
       "commandPalette": [
         {
+          "command": "tauren.memory.status",
+          "when": "tauren.backend == kward"
+        },
+        {
+          "command": "tauren.memory.enable",
+          "when": "tauren.backend == kward"
+        },
+        {
+          "command": "tauren.memory.disable",
+          "when": "tauren.backend == kward"
+        },
+        {
+          "command": "tauren.memory.toggleAutoSummary",
+          "when": "tauren.backend == kward"
+        },
+        {
+          "command": "tauren.memory.list",
+          "when": "tauren.backend == kward"
+        },
+        {
+          "command": "tauren.memory.add",
+          "when": "tauren.backend == kward"
+        },
+        {
+          "command": "tauren.memory.addCore",
+          "when": "tauren.backend == kward"
+        },
+        {
+          "command": "tauren.memory.forget",
+          "when": "tauren.backend == kward"
+        },
+        {
+          "command": "tauren.memory.promote",
+          "when": "tauren.backend == kward"
+        },
+        {
+          "command": "tauren.memory.relax",
+          "when": "tauren.backend == kward"
+        },
+        {
+          "command": "tauren.memory.inspect",
+          "when": "tauren.backend == kward"
+        },
+        {
+          "command": "tauren.memory.why",
+          "when": "tauren.backend == kward"
+        },
+        {
+          "command": "tauren.memory.summarize",
+          "when": "tauren.backend == kward"
+        },
+        {
           "command": "tauren.showSessionTree"
         },
         {

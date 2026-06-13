@@ -2882,7 +2882,8 @@
     }
     getAllSlashCommands() {
       const state2 = this.options.getState();
-      const commands = [...webviewLocalSlashCommands];
+      const backend = state2.settings.values["tauren.backend"];
+      const commands = webviewLocalSlashCommands.filter((command) => command.name !== "memory" || backend === "kward");
       const names = /* @__PURE__ */ new Set([
         ...commands.map((command) => command.name),
         ...webviewHiddenLocalSlashCommandNames

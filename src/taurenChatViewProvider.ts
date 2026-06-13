@@ -78,6 +78,7 @@ export type { PiClient } from './pi/clientTypes';
 const currentSessionFileStorageKey = 'tauren.currentSessionFile';
 const taurenSidebarFocusContextKey = 'tauren.sidebarFocus';
 const taurenBusyContextKey = 'tauren.busy';
+const taurenBackendContextKey = 'tauren.backend';
 const contextUsagePollingIntervalMs = 2000;
 const sessionDiffStatsRefreshDelayMs = 250;
 const sessionMetadataCacheFileName = 'sessionMetadataCache.json';
@@ -249,6 +250,7 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
 
     this.setSidebarFocusContext(false);
     this.setBusyContext(false);
+    this.setBackendContext();
 
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration((event) => {
@@ -265,6 +267,10 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
 
         if (affectsDebugPerformance) {
           this.debugPerformanceEnabled = getDebugPerformanceSetting();
+        }
+
+        if (event.affectsConfiguration('tauren.backend')) {
+          this.setBackendContext();
         }
 
         if (event.affectsConfiguration('tauren.backend') || event.affectsConfiguration('tauren.kward.path')) {
@@ -1511,6 +1517,10 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
 
     this.busyContext = busy;
     void vscode.commands.executeCommand('setContext', taurenBusyContextKey, busy).then(undefined, () => undefined);
+  }
+
+  private setBackendContext(): void {
+    void vscode.commands.executeCommand('setContext', taurenBackendContextKey, getBackendSetting()).then(undefined, () => undefined);
   }
 
 }
