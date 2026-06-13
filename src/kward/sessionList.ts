@@ -52,7 +52,7 @@ async function listKwardSessionsViaRpc(options: {
       return undefined;
     }
 
-    const result = await transport.request('sessions/list', { workspaceRoot: options.cwd, limit: 100 });
+    const result = await transport.request('sessions/list', { workspaceRoot: options.cwd });
     return isRecord(result) && Array.isArray(result.sessions)
       ? result.sessions.map(readKwardSessionItemFromRpc).filter(isKwardSessionItem)
       : [];

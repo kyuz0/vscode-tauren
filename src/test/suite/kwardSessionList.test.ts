@@ -60,7 +60,7 @@ suite('Kward session list', () => {
       await waitForWriteCount(child, 2);
       assertWrittenRequest(child.writes[1], {
         method: 'sessions/list',
-        params: { workspaceRoot: '/workspace', limit: 100 }
+        params: { workspaceRoot: '/workspace' }
       });
       child.respond(2, {
         sessions: [
@@ -80,6 +80,7 @@ suite('Kward session list', () => {
       assert.deepStrictEqual(sessions.map((session) => ({ path: session.path, current: session.current })), [
         { path: '/sessions/one.jsonl', current: true }
       ]);
+      assert.strictEqual(child.writes.length, 2);
     } finally {
       spawned.spawn = originalSpawn;
     }
