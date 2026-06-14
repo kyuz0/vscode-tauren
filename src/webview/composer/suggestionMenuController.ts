@@ -12,8 +12,10 @@ import {
 } from './fileSuggestions';
 
 type PostMessage = (message: unknown) => void;
-type SuggestionKind = 'slash' | 'file' | 'memory';
-type MemorySuggestion = { command: string; description: string; insertText?: string };
+type SuggestionKind = 'slash' | 'file' | 'commandOption';
+type CommandOptionSuggestion = { command: string; description: string; insertText?: string };
+type CommandOptionProvider = { name: string; source: string; options: CommandOptionSuggestion[] };
+type CommandOptionQuery = { provider: CommandOptionProvider; query: string };
 
 export type SuggestionMenuControllerOptions = {
   getState: () => WebviewState;
@@ -35,8 +37,9 @@ export class SuggestionMenuController {
   private dismissedSlashQuery: string | undefined;
   private slashCommandsRefreshRequested = false;
   private kind: SuggestionKind | undefined;
-  private memoryItems: MemorySuggestion[] = [];
-  private memoryQuery = '';
+  private commandOptionItems: CommandOptionSuggestion[] = [];
+  private commandOptionQuery = '';
+  private commandOptionProvider: CommandOptionProvider | undefined;
   private fileItems: FileSuggestion[] = [];
   private filePrefix = '';
   private fileRequestId = 0;
@@ -60,8 +63,9 @@ export class SuggestionMenuController {
     this.activeIndex = 0;
     this.slashQuery = '';
     this.kind = undefined;
-    this.memoryItems = [];
-    this.memoryQuery = '';
+    this.commandOptionItems = [];
+    this.commandOptionQuery = '';
+    this.commandOptionProvider = undefined;
     this.fileItems = [];
     this.filePrefix = '';
     this.fileLoading = false;
@@ -104,9 +108,9 @@ export class SuggestionMenuController {
     }
 
     const state = this.options.getState();
-    const memoryQuery = this.getMemoryCommandQuery();
+    const commandOptionQuery = this.getCommandOptionQuery();
 
-    if (!this.shouldShowSlashMenu() && memoryQuery === undefined) {
+    if (!this.shouldShowSlashMenu() && commandOptionQuery === undefined) {
       this.close();
       return;
     }
@@ -114,8 +118,8 @@ export class SuggestionMenuController {
     this.options.closeModelMenu();
     this.options.cancelSessionNameEdit();
 
-    if (memoryQuery !== undefined) {
-      this.syncMemoryMenu(memoryQuery);
+    if (commandOptionQuery !== undefined) {
+      this.syncCommandOptionMenu(commandOptionQuery);
       return;
     }
     if (
@@ -135,8 +139,9 @@ export class SuggestionMenuController {
 
     if (this.kind !== 'slash' || query !== this.slashQuery) {
       this.kind = 'slash';
-      this.memoryItems = [];
-      this.memoryQuery = '';
+      this.commandOptionItems = [];
+      this.commandOptionQuery = '';
+      this.commandOptionProvider = undefined;
       this.fileItems = [];
       this.fileLoading = false;
       this.slashQuery = query;
@@ -250,11 +255,11 @@ export class SuggestionMenuController {
       return;
     }
 
-    if (this.kind === 'memory') {
-      const command = this.memoryItems[index];
+    if (this.kind === 'commandOption') {
+      const command = this.commandOptionItems[index];
 
       if (command) {
-        this.acceptMemoryCommand(command);
+        this.acceptCommandOption(command);
       }
 
       return;
@@ -279,8 +284,9 @@ export class SuggestionMenuController {
     if (this.kind !== 'file' || prefix !== this.filePrefix) {
       this.kind = 'file';
       this.slashItems = [];
-      this.memoryItems = [];
-      this.memoryQuery = '';
+      this.commandOptionItems = [];
+      this.commandOptionQuery = '';
+      this.commandOptionProvider = undefined;
       this.fileItems = [];
       this.filePrefix = prefix;
       this.fileLoading = true;
@@ -317,10 +323,10 @@ export class SuggestionMenuController {
       && !Array.from(beforeCursor).some((character) => character.trim().length === 0);
   }
 
-  private getMemoryCommandQuery(): string | undefined {
+  private getCommandOptionQuery(): CommandOptionQuery | undefined {
     const state = this.options.getState();
 
-    if (state.busy || state.settings.values['tauren.backend'] !== 'kward' || document.activeElement !== this.options.textarea) {
+    if (state.busy || document.activeElement !== this.options.textarea) {
       return undefined;
     }
 
@@ -331,13 +337,35 @@ export class SuggestionMenuController {
     }
 
     const beforeCursor = this.options.textarea.value.slice(0, cursor);
-    const match = beforeCursor.match(/^\/memory(?:\s+(.*))?$/i);
+    const match = beforeCursor.match(/^\/([^\s]*)(?:\s+(.*))?$/);
 
     if (!match) {
       return undefined;
     }
 
-    return (match[1] ?? '').toLowerCase();
+    const commandQuery = match[1].toLowerCase();
+
+    if (!commandQuery) {
+      return undefined;
+    }
+
+    const argQuery = (match[2] ?? '').toLowerCase();
+    const matchingProviders = this.getCommandOptionProviders()
+      .filter((provider) => provider.name.startsWith(commandQuery));
+
+    if (matchingProviders.length !== 1) {
+      return undefined;
+    }
+
+    const provider = matchingProviders[0];
+    const matchingCommands = this.getAllSlashCommands()
+      .filter((command) => command.name.toLowerCase().startsWith(commandQuery));
+
+    if (matchingCommands.some((command) => command.name !== provider.name)) {
+      return undefined;
+    }
+
+    return { provider, query: commandQuery === provider.name ? argQuery : '' };
   }
 
   private getSlashCommandQuery(): string {
@@ -398,29 +426,32 @@ export class SuggestionMenuController {
     return commands;
   }
 
-  private syncMemoryMenu(query: string): void {
-    if (this.kind !== 'memory' || query !== this.memoryQuery) {
-      this.kind = 'memory';
+  private syncCommandOptionMenu(optionQuery: CommandOptionQuery): void {
+    const providerChanged = this.commandOptionProvider?.name !== optionQuery.provider.name;
+
+    if (this.kind !== 'commandOption' || providerChanged || optionQuery.query !== this.commandOptionQuery) {
+      this.kind = 'commandOption';
       this.slashItems = [];
       this.fileItems = [];
       this.fileLoading = false;
-      this.memoryQuery = query;
+      this.commandOptionQuery = optionQuery.query;
+      this.commandOptionProvider = optionQuery.provider;
       this.activeIndex = 0;
       this.disablePointerHover();
       this.options.slashMenuElement?.scrollTo({ top: 0 });
     }
 
-    this.memoryItems = this.getFilteredMemoryCommands(query);
-    this.activeIndex = Math.min(this.activeIndex, Math.max(0, this.memoryItems.length - 1));
-    this.renderMemoryMenu(query);
+    this.commandOptionItems = this.getFilteredCommandOptions(optionQuery.provider, optionQuery.query);
+    this.activeIndex = Math.min(this.activeIndex, Math.max(0, this.commandOptionItems.length - 1));
+    this.renderCommandOptionMenu(optionQuery);
     this.openMenu();
   }
 
-  private getFilteredMemoryCommands(query: string): MemorySuggestion[] {
+  private getFilteredCommandOptions(provider: CommandOptionProvider, query: string): CommandOptionSuggestion[] {
     const normalizedQuery = query.trim().toLowerCase();
     const scored = [];
 
-    for (const option of webviewKwardMemoryCommandOptions) {
+    for (const option of provider.options) {
       const command = option.command.toLowerCase();
       const description = option.description.toLowerCase();
       const commandPrefix = command.startsWith(normalizedQuery);
@@ -441,6 +472,17 @@ export class SuggestionMenuController {
       .sort((left, right) => left.score - right.score || left.option.command.localeCompare(right.option.command))
       .slice(0, 8)
       .map((item) => item.option);
+  }
+
+  private getCommandOptionProviders(): CommandOptionProvider[] {
+    const state = this.options.getState();
+    const providers: CommandOptionProvider[] = [];
+
+    if (state.settings.values['tauren.backend'] === 'kward') {
+      providers.push({ name: 'memory', source: 'memory', options: webviewKwardMemoryCommandOptions });
+    }
+
+    return providers;
   }
 
   private renderSlashMenu(query: string): void {
@@ -470,7 +512,7 @@ export class SuggestionMenuController {
     this.syncActiveDescendant();
   }
 
-  private renderMemoryMenu(query: string): void {
+  private renderCommandOptionMenu(optionQuery: CommandOptionQuery): void {
     const slashMenuElement = this.options.slashMenuElement;
 
     if (!slashMenuElement) {
@@ -479,13 +521,13 @@ export class SuggestionMenuController {
 
     slashMenuElement.replaceChildren();
 
-    if (this.memoryItems.length === 0) {
-      slashMenuElement.append(createSlashMenuEmptyElement(query ? 'No matching memory commands' : 'No memory commands available'));
+    if (this.commandOptionItems.length === 0) {
+      slashMenuElement.append(createSlashMenuEmptyElement(optionQuery.query ? `No matching ${optionQuery.provider.source} commands` : `No ${optionQuery.provider.source} commands available`));
       return;
     }
 
-    for (let index = 0; index < this.memoryItems.length; index += 1) {
-      slashMenuElement.append(this.createMemorySuggestionItemElement(this.memoryItems[index], index));
+    for (let index = 0; index < this.commandOptionItems.length; index += 1) {
+      slashMenuElement.append(this.createCommandOptionSuggestionItemElement(optionQuery.provider, this.commandOptionItems[index], index));
     }
 
     this.syncActiveDescendant();
@@ -551,17 +593,17 @@ export class SuggestionMenuController {
     return item;
   }
 
-  private createMemorySuggestionItemElement(command: MemorySuggestion, index: number): HTMLElement {
+  private createCommandOptionSuggestionItemElement(provider: CommandOptionProvider, command: CommandOptionSuggestion, index: number): HTMLElement {
     const item = this.createSuggestionBaseElement(index);
 
     const label = document.createElement('span');
     label.className = 'composer__slash-label';
-    label.textContent = '/memory ' + command.command;
+    label.textContent = '/' + provider.name + ' ' + command.command;
     item.append(label);
 
     const source = document.createElement('span');
     source.className = 'composer__slash-source';
-    source.textContent = 'memory';
+    source.textContent = provider.source;
     item.append(source);
 
     const description = document.createElement('span');
@@ -605,7 +647,7 @@ export class SuggestionMenuController {
 
     this.open = true;
     this.options.slashMenuElement.setAttribute('open', '');
-    this.options.slashMenuElement.setAttribute('aria-label', this.kind === 'file' ? 'File suggestions' : this.kind === 'memory' ? 'Memory commands' : 'Slash commands');
+    this.options.slashMenuElement.setAttribute('aria-label', this.kind === 'file' ? 'File suggestions' : this.kind === 'commandOption' ? 'Slash command options' : 'Slash commands');
     this.options.textarea.setAttribute('aria-expanded', 'true');
     this.syncActiveDescendant();
   }
@@ -621,8 +663,8 @@ export class SuggestionMenuController {
 
     if (this.kind === 'file') {
       this.renderFileMenu(this.filePrefix);
-    } else if (this.kind === 'memory') {
-      this.renderMemoryMenu(this.memoryQuery);
+    } else if (this.kind === 'commandOption' && this.commandOptionProvider) {
+      this.renderCommandOptionMenu({ provider: this.commandOptionProvider, query: this.commandOptionQuery });
     } else {
       this.renderSlashMenu(this.getSlashCommandQuery());
     }
@@ -687,11 +729,11 @@ export class SuggestionMenuController {
       return;
     }
 
-    if (this.kind === 'memory') {
-      const command = this.memoryItems[this.activeIndex];
+    if (this.kind === 'commandOption') {
+      const command = this.commandOptionItems[this.activeIndex];
 
       if (command) {
-        this.acceptMemoryCommand(command);
+        this.acceptCommandOption(command);
       }
 
       return;
@@ -705,7 +747,7 @@ export class SuggestionMenuController {
   }
 
   private getActiveSuggestionCount(): number {
-    return this.kind === 'file' ? this.fileItems.length : this.kind === 'memory' ? this.memoryItems.length : this.slashItems.length;
+    return this.kind === 'file' ? this.fileItems.length : this.kind === 'commandOption' ? this.commandOptionItems.length : this.slashItems.length;
   }
 
   private acceptSlashCommand(command: SlashCommand): void {
@@ -720,12 +762,18 @@ export class SuggestionMenuController {
     this.options.focusPromptInput();
   }
 
-  private acceptMemoryCommand(command: MemorySuggestion): void {
+  private acceptCommandOption(command: CommandOptionSuggestion): void {
+    const provider = this.commandOptionProvider;
+
+    if (!provider) {
+      return;
+    }
+
     const cursor = this.options.textarea.selectionStart;
     const after = this.options.textarea.value.slice(cursor).trimStart();
     const insertText = command.insertText ?? command.command;
-    const value = '/memory ' + insertText + ' ' + after;
-    const nextCursor = insertText.length + 9;
+    const value = '/' + provider.name + ' ' + insertText + ' ' + after;
+    const nextCursor = provider.name.length + insertText.length + 3;
     this.options.textarea.value = value;
     this.options.textarea.setSelectionRange(nextCursor, nextCursor);
     this.close();

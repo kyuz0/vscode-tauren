@@ -2677,8 +2677,9 @@
     dismissedSlashQuery;
     slashCommandsRefreshRequested = false;
     kind;
-    memoryItems = [];
-    memoryQuery = "";
+    commandOptionItems = [];
+    commandOptionQuery = "";
+    commandOptionProvider;
     fileItems = [];
     filePrefix = "";
     fileRequestId = 0;
@@ -2697,8 +2698,9 @@
       this.activeIndex = 0;
       this.slashQuery = "";
       this.kind = void 0;
-      this.memoryItems = [];
-      this.memoryQuery = "";
+      this.commandOptionItems = [];
+      this.commandOptionQuery = "";
+      this.commandOptionProvider = void 0;
       this.fileItems = [];
       this.filePrefix = "";
       this.fileLoading = false;
@@ -2733,15 +2735,15 @@
         return;
       }
       const state2 = this.options.getState();
-      const memoryQuery = this.getMemoryCommandQuery();
-      if (!this.shouldShowSlashMenu() && memoryQuery === void 0) {
+      const commandOptionQuery = this.getCommandOptionQuery();
+      if (!this.shouldShowSlashMenu() && commandOptionQuery === void 0) {
         this.close();
         return;
       }
       this.options.closeModelMenu();
       this.options.cancelSessionNameEdit();
-      if (memoryQuery !== void 0) {
-        this.syncMemoryMenu(memoryQuery);
+      if (commandOptionQuery !== void 0) {
+        this.syncCommandOptionMenu(commandOptionQuery);
         return;
       }
       if (state2.slashCommands.length === 0 && !state2.slashCommandsRefreshing && !this.slashCommandsRefreshRequested) {
@@ -2755,8 +2757,9 @@
       }
       if (this.kind !== "slash" || query !== this.slashQuery) {
         this.kind = "slash";
-        this.memoryItems = [];
-        this.memoryQuery = "";
+        this.commandOptionItems = [];
+        this.commandOptionQuery = "";
+        this.commandOptionProvider = void 0;
         this.fileItems = [];
         this.fileLoading = false;
         this.slashQuery = query;
@@ -2843,10 +2846,10 @@
         }
         return;
       }
-      if (this.kind === "memory") {
-        const command2 = this.memoryItems[index];
+      if (this.kind === "commandOption") {
+        const command2 = this.commandOptionItems[index];
         if (command2) {
-          this.acceptMemoryCommand(command2);
+          this.acceptCommandOption(command2);
         }
         return;
       }
@@ -2865,8 +2868,9 @@
       if (this.kind !== "file" || prefix !== this.filePrefix) {
         this.kind = "file";
         this.slashItems = [];
-        this.memoryItems = [];
-        this.memoryQuery = "";
+        this.commandOptionItems = [];
+        this.commandOptionQuery = "";
+        this.commandOptionProvider = void 0;
         this.fileItems = [];
         this.filePrefix = prefix;
         this.fileLoading = true;
@@ -2895,9 +2899,9 @@
       const beforeCursor = this.options.textarea.value.slice(0, cursor);
       return beforeCursor.startsWith("/") && !Array.from(beforeCursor).some((character) => character.trim().length === 0);
     }
-    getMemoryCommandQuery() {
+    getCommandOptionQuery() {
       const state2 = this.options.getState();
-      if (state2.busy || state2.settings.values["tauren.backend"] !== "kward" || document.activeElement !== this.options.textarea) {
+      if (state2.busy || document.activeElement !== this.options.textarea) {
         return void 0;
       }
       const cursor = this.options.textarea.selectionStart;
@@ -2905,11 +2909,25 @@
         return void 0;
       }
       const beforeCursor = this.options.textarea.value.slice(0, cursor);
-      const match = beforeCursor.match(/^\/memory(?:\s+(.*))?$/i);
+      const match = beforeCursor.match(/^\/([^\s]*)(?:\s+(.*))?$/);
       if (!match) {
         return void 0;
       }
-      return (match[1] ?? "").toLowerCase();
+      const commandQuery = match[1].toLowerCase();
+      if (!commandQuery) {
+        return void 0;
+      }
+      const argQuery = (match[2] ?? "").toLowerCase();
+      const matchingProviders = this.getCommandOptionProviders().filter((provider2) => provider2.name.startsWith(commandQuery));
+      if (matchingProviders.length !== 1) {
+        return void 0;
+      }
+      const provider = matchingProviders[0];
+      const matchingCommands = this.getAllSlashCommands().filter((command) => command.name.toLowerCase().startsWith(commandQuery));
+      if (matchingCommands.some((command) => command.name !== provider.name)) {
+        return void 0;
+      }
+      return { provider, query: commandQuery === provider.name ? argQuery : "" };
     }
     getSlashCommandQuery() {
       return this.options.textarea.value.slice(1, this.options.textarea.selectionStart).toLowerCase();
@@ -2955,26 +2973,28 @@
       }
       return commands;
     }
-    syncMemoryMenu(query) {
-      if (this.kind !== "memory" || query !== this.memoryQuery) {
-        this.kind = "memory";
+    syncCommandOptionMenu(optionQuery) {
+      const providerChanged = this.commandOptionProvider?.name !== optionQuery.provider.name;
+      if (this.kind !== "commandOption" || providerChanged || optionQuery.query !== this.commandOptionQuery) {
+        this.kind = "commandOption";
         this.slashItems = [];
         this.fileItems = [];
         this.fileLoading = false;
-        this.memoryQuery = query;
+        this.commandOptionQuery = optionQuery.query;
+        this.commandOptionProvider = optionQuery.provider;
         this.activeIndex = 0;
         this.disablePointerHover();
         this.options.slashMenuElement?.scrollTo({ top: 0 });
       }
-      this.memoryItems = this.getFilteredMemoryCommands(query);
-      this.activeIndex = Math.min(this.activeIndex, Math.max(0, this.memoryItems.length - 1));
-      this.renderMemoryMenu(query);
+      this.commandOptionItems = this.getFilteredCommandOptions(optionQuery.provider, optionQuery.query);
+      this.activeIndex = Math.min(this.activeIndex, Math.max(0, this.commandOptionItems.length - 1));
+      this.renderCommandOptionMenu(optionQuery);
       this.openMenu();
     }
-    getFilteredMemoryCommands(query) {
+    getFilteredCommandOptions(provider, query) {
       const normalizedQuery = query.trim().toLowerCase();
       const scored = [];
-      for (const option of webviewKwardMemoryCommandOptions) {
+      for (const option of provider.options) {
         const command = option.command.toLowerCase();
         const description = option.description.toLowerCase();
         const commandPrefix = command.startsWith(normalizedQuery);
@@ -2989,6 +3009,14 @@
         });
       }
       return scored.sort((left, right) => left.score - right.score || left.option.command.localeCompare(right.option.command)).slice(0, 8).map((item) => item.option);
+    }
+    getCommandOptionProviders() {
+      const state2 = this.options.getState();
+      const providers = [];
+      if (state2.settings.values["tauren.backend"] === "kward") {
+        providers.push({ name: "memory", source: "memory", options: webviewKwardMemoryCommandOptions });
+      }
+      return providers;
     }
     renderSlashMenu(query) {
       const slashMenuElement2 = this.options.slashMenuElement;
@@ -3010,18 +3038,18 @@
       }
       this.syncActiveDescendant();
     }
-    renderMemoryMenu(query) {
+    renderCommandOptionMenu(optionQuery) {
       const slashMenuElement2 = this.options.slashMenuElement;
       if (!slashMenuElement2) {
         return;
       }
       slashMenuElement2.replaceChildren();
-      if (this.memoryItems.length === 0) {
-        slashMenuElement2.append(createSlashMenuEmptyElement(query ? "No matching memory commands" : "No memory commands available"));
+      if (this.commandOptionItems.length === 0) {
+        slashMenuElement2.append(createSlashMenuEmptyElement(optionQuery.query ? `No matching ${optionQuery.provider.source} commands` : `No ${optionQuery.provider.source} commands available`));
         return;
       }
-      for (let index = 0; index < this.memoryItems.length; index += 1) {
-        slashMenuElement2.append(this.createMemorySuggestionItemElement(this.memoryItems[index], index));
+      for (let index = 0; index < this.commandOptionItems.length; index += 1) {
+        slashMenuElement2.append(this.createCommandOptionSuggestionItemElement(optionQuery.provider, this.commandOptionItems[index], index));
       }
       this.syncActiveDescendant();
     }
@@ -3072,15 +3100,15 @@
       }
       return item;
     }
-    createMemorySuggestionItemElement(command, index) {
+    createCommandOptionSuggestionItemElement(provider, command, index) {
       const item = this.createSuggestionBaseElement(index);
       const label = document.createElement("span");
       label.className = "composer__slash-label";
-      label.textContent = "/memory " + command.command;
+      label.textContent = "/" + provider.name + " " + command.command;
       item.append(label);
       const source = document.createElement("span");
       source.className = "composer__slash-source";
-      source.textContent = "memory";
+      source.textContent = provider.source;
       item.append(source);
       const description = document.createElement("span");
       description.className = "composer__slash-description";
@@ -3115,7 +3143,7 @@
       }
       this.open = true;
       this.options.slashMenuElement.setAttribute("open", "");
-      this.options.slashMenuElement.setAttribute("aria-label", this.kind === "file" ? "File suggestions" : this.kind === "memory" ? "Memory commands" : "Slash commands");
+      this.options.slashMenuElement.setAttribute("aria-label", this.kind === "file" ? "File suggestions" : this.kind === "commandOption" ? "Slash command options" : "Slash commands");
       this.options.textarea.setAttribute("aria-expanded", "true");
       this.syncActiveDescendant();
     }
@@ -3127,8 +3155,8 @@
       this.activeIndex = (this.activeIndex + delta + itemCount) % itemCount;
       if (this.kind === "file") {
         this.renderFileMenu(this.filePrefix);
-      } else if (this.kind === "memory") {
-        this.renderMemoryMenu(this.memoryQuery);
+      } else if (this.kind === "commandOption" && this.commandOptionProvider) {
+        this.renderCommandOptionMenu({ provider: this.commandOptionProvider, query: this.commandOptionQuery });
       } else {
         this.renderSlashMenu(this.getSlashCommandQuery());
       }
@@ -3178,10 +3206,10 @@
         }
         return;
       }
-      if (this.kind === "memory") {
-        const command2 = this.memoryItems[this.activeIndex];
+      if (this.kind === "commandOption") {
+        const command2 = this.commandOptionItems[this.activeIndex];
         if (command2) {
-          this.acceptMemoryCommand(command2);
+          this.acceptCommandOption(command2);
         }
         return;
       }
@@ -3191,7 +3219,7 @@
       }
     }
     getActiveSuggestionCount() {
-      return this.kind === "file" ? this.fileItems.length : this.kind === "memory" ? this.memoryItems.length : this.slashItems.length;
+      return this.kind === "file" ? this.fileItems.length : this.kind === "commandOption" ? this.commandOptionItems.length : this.slashItems.length;
     }
     acceptSlashCommand(command) {
       const cursor = this.options.textarea.selectionStart;
@@ -3204,12 +3232,16 @@
       this.options.syncComposer({ preserveBottom: true });
       this.options.focusPromptInput();
     }
-    acceptMemoryCommand(command) {
+    acceptCommandOption(command) {
+      const provider = this.commandOptionProvider;
+      if (!provider) {
+        return;
+      }
       const cursor = this.options.textarea.selectionStart;
       const after = this.options.textarea.value.slice(cursor).trimStart();
       const insertText = command.insertText ?? command.command;
-      const value = "/memory " + insertText + " " + after;
-      const nextCursor = insertText.length + 9;
+      const value = "/" + provider.name + " " + insertText + " " + after;
+      const nextCursor = provider.name.length + insertText.length + 3;
       this.options.textarea.value = value;
       this.options.textarea.setSelectionRange(nextCursor, nextCursor);
       this.close();
