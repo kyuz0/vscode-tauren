@@ -11,6 +11,7 @@
 
 - Clarified backend-neutral Runtime and Login settings copy while keeping Pi-specific extension settings explicit.
 - Changed Login settings to derive authentication providers from the Pi runtime instead of Tauren-maintained built-in provider metadata.
+- Update Pi-SDK to 0.79.3
 
 ### Fixed
 
