@@ -32,6 +32,7 @@
 - Fixed Kward model picker options when the backend reports scoped model cycling as unsupported.
 - Fixed Kward live reasoning blocks so separated reasoning phases no longer collapse into one transcript entry.
 - Fixed Kward RPC session switching to use active RPC session IDs and ignore stale old-session responses.
+- Recovered Kward metadata reads when the backend has already closed Tauren's cached RPC session.
 - Fixed Kward startup session restore so concurrent metadata/history requests share one resumed RPC session.
 - Fixed explicit Kward new sessions so they bypass backend auto-resume and always create a fresh session.
 - Fixed empty unnamed Kward sessions so they refresh the Session List Lane when left and are not remembered for startup reconnection.

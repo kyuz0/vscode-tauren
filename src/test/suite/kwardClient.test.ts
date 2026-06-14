@@ -725,7 +725,7 @@ suite('KwardClient', () => {
     }
   });
 
-  test('ignores stale Unknown session errors but surfaces current Unknown session errors', async () => {
+  test('ignores stale Unknown session errors but recovers current read requests', async () => {
     const child = new FakeChildProcess();
     const client = new KwardClient({ kwardPath: createKwardPath() });
     const spawned = require('node:child_process') as { spawn: unknown };
@@ -763,7 +763,18 @@ suite('KwardClient', () => {
         params: { sessionId: 'rpc-new' }
       });
       respondError(client, 5, 'Unknown session: rpc-new');
-      await assert.rejects(currentStatsPromise, /Unknown session: rpc-new/);
+
+      await waitForWriteCount(child, 6);
+      assertWrittenRequest(child.writes[5], { method: 'sessions/create', params: {} });
+      respond(client, 6, { id: 'rpc-recovered', persistentId: 'persist-recovered', path: '/tmp/recovered.jsonl' });
+
+      await waitForWriteCount(child, 7);
+      assertWrittenRequest(child.writes[6], {
+        method: 'runtime/stats',
+        params: { sessionId: 'rpc-recovered' }
+      });
+      respond(client, 7, { sessionId: 'persist-recovered' });
+      await currentStatsPromise;
     } finally {
       spawned.spawn = originalSpawn;
       client.dispose();

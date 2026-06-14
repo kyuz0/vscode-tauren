@@ -724,12 +724,34 @@ export class KwardClient implements PiClient {
 
       return result;
     } catch (error) {
-      if (!this.isCurrentRpcSession(sessionId) && isUnknownSessionError(error)) {
+      if (!isUnknownSessionError(error)) {
+        throw error;
+      }
+
+      if (!this.isCurrentRpcSession(sessionId)) {
         throw new StaleKwardSessionRequestError(method, sessionId);
       }
 
-      throw error;
+      if (!isRecoverableSessionReadMethod(method)) {
+        throw error;
+      }
+
+      this.clearCurrentSession(session);
+      const recoveredSession = await this.ensureSession();
+      const recoveredSessionId = requiredString(recoveredSession.id, 'Kward session id');
+      return this.request(method, { sessionId: recoveredSessionId, ...params });
     }
+  }
+
+  private clearCurrentSession(session: KwardSession): void {
+    if (this.session !== session) {
+      return;
+    }
+
+    this.session = undefined;
+    this.sessionPromise = undefined;
+    this.currentTurnId = undefined;
+    this.clearExtensionFooter();
   }
 
   private async requestMemory(method: string, params?: unknown): Promise<unknown> {
@@ -1571,6 +1593,15 @@ function requiredString(value: string | undefined, label: string): string {
 function isUnknownSessionError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /Unknown session:/i.test(message);
+}
+
+function isRecoverableSessionReadMethod(method: string): boolean {
+  return method === 'runtime/state'
+    || method === 'runtime/stats'
+    || method === 'sessions/transcript'
+    || method === 'sessions/tree'
+    || method === 'commands/list'
+    || method === 'resources/startup';
 }
 
 function getString(record: Record<string, unknown>, key: string): string | undefined {
