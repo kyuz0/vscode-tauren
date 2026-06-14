@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-06-14
+
 ### Added
 
 - Added support for the Kward agent: https://github.com/kaiwood/kward
