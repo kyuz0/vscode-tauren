@@ -4,55 +4,23 @@
 
 ### Added
 
-- Added Kward memory management through `/memory ...` and VS Code command palette actions.
-- Added `/memory` Composer Suggestions for Kward memory options.
-- Added Kward-backed Session Tree support with tree labels, navigation, filtering, search, folding, and label timestamp display.
+- Added support for the Kward agent: https://github.com/kaiwood/kward
 - Added a `/restart` command that restarts open backend engines, reconnects persisted sessions, and refreshes session navigation.
-- Added an experimental configurable Kward JSON-RPC backend for Tauren sidebar chat.
 
 ### Changed
 
 - Clarified backend-neutral Runtime and Login settings copy while keeping Pi-specific extension settings explicit.
-- Changed Kward backend launch to use the global `kward rpc` command by default; `tauren.kward.path` now points only to a Kward executable.
-- Changed Kward memory slash command results to appear in the Transcript.
 - Changed Login settings to derive authentication providers from the Pi runtime instead of Tauren-maintained built-in provider metadata.
-- Wired the experimental Kward backend to the expanded RPC parity contract for images, runtime metadata, commands, auth, fork, and session listing.
-- Show Kward's active persona label on new assistant transcript messages when provided by RPC runtime state.
 
 ### Fixed
 
-- Removed the Kward experimental startup popup when opening new Kward sessions.
 - Fixed the Session List Lane and Session Tree Lane so background renders no longer steal focus back from the editor or terminal.
 - Reduced session diff file watcher subprocess churn by ignoring generated/vendor paths and directories during live workspace tracking.
 - Fixed Login settings so API-key providers are shown and filtered with Pi `/login` parity.
 - Fixed session changes so command-generated files and mixed reconstructable/non-reconstructable edits are included more reliably.
 - Fixed external VS Code setting changes so every Tauren-owned setting refreshes the sidebar state immediately.
 - Restricted `@` file suggestions to the active workspace cwd so absolute, home, or traversal prefixes cannot browse outside it.
-- Fixed Kward `ask_user_question` answer delivery and keyboard-friendly question dialog behavior.
-- Fixed Kward Session List Lane refreshes around newly created sessions so first-turn metadata can replace Tauren's temporary fallback row.
 - Hide the Composer Footer when no extension status or footer plugin claims the Footer space.
-- Fixed Kward model and thinking selections so the sidebar updates immediately while slower metadata refreshes continue in the background.
-- Fixed Kward model picker options when the backend reports scoped model cycling as unsupported.
-- Fixed Kward live reasoning blocks so separated reasoning phases no longer collapse into one transcript entry.
-- Fixed Kward RPC session switching to use active RPC session IDs and ignore stale old-session responses.
-- Recovered Kward metadata reads when the backend has already closed Tauren's cached RPC session.
-- Fixed Kward startup session restore so concurrent metadata/history requests share one resumed RPC session.
-- Fixed explicit Kward new sessions so they bypass backend auto-resume and always create a fresh session.
-- Fixed empty unnamed Kward sessions so they refresh the Session List Lane when left and are not remembered for startup reconnection.
-- Fixed Kward Session List RPC loading to request the full backend list instead of the previous 100-session cap.
-- Fixed Kward session deletion when RPC capabilities list `sessions/delete` without a top-level supported flag.
-- Added Tauren bridge handling for Kward RPC footer notifications so Kward plugin footers can render in the Footer.
-- Fixed Kward compaction status updates from the current `session/event` RPC notification channel.
-- Routed Kward Session List deletion through the backend `sessions/delete` RPC method.
-- Closed temporary Kward background RPC sessions through `sessions/close` when supported.
-- Mapped newer Kward turn lifecycle and metadata RPC events into Tauren-compatible events.
-- Warn when Kward reports an unexpected RPC protocol version during initialization.
-- Capability-gated Kward RPC session listing before falling back to local session files.
-- Extracted Kward RPC launch resolution in preparation for additional Kward launch modes.
-- Filtered Pi-owned settings from the Kward Settings view unless Kward reports current values for them.
-- Added an empty state for Kward Settings sections with no Kward-supported settings.
-- Added coverage for Kward-specific Settings filtering.
-- Documented experimental Kward backend setup and trusted-local behavior.
 
 ## [1.6.1] - 2026-05-31
 
