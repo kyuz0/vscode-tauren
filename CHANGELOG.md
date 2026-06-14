@@ -20,6 +20,7 @@
 
 ### Fixed
 
+- Removed the Kward experimental startup popup when opening new Kward sessions.
 - Fixed the Session List Lane and Session Tree Lane so background renders no longer steal focus back from the editor or terminal.
 - Reduced session diff file watcher subprocess churn by ignoring generated/vendor paths and directories during live workspace tracking.
 - Fixed Login settings so API-key providers are shown and filtered with Pi `/login` parity.

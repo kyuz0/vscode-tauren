@@ -84,10 +84,6 @@ suite('KwardClient', () => {
         {
           message: "Kward RPC protocol version 2 differs from Tauren's supported version 1. Some Kward features may not work as expected.",
           notifyType: 'warning'
-        },
-        {
-          message: 'Kward backend is experimental. Tauren will warn but will not gate Kward file or shell mutations.',
-          notifyType: 'warning'
         }
       ]);
     } finally {

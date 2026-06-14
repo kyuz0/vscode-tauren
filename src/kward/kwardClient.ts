@@ -96,7 +96,6 @@ export class KwardClient implements PiClient {
   private readonly pendingKwardFooters = new Map<string, string>();
   private readonly eventNormalizer = new KwardTurnEventNormalizer();
   private disposed = false;
-  private startupWarningShown = false;
   private protocolWarningShown = false;
   private readonly eventListeners = new Set<(event: PiEvent) => void>();
   private readonly errorListeners = new Set<(message: string) => void>();
@@ -706,7 +705,6 @@ export class KwardClient implements PiClient {
       this.capabilities = initializeResult.capabilities ?? {};
       this.capabilityResolver = new KwardCapabilityResolver(this.capabilities);
       this.showProtocolWarning(initializeResult);
-      this.showStartupWarning();
     });
 
     return this.initializePromise;
@@ -943,17 +941,6 @@ export class KwardClient implements PiClient {
     );
   }
 
-  private showStartupWarning(): void {
-    if (this.startupWarningShown) {
-      return;
-    }
-
-    this.startupWarningShown = true;
-    this.options.showNotification?.(
-      'Kward backend is experimental. Tauren will warn but will not gate Kward file or shell mutations.',
-      'warning'
-    );
-  }
 
   private emitEvent(event: PiEvent): void {
     for (const listener of this.eventListeners) {
