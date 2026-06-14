@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Reduced flicker in syntax-highlighted tool boxes by preserving unchanged activity DOM during fast transcript updates.
 - Fixed slash command option suggestions so command-specific options appear before typing a space, such as `/me` showing `/memory list`.
 
 ## [1.7.0] - 2026-06-14

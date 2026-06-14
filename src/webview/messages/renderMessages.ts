@@ -7,6 +7,7 @@ import type { Activity, ChatImage, ChatMessage } from '../types';
 const maxRememberedActivityIds = 1000;
 const activityExpansion = new Map<string, boolean>();
 const activityBodyExpansion = new Map<string, boolean>();
+const activityRenderSignatures = new WeakMap<HTMLElement, string>();
 
 export function toggleActivityBodyExpansion(activityId: string): boolean {
   const next = !activityBodyExpansion.get(activityId);
@@ -292,14 +293,188 @@ function createCopyButtonElement(messageIndex: number): HTMLElement {
 }
 
 function createActivityListElement(activities: Activity[], messageIndex: number | undefined, options: MessageRenderOptions): HTMLElement {
-  const list = document.createElement('div');
-  list.className = 'activity-list';
+  const list = createActivityListShell();
 
   for (const activity of activities) {
-    list.append(createActivityElement(activity, messageIndex, options));
+    list.append(createTrackedActivityElement(activity, messageIndex, options));
   }
 
   return list;
+}
+
+export function updateMessageActivitiesElement(
+  article: HTMLElement,
+  message: ChatMessage,
+  messageIndex: number | undefined,
+  options: MessageRenderOptions = {}
+): boolean {
+  const activities = Array.isArray(message.activities) ? message.activities : [];
+
+  if (message.variant === 'branchSummary' || message.variant === 'compactionSummary') {
+    return activities.length === 0;
+  }
+
+  updateMessageBodyActivityClass(article, activities.length > 0);
+  const existingList = getDirectActivityListElement(article);
+
+  if (activities.length === 0) {
+    existingList?.remove();
+    return true;
+  }
+
+  const list = existingList ?? createActivityListShell();
+  updateActivityListElement(list, activities, messageIndex, options);
+
+  if (!existingList) {
+    article.insertBefore(list, getActivityListInsertionReference(article));
+  }
+
+  return true;
+}
+
+function createActivityListShell(): HTMLElement {
+  const list = document.createElement('div');
+  list.className = 'activity-list';
+  return list;
+}
+
+function updateActivityListElement(list: HTMLElement, activities: Activity[], messageIndex: number | undefined, options: MessageRenderOptions): void {
+  const existingById = getExistingActivityElementsById(list);
+  const reusedIds = new Set<string>();
+
+  for (const [index, activity] of activities.entries()) {
+    const activityId = getActivityRenderId(activity);
+    const signature = getActivityRenderSignature(activity, messageIndex, options);
+    const reusable = activityId ? existingById.get(activityId) : undefined;
+    const element = reusable
+      && !reusedIds.has(activityId)
+      && activityRenderSignatures.get(reusable) === signature
+      ? reusable
+      : createTrackedActivityElement(activity, messageIndex, options, signature);
+
+    if (activityId) {
+      reusedIds.add(activityId);
+    }
+
+    const currentNode = list.children[index];
+
+    if (currentNode !== element) {
+      list.insertBefore(element, currentNode ?? null);
+    }
+  }
+
+  while (list.children.length > activities.length) {
+    list.children[activities.length]?.remove();
+  }
+}
+
+function createTrackedActivityElement(
+  activity: Activity,
+  messageIndex: number | undefined,
+  options: MessageRenderOptions,
+  signature = getActivityRenderSignature(activity, messageIndex, options)
+): HTMLElement {
+  const element = createActivityElement(activity, messageIndex, options);
+  const activityId = getActivityRenderId(activity);
+
+  if (activityId) {
+    element.dataset.activityRenderId = activityId;
+  }
+
+  activityRenderSignatures.set(element, signature);
+  return element;
+}
+
+function getExistingActivityElementsById(list: HTMLElement): Map<string, HTMLElement> {
+  const elements = new Map<string, HTMLElement>();
+
+  for (const child of Array.from(list.children)) {
+    if (!(child instanceof HTMLElement) || !child.classList.contains('activity')) {
+      continue;
+    }
+
+    const activityId = child.dataset.activityRenderId;
+
+    if (activityId && !elements.has(activityId)) {
+      elements.set(activityId, child);
+    }
+  }
+
+  return elements;
+}
+
+function getDirectActivityListElement(article: HTMLElement): HTMLElement | undefined {
+  for (const child of Array.from(article.children)) {
+    if (child instanceof HTMLElement && child.classList.contains('activity-list')) {
+      return child;
+    }
+  }
+
+  return undefined;
+}
+
+function updateMessageBodyActivityClass(article: HTMLElement, hasActivities: boolean): void {
+  const body = getDirectMessageBodyElement(article);
+  body?.classList.toggle('message__body--after-activities', hasActivities);
+}
+
+function getActivityListInsertionReference(article: HTMLElement): ChildNode | null {
+  for (const child of Array.from(article.children)) {
+    if (child instanceof HTMLElement && (child.classList.contains('message__body') || child.classList.contains('message__actions'))) {
+      return child;
+    }
+  }
+
+  return null;
+}
+
+function getActivityRenderId(activity: Activity): string {
+  return typeof activity.id === 'string' ? activity.id : '';
+}
+
+function getActivityRenderSignature(activity: Activity, messageIndex: number | undefined, options: MessageRenderOptions): string {
+  return [
+    messageIndex ?? '',
+    getActivityRenderId(activity),
+    activity.kind ?? '',
+    activity.status ?? '',
+    activity.title ?? '',
+    activity.summary ?? '',
+    activity.body ?? '',
+    activity.expandedBody ?? '',
+    activity.code ? 'code' : '',
+    isActivityBodyExpanded(activity, getActivityRenderId(activity)) ? 'expanded' : 'collapsed',
+    options.outputColors !== false ? 'colors' : 'plain',
+    options.animationsEnabled !== false ? 'animated' : 'static',
+    options.allowRemoteImages === true ? 'remote' : 'local',
+    getImagesSignature(activity.images)
+  ].join('\u0000');
+}
+
+function isActivityBodyExpanded(activity: Activity, activityId: string): boolean {
+  const isCollapsibleCompactionOutput = activity.kind === 'compaction' && !activity.code;
+  const bodyCanVisuallyExpand = Boolean(activityId && (activity.code || isCollapsibleCompactionOutput));
+  return Boolean(activityId && activityBodyExpansion.get(activityId) && (activity.expandedBody || bodyCanVisuallyExpand));
+}
+
+function getImagesSignature(images: ChatImage[] | undefined): string {
+  if (!Array.isArray(images) || images.length === 0) {
+    return '';
+  }
+
+  return images.map((image) => {
+    const data = typeof image.data === 'string' ? image.data : '';
+    const prefix = data.slice(0, 32);
+    const suffix = data.length > 32 ? data.slice(-32) : '';
+    return [
+      image.type ?? '',
+      image.mimeType ?? '',
+      image.alt ?? '',
+      data.length,
+      prefix,
+      suffix
+    ].join('\u0000');
+  }).join('\u0001');
 }
 
 function createActivityElement(activity: Activity, messageIndex: number | undefined, options: MessageRenderOptions): HTMLElement {
@@ -345,7 +520,7 @@ function createActivityElement(activity: Activity, messageIndex: number | undefi
   if (typeof activity.body === 'string' && activity.body.length > 0) {
     const isCollapsibleCompactionOutput = activity.kind === 'compaction' && !activity.code;
     const bodyCanVisuallyExpand = Boolean(activityId && (activity.code || isCollapsibleCompactionOutput));
-    const bodyExpanded = Boolean(activityId && activityBodyExpansion.get(activityId) && (activity.expandedBody || bodyCanVisuallyExpand));
+    const bodyExpanded = isActivityBodyExpanded(activity, activityId);
     const bodyText = bodyExpanded && typeof activity.expandedBody === 'string' ? activity.expandedBody : activity.body;
     const body = document.createElement(activity.code ? 'pre' : 'div');
     body.className = `activity__body${activity.code ? ' activity__body--code' : ' activity__body--markdown'}${isCollapsibleCompactionOutput ? ' activity__body--compaction' : ''}${bodyExpanded ? ' activity__body--expanded' : ''}`;

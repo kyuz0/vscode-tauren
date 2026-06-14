@@ -4081,6 +4081,7 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
   var maxRememberedActivityIds = 1e3;
   var activityExpansion = /* @__PURE__ */ new Map();
   var activityBodyExpansion = /* @__PURE__ */ new Map();
+  var activityRenderSignatures = /* @__PURE__ */ new WeakMap();
   function toggleActivityBodyExpansion(activityId) {
     const next = !activityBodyExpansion.get(activityId);
     activityBodyExpansion.set(activityId, next);
@@ -4286,12 +4287,140 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
     return actions;
   }
   function createActivityListElement(activities, messageIndex, options) {
-    const list = document.createElement("div");
-    list.className = "activity-list";
+    const list = createActivityListShell();
     for (const activity of activities) {
-      list.append(createActivityElement(activity, messageIndex, options));
+      list.append(createTrackedActivityElement(activity, messageIndex, options));
     }
     return list;
+  }
+  function updateMessageActivitiesElement(article, message, messageIndex, options = {}) {
+    const activities = Array.isArray(message.activities) ? message.activities : [];
+    if (message.variant === "branchSummary" || message.variant === "compactionSummary") {
+      return activities.length === 0;
+    }
+    updateMessageBodyActivityClass(article, activities.length > 0);
+    const existingList = getDirectActivityListElement(article);
+    if (activities.length === 0) {
+      existingList?.remove();
+      return true;
+    }
+    const list = existingList ?? createActivityListShell();
+    updateActivityListElement(list, activities, messageIndex, options);
+    if (!existingList) {
+      article.insertBefore(list, getActivityListInsertionReference(article));
+    }
+    return true;
+  }
+  function createActivityListShell() {
+    const list = document.createElement("div");
+    list.className = "activity-list";
+    return list;
+  }
+  function updateActivityListElement(list, activities, messageIndex, options) {
+    const existingById = getExistingActivityElementsById(list);
+    const reusedIds = /* @__PURE__ */ new Set();
+    for (const [index, activity] of activities.entries()) {
+      const activityId = getActivityRenderId(activity);
+      const signature = getActivityRenderSignature(activity, messageIndex, options);
+      const reusable = activityId ? existingById.get(activityId) : void 0;
+      const element = reusable && !reusedIds.has(activityId) && activityRenderSignatures.get(reusable) === signature ? reusable : createTrackedActivityElement(activity, messageIndex, options, signature);
+      if (activityId) {
+        reusedIds.add(activityId);
+      }
+      const currentNode = list.children[index];
+      if (currentNode !== element) {
+        list.insertBefore(element, currentNode ?? null);
+      }
+    }
+    while (list.children.length > activities.length) {
+      list.children[activities.length]?.remove();
+    }
+  }
+  function createTrackedActivityElement(activity, messageIndex, options, signature = getActivityRenderSignature(activity, messageIndex, options)) {
+    const element = createActivityElement(activity, messageIndex, options);
+    const activityId = getActivityRenderId(activity);
+    if (activityId) {
+      element.dataset.activityRenderId = activityId;
+    }
+    activityRenderSignatures.set(element, signature);
+    return element;
+  }
+  function getExistingActivityElementsById(list) {
+    const elements = /* @__PURE__ */ new Map();
+    for (const child of Array.from(list.children)) {
+      if (!(child instanceof HTMLElement) || !child.classList.contains("activity")) {
+        continue;
+      }
+      const activityId = child.dataset.activityRenderId;
+      if (activityId && !elements.has(activityId)) {
+        elements.set(activityId, child);
+      }
+    }
+    return elements;
+  }
+  function getDirectActivityListElement(article) {
+    for (const child of Array.from(article.children)) {
+      if (child instanceof HTMLElement && child.classList.contains("activity-list")) {
+        return child;
+      }
+    }
+    return void 0;
+  }
+  function updateMessageBodyActivityClass(article, hasActivities) {
+    const body = getDirectMessageBodyElement(article);
+    body?.classList.toggle("message__body--after-activities", hasActivities);
+  }
+  function getActivityListInsertionReference(article) {
+    for (const child of Array.from(article.children)) {
+      if (child instanceof HTMLElement && (child.classList.contains("message__body") || child.classList.contains("message__actions"))) {
+        return child;
+      }
+    }
+    return null;
+  }
+  function getActivityRenderId(activity) {
+    return typeof activity.id === "string" ? activity.id : "";
+  }
+  function getActivityRenderSignature(activity, messageIndex, options) {
+    return [
+      messageIndex ?? "",
+      getActivityRenderId(activity),
+      activity.kind ?? "",
+      activity.status ?? "",
+      activity.title ?? "",
+      activity.summary ?? "",
+      activity.body ?? "",
+      activity.expandedBody ?? "",
+      activity.code ? "code" : "",
+      isActivityBodyExpanded(activity, getActivityRenderId(activity)) ? "expanded" : "collapsed",
+      options.outputColors !== false ? "colors" : "plain",
+      options.animationsEnabled !== false ? "animated" : "static",
+      options.allowRemoteImages === true ? "remote" : "local",
+      getImagesSignature(activity.images)
+    ].join("\0");
+  }
+  function isActivityBodyExpanded(activity, activityId) {
+    const isCollapsibleCompactionOutput = activity.kind === "compaction" && !activity.code;
+    const bodyCanVisuallyExpand = Boolean(activityId && (activity.code || isCollapsibleCompactionOutput));
+    return Boolean(activityId && activityBodyExpansion.get(activityId) && (activity.expandedBody || bodyCanVisuallyExpand));
+  }
+  function getImagesSignature(images) {
+    if (!Array.isArray(images) || images.length === 0) {
+      return "";
+    }
+    return images.map((image) => {
+      const data = typeof image.data === "string" ? image.data : "";
+      const prefix = data.slice(0, 32);
+      const suffix = data.length > 32 ? data.slice(-32) : "";
+      return [
+        image.type ?? "",
+        image.mimeType ?? "",
+        image.alt ?? "",
+        data.length,
+        prefix,
+        suffix
+      ].join("\0");
+    }).join("");
   }
   function createActivityElement(activity, messageIndex, options) {
     const details = document.createElement("details");
@@ -4324,7 +4453,7 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
     if (typeof activity.body === "string" && activity.body.length > 0) {
       const isCollapsibleCompactionOutput = activity.kind === "compaction" && !activity.code;
       const bodyCanVisuallyExpand = Boolean(activityId && (activity.code || isCollapsibleCompactionOutput));
-      const bodyExpanded = Boolean(activityId && activityBodyExpansion.get(activityId) && (activity.expandedBody || bodyCanVisuallyExpand));
+      const bodyExpanded = isActivityBodyExpanded(activity, activityId);
       const bodyText = bodyExpanded && typeof activity.expandedBody === "string" ? activity.expandedBody : activity.body;
       const body = document.createElement(activity.code ? "pre" : "div");
       body.className = `activity__body${activity.code ? " activity__body--code" : " activity__body--markdown"}${isCollapsibleCompactionOutput ? " activity__body--compaction" : ""}${bodyExpanded ? " activity__body--expanded" : ""}`;
@@ -4609,7 +4738,6 @@ ${after}`;
       this.renderedMessageViews.length = state2.messages.length;
       pruneActivityRenderState(getActiveActivityIds(state2.messages));
       pruneDisconnectedMessageRenderState();
-      requestCodeHighlightsIn(this.options.messagesContentElement);
     }
     syncBusyStatus() {
       const state2 = this.options.getState();
@@ -4817,30 +4945,28 @@ ${after}`;
     renderMessageAtIndex(index, message, showRole) {
       const state2 = this.options.getState();
       const existingView = this.renderedMessageViews[index];
-      const activitiesSignature = this.getActivitiesSignature(message);
       const imagesSignature = this.getImagesSignature(message);
       const copyable = canCopyAssistantMessage2(message);
+      const hasBody = shouldRenderMessageBody(message);
       const animateFromText = this.getStreamingAnimationStartText(existingView, message, index);
-      if (existingView && canReuseMessageElement(existingView, message, showRole, activitiesSignature, imagesSignature, state2.allowRemoteImages, copyable)) {
+      if (existingView && canReuseMessageElement(existingView, message, showRole, imagesSignature, state2.allowRemoteImages, copyable, hasBody)) {
+        const renderOptions = {
+          ...animateFromText === void 0 ? {} : { animateFromText },
+          outputColors: state2.outputColors,
+          animationsEnabled: state2.animationsEnabled,
+          allowRemoteImages: state2.allowRemoteImages
+        };
         if ((existingView.message.text || "") !== (message.text || "") || existingView.imagesSignature !== imagesSignature) {
-          updateMessageBodyElement(
-            existingView.element,
-            message,
-            {
-              ...animateFromText === void 0 ? {} : { animateFromText },
-              outputColors: state2.outputColors,
-              animationsEnabled: state2.animationsEnabled,
-              allowRemoteImages: state2.allowRemoteImages
-            }
-          );
-          pruneDisconnectedMessageRenderState();
+          updateMessageBodyElement(existingView.element, message, renderOptions);
         }
+        updateMessageActivitiesElement(existingView.element, message, index, renderOptions);
+        pruneDisconnectedMessageRenderState();
         existingView.message = message;
         existingView.showRole = showRole;
-        existingView.activitiesSignature = activitiesSignature;
         existingView.imagesSignature = imagesSignature;
         existingView.allowRemoteImages = state2.allowRemoteImages;
         existingView.copyable = copyable;
+        existingView.hasBody = hasBody;
         return existingView;
       }
       const nextView = {
@@ -4857,10 +4983,10 @@ ${after}`;
         ),
         message,
         showRole,
-        activitiesSignature,
         imagesSignature,
         allowRemoteImages: state2.allowRemoteImages,
-        copyable
+        copyable,
+        hasBody
       };
       existingView?.element.replaceWith(nextView.element);
       this.renderedMessageViews[index] = nextView;
@@ -4888,15 +5014,14 @@ ${after}`;
         ),
         message: state2.messages[index],
         showRole,
-        activitiesSignature: this.getActivitiesSignature(state2.messages[index]),
         imagesSignature: this.getImagesSignature(state2.messages[index]),
         allowRemoteImages: state2.allowRemoteImages,
-        copyable: canCopyAssistantMessage2(state2.messages[index])
+        copyable: canCopyAssistantMessage2(state2.messages[index]),
+        hasBody: shouldRenderMessageBody(state2.messages[index])
       };
       existingView.element.replaceWith(nextView.element);
       this.renderedMessageViews[index] = nextView;
       pruneDisconnectedMessageRenderState();
-      requestCodeHighlightsIn(nextView.element);
     }
     getStreamingAnimationStartText(existingView, message, index) {
       if (!existingView || !this.shouldAnimateStreamingAppend(existingView.message, message, index)) {
@@ -4910,20 +5035,8 @@ ${after}`;
       const nextText = next.text || "";
       return state2.busy && index === state2.messages.length - 1 && previous.role === "assistant" && next.role === "assistant" && !previous.error && !next.error && previous.variant !== "thinking" && next.variant !== "thinking" && nextText.length > previousText.length && nextText.startsWith(previousText);
     }
-    getActivitiesSignature(message) {
-      const state2 = this.options.getState();
-      if (!Array.isArray(message.activities) || message.activities.length === 0) {
-        return "";
-      }
-      return [
-        state2.outputColors ? "colors" : "plain",
-        state2.animationsEnabled ? "animated" : "static",
-        state2.allowRemoteImages ? "remote" : "local",
-        ...message.activities.map(getActivitySignature)
-      ].join("");
-    }
     getImagesSignature(message) {
-      return getImagesSignature(message.images);
+      return getImagesSignature2(message.images);
     }
     getBusyStatusText() {
       const activity = this.getLatestRunningActivity();
@@ -5047,20 +5160,7 @@ ${after}`;
     }
     return container.childElementCount > 0 ? container : void 0;
   }
-  function getActivitySignature(activity) {
-    return [
-      activity.id ?? "",
-      activity.kind ?? "",
-      activity.status ?? "",
-      activity.title ?? "",
-      activity.summary ?? "",
-      activity.body ?? "",
-      activity.expandedBody ?? "",
-      activity.code ? "code" : "",
-      getImagesSignature(activity.images)
-    ].join("\0");
-  }
-  function getImagesSignature(images) {
+  function getImagesSignature2(images) {
     if (!Array.isArray(images) || images.length === 0) {
       return "";
     }
@@ -5078,8 +5178,21 @@ ${after}`;
       ].join("\0");
     }).join("");
   }
-  function canReuseMessageElement(view, message, showRole, activitiesSignature, imagesSignature, allowRemoteImages, copyable) {
-    return view.message.role === message.role && Boolean(view.message.error) === Boolean(message.error) && (view.message.variant || "") === (message.variant || "") && view.showRole === showRole && view.activitiesSignature === activitiesSignature && view.imagesSignature === imagesSignature && view.allowRemoteImages === allowRemoteImages && view.copyable === copyable;
+  function canReuseMessageElement(view, message, showRole, imagesSignature, allowRemoteImages, copyable, hasBody) {
+    return view.message.role === message.role && Boolean(view.message.error) === Boolean(message.error) && (view.message.variant || "") === (message.variant || "") && view.showRole === showRole && view.imagesSignature === imagesSignature && view.allowRemoteImages === allowRemoteImages && view.copyable === copyable && view.hasBody === hasBody;
+  }
+  function shouldRenderMessageBody(message) {
+    const activities = Array.isArray(message.activities) ? message.activities : [];
+    return Boolean(message.text || message.error || hasRenderableImages(message.images) || activities.length === 0);
+  }
+  function hasRenderableImages(images) {
+    if (!Array.isArray(images)) {
+      return false;
+    }
+    return images.some((image) => {
+      const mimeType = typeof image.mimeType === "string" ? image.mimeType.toLowerCase() : "";
+      return image.type === "image" && typeof image.data === "string" && Boolean(image.data) && (mimeType === "image/png" || mimeType === "image/jpeg" || mimeType === "image/gif" || mimeType === "image/webp");
+    });
   }
   function getActiveActivityIds(messages) {
     const ids = /* @__PURE__ */ new Set();

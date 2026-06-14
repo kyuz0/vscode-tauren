@@ -1,11 +1,11 @@
-import { pruneDisconnectedCodeHighlights, requestCodeHighlightsIn } from '../codeHighlighting';
+import { pruneDisconnectedCodeHighlights } from '../codeHighlighting';
 import { messagesBottomThreshold } from '../constants';
 import { eventTargetElement } from '../dom';
 import { getAgentRuntimeWorkingText } from '../../shared/agentRuntimeLabels';
 import { isHttpUrl } from '../../shared/url';
 import { pruneDisconnectedLocalImageRequests } from './markdown';
 import { shouldRenderQuietEmptyTranscript } from './renderPolicy';
-import { createMessageElement, getActivityBodyExpansion, pruneActivityRenderState, setActivityBodyExpansion, toggleActivityBodyExpansion, updateMessageBodyElement } from './renderMessages';
+import { createMessageElement, getActivityBodyExpansion, pruneActivityRenderState, setActivityBodyExpansion, toggleActivityBodyExpansion, updateMessageActivitiesElement, updateMessageBodyElement } from './renderMessages';
 import {
   createScrollFollowState,
   isScrollAtBottom,
@@ -22,10 +22,10 @@ type RenderedMessageView = {
   element: HTMLElement;
   message: ChatMessage;
   showRole: boolean;
-  activitiesSignature: string;
   imagesSignature: string;
   allowRemoteImages: boolean;
   copyable: boolean;
+  hasBody: boolean;
 };
 
 export type MessageListControllerOptions = {
@@ -85,7 +85,6 @@ export class MessageListController {
     this.renderedMessageViews.length = state.messages.length;
     pruneActivityRenderState(getActiveActivityIds(state.messages));
     pruneDisconnectedMessageRenderState();
-    requestCodeHighlightsIn(this.options.messagesContentElement);
   }
 
   public syncBusyStatus(): void {
@@ -355,32 +354,31 @@ export class MessageListController {
   private renderMessageAtIndex(index: number, message: ChatMessage, showRole: boolean): RenderedMessageView {
     const state = this.options.getState();
     const existingView = this.renderedMessageViews[index];
-    const activitiesSignature = this.getActivitiesSignature(message);
     const imagesSignature = this.getImagesSignature(message);
     const copyable = canCopyAssistantMessage(message);
+    const hasBody = shouldRenderMessageBody(message);
     const animateFromText = this.getStreamingAnimationStartText(existingView, message, index);
 
-    if (existingView && canReuseMessageElement(existingView, message, showRole, activitiesSignature, imagesSignature, state.allowRemoteImages, copyable)) {
+    if (existingView && canReuseMessageElement(existingView, message, showRole, imagesSignature, state.allowRemoteImages, copyable, hasBody)) {
+      const renderOptions = {
+        ...(animateFromText === undefined ? {} : { animateFromText }),
+        outputColors: state.outputColors,
+        animationsEnabled: state.animationsEnabled,
+        allowRemoteImages: state.allowRemoteImages
+      };
+
       if ((existingView.message.text || '') !== (message.text || '') || existingView.imagesSignature !== imagesSignature) {
-        updateMessageBodyElement(
-          existingView.element,
-          message,
-          {
-            ...(animateFromText === undefined ? {} : { animateFromText }),
-            outputColors: state.outputColors,
-            animationsEnabled: state.animationsEnabled,
-            allowRemoteImages: state.allowRemoteImages
-          }
-        );
-        pruneDisconnectedMessageRenderState();
+        updateMessageBodyElement(existingView.element, message, renderOptions);
       }
 
+      updateMessageActivitiesElement(existingView.element, message, index, renderOptions);
+      pruneDisconnectedMessageRenderState();
       existingView.message = message;
       existingView.showRole = showRole;
-      existingView.activitiesSignature = activitiesSignature;
       existingView.imagesSignature = imagesSignature;
       existingView.allowRemoteImages = state.allowRemoteImages;
       existingView.copyable = copyable;
+      existingView.hasBody = hasBody;
       return existingView;
     }
 
@@ -398,10 +396,10 @@ export class MessageListController {
       ),
       message,
       showRole,
-      activitiesSignature,
       imagesSignature,
       allowRemoteImages: state.allowRemoteImages,
-      copyable
+      copyable,
+      hasBody
     };
 
     existingView?.element.replaceWith(nextView.element);
@@ -435,16 +433,15 @@ export class MessageListController {
       ),
       message: state.messages[index],
       showRole,
-      activitiesSignature: this.getActivitiesSignature(state.messages[index]),
       imagesSignature: this.getImagesSignature(state.messages[index]),
       allowRemoteImages: state.allowRemoteImages,
-      copyable: canCopyAssistantMessage(state.messages[index])
+      copyable: canCopyAssistantMessage(state.messages[index]),
+      hasBody: shouldRenderMessageBody(state.messages[index])
     };
 
     existingView.element.replaceWith(nextView.element);
     this.renderedMessageViews[index] = nextView;
     pruneDisconnectedMessageRenderState();
-    requestCodeHighlightsIn(nextView.element);
   }
 
   private getStreamingAnimationStartText(
@@ -474,21 +471,6 @@ export class MessageListController {
       && next.variant !== 'thinking'
       && nextText.length > previousText.length
       && nextText.startsWith(previousText);
-  }
-
-  private getActivitiesSignature(message: ChatMessage): string {
-    const state = this.options.getState();
-
-    if (!Array.isArray(message.activities) || message.activities.length === 0) {
-      return '';
-    }
-
-    return [
-      state.outputColors ? 'colors' : 'plain',
-      state.animationsEnabled ? 'animated' : 'static',
-      state.allowRemoteImages ? 'remote' : 'local',
-      ...message.activities.map(getActivitySignature)
-    ].join('\u0001');
   }
 
   private getImagesSignature(message: ChatMessage): string {
@@ -661,20 +643,6 @@ function createStartupResourcesElement(resources: StartupResourceSection[]): HTM
   return container.childElementCount > 0 ? container : undefined;
 }
 
-function getActivitySignature(activity: Activity): string {
-  return [
-    activity.id ?? '',
-    activity.kind ?? '',
-    activity.status ?? '',
-    activity.title ?? '',
-    activity.summary ?? '',
-    activity.body ?? '',
-    activity.expandedBody ?? '',
-    activity.code ? 'code' : '',
-    getImagesSignature(activity.images)
-  ].join('\u0000');
-}
-
 function getImagesSignature(images: ChatImage[] | undefined): string {
   if (!Array.isArray(images) || images.length === 0) {
     return '';
@@ -699,19 +667,38 @@ function canReuseMessageElement(
   view: RenderedMessageView,
   message: ChatMessage,
   showRole: boolean,
-  activitiesSignature: string,
   imagesSignature: string,
   allowRemoteImages: boolean,
-  copyable: boolean
+  copyable: boolean,
+  hasBody: boolean
 ): boolean {
   return view.message.role === message.role
     && Boolean(view.message.error) === Boolean(message.error)
     && (view.message.variant || '') === (message.variant || '')
     && view.showRole === showRole
-    && view.activitiesSignature === activitiesSignature
     && view.imagesSignature === imagesSignature
     && view.allowRemoteImages === allowRemoteImages
-    && view.copyable === copyable;
+    && view.copyable === copyable
+    && view.hasBody === hasBody;
+}
+
+function shouldRenderMessageBody(message: ChatMessage): boolean {
+  const activities = Array.isArray(message.activities) ? message.activities : [];
+  return Boolean(message.text || message.error || hasRenderableImages(message.images) || activities.length === 0);
+}
+
+function hasRenderableImages(images: ChatImage[] | undefined): boolean {
+  if (!Array.isArray(images)) {
+    return false;
+  }
+
+  return images.some((image) => {
+    const mimeType = typeof image.mimeType === 'string' ? image.mimeType.toLowerCase() : '';
+    return image.type === 'image'
+      && typeof image.data === 'string'
+      && Boolean(image.data)
+      && (mimeType === 'image/png' || mimeType === 'image/jpeg' || mimeType === 'image/gif' || mimeType === 'image/webp');
+  });
 }
 
 function getActiveActivityIds(messages: ChatMessage[]): Set<string> {
