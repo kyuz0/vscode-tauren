@@ -60,7 +60,7 @@ suite('Kward session list', () => {
       await waitForWriteCount(child, 2);
       assertWrittenRequest(child.writes[1], {
         method: 'sessions/list',
-        params: { workspaceRoot: '/workspace' }
+        params: { workspaceRoot: '/workspace', currentSessionPath: '/sessions/one.jsonl' }
       });
       child.respond(2, {
         sessions: [

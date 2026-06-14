@@ -1495,6 +1495,10 @@ export class TaurenChatController {
 
   private refreshSessionMetaAfterAgentEnd(): void {
     void this.refreshSessionMeta();
+
+    if (this.getBackend() === 'kward') {
+      void this.sessionView.refreshSessions();
+    }
   }
 
   private handleClientError(message: string): void {

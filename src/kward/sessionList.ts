@@ -37,6 +37,7 @@ export async function listKwardSessions(options: {
 
 async function listKwardSessionsViaRpc(options: {
   cwd?: string;
+  currentSessionFile?: string;
   kwardPath?: string;
 }): Promise<WebviewSessionItem[] | undefined> {
   if (!options.cwd) {
@@ -52,7 +53,10 @@ async function listKwardSessionsViaRpc(options: {
       return undefined;
     }
 
-    const result = await transport.request('sessions/list', { workspaceRoot: options.cwd });
+    const result = await transport.request('sessions/list', {
+      workspaceRoot: options.cwd,
+      ...(options.currentSessionFile ? { currentSessionPath: options.currentSessionFile } : {})
+    });
     return isRecord(result) && Array.isArray(result.sessions)
       ? result.sessions.map(readKwardSessionItemFromRpc).filter(isKwardSessionItem)
       : [];

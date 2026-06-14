@@ -1982,6 +1982,55 @@ suite('TaurenChatController', () => {
     harness.controller.dispose();
   });
 
+  test('Kward agent end refreshes cached session list metadata', async () => {
+    const staleSessions: WebviewSessionItem[] = [{
+      path: '/sessions/current.jsonl',
+      id: 'current',
+      cwd: '/workspace',
+      created: '2026-01-01T00:00:00.000Z',
+      modified: '2026-01-01T00:01:00.000Z',
+      messageCount: 0,
+      firstMessage: 'Current question',
+      depth: 0,
+      isLast: true,
+      ancestorContinues: [],
+      current: true
+    }];
+    const refreshedSessions: WebviewSessionItem[] = [{
+      ...staleSessions[0],
+      modified: '2026-01-01T00:02:00.000Z',
+      messageCount: 2
+    }];
+    const client = new FakePiClient();
+    let listCalls = 0;
+    let agentEnded = false;
+    const harness = createControllerHarness([client], {
+      getTaurenSettingValues: () => ({ 'tauren.backend': 'kward' }),
+      listSessions: async () => {
+        listCalls += 1;
+        return agentEnded ? refreshedSessions : staleSessions;
+      }
+    });
+
+    await harness.controller.handleWebviewMessage({ type: 'ready' });
+    await flushPromises();
+
+    harness.controller.toggleSessionList();
+    await flushPromises();
+    assert.deepStrictEqual(lastState(harness).sessions, staleSessions);
+
+    client.emit({ type: 'agent_start' });
+    agentEnded = true;
+    client.emit({ type: 'agent_end' });
+    await flushPromises();
+    await flushPromises();
+    await flushPromises();
+
+    assert.strictEqual(listCalls, 3);
+    assert.deepStrictEqual(lastState(harness).sessions, refreshedSessions);
+    harness.controller.dispose();
+  });
+
   test('show chat returns from session lanes and settings', async () => {
     const harness = createControllerHarness([new FakePiClient()]);
 
