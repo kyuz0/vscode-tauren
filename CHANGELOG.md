@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-06-14
+
 ### Fixed
 
 - Reduced flicker in syntax-highlighted tool boxes by preserving unchanged activity DOM during fast transcript updates.
