@@ -60,6 +60,7 @@ export const initialWebviewState: WebviewState = {
   treeRefreshing: false,
   treeError: '',
   sessionLoading: false,
+  voice: undefined,
   perfEnabled: false
 };
 
@@ -243,8 +244,67 @@ export function parseWebviewStateMessage(data: unknown, previousState?: WebviewS
     treeRefreshing: Boolean(record.treeRefreshing),
     treeError: typeof record.treeError === 'string' ? record.treeError : '',
     sessionLoading: Boolean(record.sessionLoading),
+    voice: parseVoiceState(record.voice),
     perfEnabled: Boolean(record.perfEnabled)
   };
+}
+
+function parseVoiceState(value: unknown): WebviewState['voice'] {
+  if (!isRecord(value) || !Array.isArray(value.models) || !isRecord(value.binary)) {
+    return undefined;
+  }
+
+  const selectedModelId = value.selectedModelId === 'tiny.en' || value.selectedModelId === 'small.en' ? value.selectedModelId : 'base.en';
+  const transcriptAction = value.transcriptAction === 'submit' ? 'submit' : 'insert';
+  const recordingStatus = value.recordingStatus === 'recording' || value.recordingStatus === 'transcribing' || value.recordingStatus === 'error'
+    ? value.recordingStatus
+    : 'idle';
+
+  return {
+    enabled: Boolean(value.enabled),
+    selectedModelId,
+    transcriptAction,
+    models: value.models.filter(isVoiceModelOption).map((model) => ({
+      ...model,
+      download: parseVoiceDownloadState(model.download)
+    })),
+    binary: {
+      status: parseVoiceDownloadStatus(value.binary.status),
+      label: typeof value.binary.label === 'string' ? value.binary.label : 'whisper.cpp',
+      ...(typeof value.binary.path === 'string' ? { path: value.binary.path } : {}),
+      ...(value.binary.source === 'system' || value.binary.source === 'downloaded' ? { source: value.binary.source } : {}),
+      ...(typeof value.binary.helper === 'string' ? { helper: value.binary.helper } : {}),
+      download: parseVoiceDownloadState(value.binary.download)
+    },
+    recordingStatus,
+    ...(typeof value.error === 'string' && value.error ? { error: value.error } : {})
+  };
+}
+
+function isVoiceModelOption(value: unknown): value is NonNullable<WebviewState['voice']>['models'][number] {
+  return isRecord(value)
+    && (value.id === 'tiny.en' || value.id === 'base.en' || value.id === 'small.en')
+    && typeof value.label === 'string'
+    && typeof value.description === 'string'
+    && typeof value.sizeBytes === 'number'
+    && typeof value.downloaded === 'boolean';
+}
+
+function parseVoiceDownloadState(value: unknown): NonNullable<WebviewState['voice']>['binary']['download'] {
+  if (!isRecord(value)) {
+    return { status: 'idle' };
+  }
+
+  return {
+    status: parseVoiceDownloadStatus(value.status),
+    ...(typeof value.receivedBytes === 'number' ? { receivedBytes: value.receivedBytes } : {}),
+    ...(typeof value.totalBytes === 'number' ? { totalBytes: value.totalBytes } : {}),
+    ...(typeof value.error === 'string' ? { error: value.error } : {})
+  };
+}
+
+function parseVoiceDownloadStatus(value: unknown): NonNullable<WebviewState['voice']>['binary']['status'] {
+  return value === 'downloading' || value === 'downloaded' || value === 'failed' || value === 'unavailable' ? value : 'idle';
 }
 
 function parseKwardQuestion(value: unknown): WebviewState['kwardQuestion'] {

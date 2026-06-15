@@ -1,5 +1,6 @@
 import type { ChatSnapshotMessage, ChatSnapshotState, ChatState } from '../chat/chatSession';
 import type { SettingId, SettingValue, TaurenSettingsSection } from '../settings/settingsRegistry';
+import type { VoiceState } from '../voice/types';
 
 export type WebviewStreamingBehavior = 'steer' | 'followUp';
 export type WebviewComposerTextMode = 'replace' | 'append';
@@ -136,6 +137,11 @@ export type WebviewMessage =
   | { type: 'hideChatFace' }
   | { type: 'setSettingsSection'; section: WebviewSettingsSection }
   | { type: 'updateSetting'; settingId: SettingId; value: SettingValue }
+  | { type: 'voiceDownloadBinary' }
+  | { type: 'voiceDownloadModel'; modelId?: string }
+  | { type: 'voiceDeleteModel'; modelId: string }
+  | { type: 'voiceStartRecording' }
+  | { type: 'voiceStopRecording' }
   | { type: 'authLogin'; providerId: string; authType?: WebviewAuthType }
   | { type: 'authLogout'; providerId: string }
   | { type: 'authRefresh' }
@@ -353,6 +359,7 @@ export type WebviewStateMessageBase = Omit<ChatState, 'messages'> & {
   settings?: WebviewSettingsState;
   auth?: WebviewAuthState;
   kwardQuestion?: WebviewKwardQuestionRequest;
+  voice?: VoiceState;
 };
 
 export type WebviewFullStateMessage = WebviewStateMessageBase & {
@@ -421,6 +428,7 @@ export type CreateWebviewStateMessageOptions = {
   settingsView?: WebviewSettingsViewState;
   auth?: WebviewAuthState;
   kwardQuestion?: WebviewKwardQuestionRequest;
+  voice?: VoiceState;
   perfEnabled?: boolean;
 };
 

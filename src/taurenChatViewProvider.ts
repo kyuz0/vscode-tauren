@@ -70,6 +70,7 @@ import {
   welcomeDismissedStorageKey
 } from './settings/taurenSettings';
 import { isRecord } from './shared/typeGuards';
+import { VoiceController } from './voice/voiceController';
 
 export const taurenChatViewType = 'tauren.chatView';
 export type { AgentClient } from './agent/clientTypes';
@@ -153,6 +154,7 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
     isEnabled: () => this.debugPerformanceEnabled,
     writeLine: (line) => this.writePerfLine(line)
   });
+  private readonly voiceController: VoiceController;
   private cachedQuietStartup: boolean | undefined;
   private pendingLaneSwitch: PendingPerfBoundary | undefined;
   private pendingSessionSwitch: PendingPerfBoundary | undefined;
@@ -181,6 +183,20 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
         placeHolder: placeholder
       })
     };
+    this.voiceController = new VoiceController({
+      storageUri: this.sessionMetadataStorageUri,
+      onDidChangeState: () => this.controller.postState(),
+      onTranscript: async (text, action) => {
+        if (action === 'submit') {
+          await this.controller.submitTextFromVoice(text);
+        } else {
+          this.controller.appendTextToComposer(text);
+        }
+      },
+      showNotification: (message, notifyType) => this.showNotification(message, notifyType),
+      showToast: (message, kind) => this.showToast(message, kind)
+    });
+
     const configuredCreateClient = createClient ?? ((options: AgentClientOptions) => createConfiguredAgentClient(options, {
       extensionUi,
       showNotification: (message, notifyType) => this.showNotification(message, notifyType),
@@ -242,7 +258,8 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
         sessionPath,
         displayName,
         readSessionDiffSnapshot(this.workspaceState, sessionPath)
-      )
+      ),
+      voiceController: this.voiceController
     });
 
     const initialWorkspaceState = getPiStartupCwdState(this.workspaceCwdProvider(), getRejectEditWriteOutsideWorkspaceSetting());
@@ -351,6 +368,7 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
     this.perfOutputChannel?.dispose();
     this.codeRenderer.dispose();
     this.sessionDiffViewer.dispose();
+    this.voiceController.dispose();
     this.controller.dispose();
   }
 

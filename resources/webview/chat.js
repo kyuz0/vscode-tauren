@@ -1907,6 +1907,7 @@
       diffRemovedElement: queryRequired(".composer__diff-removed"),
       streamingBehaviorButtonElements: queryAll(".composer__mode-button"),
       attachButton: queryRequired(".composer__attach"),
+      voiceButton: queryRequired(".composer__voice"),
       newSessionButton: queryRequired(".composer__add"),
       contextElement: queryRequired(".composer__context"),
       contextValueElement: queryRequired(".composer__context-value"),
@@ -3345,6 +3346,7 @@
         this.options.postMessage({ type: "selectPromptImages" });
         this.options.focusPromptInput();
       });
+      this.options.voiceButton.addEventListener("click", () => this.toggleVoiceRecording());
       for (const button of this.options.streamingBehaviorButtonElements) {
         button.addEventListener("click", () => this.selectStreamingBehavior(button));
       }
@@ -3593,6 +3595,7 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
     }
     syncComposer(options = {}) {
       const shouldPreserveBottom = Boolean(options.preserveBottom) && this.options.isMessagesAtBottom();
+      this.syncVoiceButton();
       this.syncSubmit();
       this.syncBusySubmitMode();
       this.syncTextareaHeightIfNeeded(Boolean(options.forceResize));
@@ -3602,6 +3605,44 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
     }
     syncSlashMenu() {
       this.suggestionMenu.sync();
+    }
+    toggleVoiceRecording() {
+      const voice = this.options.getState().voice;
+      const status = voice?.recordingStatus;
+      if (status === "recording") {
+        this.options.postMessage({ type: "voiceStopRecording" });
+        return;
+      }
+      if (status === "transcribing") {
+        return;
+      }
+      const selectedModel = voice?.models.find((model) => model.id === voice.selectedModelId);
+      const isReady = Boolean(voice?.enabled && voice.binary.status === "downloaded" && selectedModel?.downloaded);
+      if (!isReady) {
+        this.options.postMessage({ type: "showChatFace", chatFace: "settings" });
+        this.options.postMessage({ type: "setSettingsSection", section: "voice" });
+        return;
+      }
+      this.options.postMessage({ type: "voiceStartRecording" });
+    }
+    syncVoiceButton() {
+      const voice = this.options.getState().voice;
+      const button = this.options.voiceButton;
+      const tooltip = button.querySelector(".composer__button-tooltip, .tauren-icon-action-tooltip");
+      const enabled = voice?.enabled === true;
+      const selectedModel = voice?.models.find((model) => model.id === voice.selectedModelId);
+      const isRecording = enabled && voice?.recordingStatus === "recording";
+      const isTranscribing = voice?.recordingStatus === "transcribing";
+      const isReady = Boolean(voice && voice.binary.status === "downloaded" && selectedModel?.downloaded);
+      button.hidden = !enabled;
+      button.style.display = enabled ? "" : "none";
+      button.classList.toggle("composer__voice--recording", isRecording);
+      button.classList.toggle("composer__voice--transcribing", isTranscribing);
+      button.disabled = isTranscribing;
+      button.setAttribute("aria-label", isRecording ? "Stop voice input" : "Start voice input");
+      if (tooltip) {
+        tooltip.textContent = isRecording ? "Stop voice input" : isTranscribing ? "Transcribing\u2026" : isReady ? "Start voice input" : "Start voice input (setup required)";
+      }
     }
     toggleStreamingBehavior() {
       if (!this.options.getState().busy) {
@@ -5683,6 +5724,15 @@ ${after}`;
     { value: "amber", label: "Amber" },
     { value: "matrix", label: "Matrix" }
   ];
+  var voiceModelOptions = [
+    { value: "tiny.en", label: "Tiny English" },
+    { value: "base.en", label: "Base English" },
+    { value: "small.en", label: "Small English" }
+  ];
+  var voiceTranscriptActionOptions = [
+    { value: "insert", label: "Insert into Chat Input" },
+    { value: "submit", label: "Submit automatically" }
+  ];
   var settingsSections = [
     {
       id: "login",
@@ -5718,6 +5768,13 @@ ${after}`;
       eyebrow: "Agent runtime",
       title: "Scoped Models",
       description: "Choose and order the models Tauren sends to the selected backend for model cycling."
+    },
+    {
+      id: "voice",
+      label: "Voice",
+      eyebrow: "Local STT",
+      title: "Voice",
+      description: "Download local whisper.cpp assets and configure Tauren voice input."
     },
     {
       id: "workspaceSafety",
@@ -5809,6 +5866,39 @@ ${after}`;
       control: "select",
       options: customUiThemeOptions,
       defaultValue: "default",
+      liveBehavior: "immediate"
+    },
+    {
+      id: "tauren.voice.enabled",
+      owner: "tauren",
+      section: "voice",
+      label: "Voice input",
+      description: "Show the microphone control in the Chat Input and allow local speech-to-text.",
+      control: "toggle",
+      defaultValue: false,
+      liveBehavior: "immediate"
+    },
+    {
+      id: "tauren.voice.model",
+      owner: "tauren",
+      section: "voice",
+      label: "Voice model",
+      description: "Local Whisper model Tauren should use for speech-to-text.",
+      control: "select",
+      options: voiceModelOptions,
+      defaultValue: "base.en",
+      helper: "Download the selected model below before using voice input.",
+      liveBehavior: "immediate"
+    },
+    {
+      id: "tauren.voice.transcriptAction",
+      owner: "tauren",
+      section: "voice",
+      label: "After transcription",
+      description: "Choose what Tauren does with completed voice transcripts.",
+      control: "select",
+      options: voiceTranscriptActionOptions,
+      defaultValue: "insert",
       liveBehavior: "immediate"
     },
     {
@@ -8556,6 +8646,11 @@ ${after}`;
           this.handleAuthAction(authButton);
           return;
         }
+        const voiceButton2 = target?.closest("[data-voice-action]") ?? null;
+        if (voiceButton2) {
+          this.handleVoiceAction(voiceButton2);
+          return;
+        }
         const scopedModelsButton = target?.closest("[data-scoped-model-action]") ?? null;
         if (scopedModelsButton) {
           this.handleScopedModelsAction(scopedModelsButton);
@@ -8685,6 +8780,17 @@ ${after}`;
       const value = target instanceof HTMLInputElement && target.type === "checkbox" ? target.checked : target.value;
       this.options.postMessage({ type: "updateSetting", settingId: definition.id, value });
     }
+    handleVoiceAction(button) {
+      const action = button.dataset.voiceAction;
+      const modelId = button.dataset.voiceModelId;
+      if (action === "downloadBinary") {
+        this.options.postMessage({ type: "voiceDownloadBinary" });
+      } else if (action === "downloadModel") {
+        this.options.postMessage({ type: "voiceDownloadModel", ...modelId ? { modelId } : {} });
+      } else if (action === "deleteModel" && modelId) {
+        this.options.postMessage({ type: "voiceDeleteModel", modelId });
+      }
+    }
     handleScopedModelsToggle(input) {
       const modelId = input.dataset.scopedModelId;
       if (!modelId) {
@@ -8782,6 +8888,8 @@ ${after}`;
       cards.className = "settings-surface__cards";
       if (section.id === "login") {
         this.appendAuthCards(cards, state2);
+      } else if (section.id === "voice") {
+        this.appendVoiceCards(cards, state2);
       } else {
         for (const definition of getVisibleSettingsForSection(section.id, state2)) {
           cards.append(this.createSettingCard(definition, state2));
@@ -8797,6 +8905,71 @@ ${after}`;
       if (state2.chatFace === "settings") {
         requestAnimationFrame(() => this.focusSectionButton(sectionId));
       }
+    }
+    appendVoiceCards(cards, state2) {
+      for (const definition of getVisibleSettingsForSection("voice", state2)) {
+        cards.append(this.createSettingCard(definition, state2));
+      }
+      const voice = state2.voice;
+      if (!voice) {
+        const card = document.createElement("article");
+        card.className = "settings-surface__card";
+        card.append(createTextElement("h4", "settings-surface__card-title", "Voice assets"));
+        card.append(createTextElement("p", "settings-surface__card-body", "Voice state is not available yet."));
+        cards.append(card);
+        return;
+      }
+      cards.append(this.createVoiceBinaryCard(voice));
+      cards.append(this.createVoiceModelCard(voice));
+    }
+    createVoiceBinaryCard(voice) {
+      const card = document.createElement("article");
+      card.className = "settings-surface__card";
+      card.append(createTextElement("h4", "settings-surface__card-title", "whisper.cpp runtime"));
+      card.append(createTextElement("p", "settings-surface__card-body", voice.binary.source === "system" && voice.binary.path ? `${voice.binary.label}: ${voice.binary.path}` : voice.binary.label));
+      card.append(createTextElement("p", "settings-surface__card-helper", voice.binary.helper ?? getVoiceDownloadLabel(voice.binary.download)));
+      const button = this.createVoiceButton(voice.binary.status === "failed" ? "Retry runtime download" : "Download runtime", "downloadBinary");
+      button.disabled = voice.binary.status === "downloaded" || voice.binary.status === "downloading" || voice.binary.status === "unavailable";
+      card.append(button);
+      if (voice.binary.download.error) {
+        card.append(createTextElement("p", "settings-surface__card-error", voice.binary.download.error));
+      }
+      return card;
+    }
+    createVoiceModelCard(voice) {
+      const card = document.createElement("article");
+      card.className = "settings-surface__card";
+      card.append(createTextElement("h4", "settings-surface__card-title", "Downloaded models"));
+      for (const model of voice.models) {
+        const row = document.createElement("div");
+        row.className = "settings-surface__auth-toolbar";
+        row.append(createTextElement("span", "settings-surface__card-body", `${model.label} \xB7 ${formatVoiceBytes(model.sizeBytes)} \xB7 ${getVoiceDownloadLabel(model.download)}`));
+        const downloadButton = this.createVoiceButton(model.download.status === "failed" ? "Retry" : "Download", "downloadModel", model.id);
+        downloadButton.disabled = model.downloaded || model.download.status === "downloading";
+        row.append(downloadButton);
+        const deleteButton = this.createVoiceButton("Delete", "deleteModel", model.id);
+        deleteButton.disabled = !model.downloaded || model.id === voice.selectedModelId;
+        row.append(deleteButton);
+        card.append(row);
+        if (model.download.error) {
+          card.append(createTextElement("p", "settings-surface__card-error", model.download.error));
+        }
+      }
+      if (voice.error) {
+        card.append(createTextElement("p", "settings-surface__card-error", voice.error));
+      }
+      return card;
+    }
+    createVoiceButton(label, action, modelId) {
+      const button = document.createElement("button");
+      button.className = "settings-surface__button";
+      button.type = "button";
+      button.textContent = label;
+      button.dataset.voiceAction = action;
+      if (modelId) {
+        button.dataset.voiceModelId = modelId;
+      }
+      return button;
     }
     appendAuthCards(cards, state2) {
       const toolbar = document.createElement("div");
@@ -9204,8 +9377,33 @@ ${after}`;
     const values = getVisibleSettingsForSection(sectionId, state2).map((definition) => [definition.id, state2.settings.values[definition.id]]);
     const modelOptions = sectionId === "runtime" || sectionId === "scopedModels" ? state2.modelOptions.map((model) => `${model.provider}/${model.id}:${model.name}`).join("|") : "";
     const auth = sectionId === "login" ? state2.auth : void 0;
+    const voice = sectionId === "voice" ? state2.voice : void 0;
     const providerFilter = sectionId === "scopedModels" ? scopedModelsProviderFilter : void 0;
-    return JSON.stringify([sectionId, values, modelOptions, auth, state2.busy, state2.settings.errors, providerFilter]);
+    return JSON.stringify([sectionId, values, modelOptions, auth, voice, state2.busy, state2.settings.errors, providerFilter]);
+  }
+  function getVoiceDownloadLabel(download) {
+    if (download.status === "downloaded") {
+      return "Downloaded";
+    }
+    if (download.status === "downloading") {
+      if (download.totalBytes && download.receivedBytes !== void 0) {
+        return `Downloading ${Math.round(download.receivedBytes / download.totalBytes * 100)}% (${formatVoiceBytes(download.receivedBytes)} / ${formatVoiceBytes(download.totalBytes)})`;
+      }
+      return `Downloading ${formatVoiceBytes(download.receivedBytes ?? 0)}`;
+    }
+    if (download.status === "failed") {
+      return "Download failed";
+    }
+    if (download.status === "unavailable") {
+      return "Unavailable";
+    }
+    return "Not downloaded";
+  }
+  function formatVoiceBytes(value) {
+    if (value >= 1024 * 1024 * 1024) {
+      return `${(value / (1024 * 1024 * 1024)).toFixed(1)} GiB`;
+    }
+    return `${Math.round(value / (1024 * 1024))} MiB`;
   }
   function createTextElement(tagName, className, text) {
     const element = document.createElement(tagName);
@@ -9314,6 +9512,7 @@ ${after}`;
     treeRefreshing: false,
     treeError: "",
     sessionLoading: false,
+    voice: void 0,
     perfEnabled: false
   };
   function createStartupResourcesCache() {
@@ -9468,8 +9667,53 @@ ${after}`;
       treeRefreshing: Boolean(record.treeRefreshing),
       treeError: typeof record.treeError === "string" ? record.treeError : "",
       sessionLoading: Boolean(record.sessionLoading),
+      voice: parseVoiceState(record.voice),
       perfEnabled: Boolean(record.perfEnabled)
     };
+  }
+  function parseVoiceState(value) {
+    if (!isRecord(value) || !Array.isArray(value.models) || !isRecord(value.binary)) {
+      return void 0;
+    }
+    const selectedModelId = value.selectedModelId === "tiny.en" || value.selectedModelId === "small.en" ? value.selectedModelId : "base.en";
+    const transcriptAction = value.transcriptAction === "submit" ? "submit" : "insert";
+    const recordingStatus = value.recordingStatus === "recording" || value.recordingStatus === "transcribing" || value.recordingStatus === "error" ? value.recordingStatus : "idle";
+    return {
+      enabled: Boolean(value.enabled),
+      selectedModelId,
+      transcriptAction,
+      models: value.models.filter(isVoiceModelOption).map((model) => ({
+        ...model,
+        download: parseVoiceDownloadState(model.download)
+      })),
+      binary: {
+        status: parseVoiceDownloadStatus(value.binary.status),
+        label: typeof value.binary.label === "string" ? value.binary.label : "whisper.cpp",
+        ...typeof value.binary.path === "string" ? { path: value.binary.path } : {},
+        ...value.binary.source === "system" || value.binary.source === "downloaded" ? { source: value.binary.source } : {},
+        ...typeof value.binary.helper === "string" ? { helper: value.binary.helper } : {},
+        download: parseVoiceDownloadState(value.binary.download)
+      },
+      recordingStatus,
+      ...typeof value.error === "string" && value.error ? { error: value.error } : {}
+    };
+  }
+  function isVoiceModelOption(value) {
+    return isRecord(value) && (value.id === "tiny.en" || value.id === "base.en" || value.id === "small.en") && typeof value.label === "string" && typeof value.description === "string" && typeof value.sizeBytes === "number" && typeof value.downloaded === "boolean";
+  }
+  function parseVoiceDownloadState(value) {
+    if (!isRecord(value)) {
+      return { status: "idle" };
+    }
+    return {
+      status: parseVoiceDownloadStatus(value.status),
+      ...typeof value.receivedBytes === "number" ? { receivedBytes: value.receivedBytes } : {},
+      ...typeof value.totalBytes === "number" ? { totalBytes: value.totalBytes } : {},
+      ...typeof value.error === "string" ? { error: value.error } : {}
+    };
+  }
+  function parseVoiceDownloadStatus(value) {
+    return value === "downloading" || value === "downloaded" || value === "failed" || value === "unavailable" ? value : "idle";
   }
   function parseKwardQuestion(value) {
     if (!isRecord(value) || typeof value.sessionId !== "string" || typeof value.questionRequestId !== "string" || !Array.isArray(value.questions)) {
@@ -9830,6 +10074,7 @@ ${after}`;
     diffRemovedElement,
     streamingBehaviorButtonElements,
     attachButton,
+    voiceButton,
     newSessionButton,
     contextElement,
     contextValueElement,
@@ -9925,6 +10170,7 @@ ${after}`;
     textarea,
     submitButton,
     attachButton,
+    voiceButton,
     newSessionButton,
     busySubmitElement,
     diffSummaryElement,

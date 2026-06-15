@@ -32,6 +32,7 @@ export type ComposerControllerOptions = {
   textarea: HTMLTextAreaElement;
   submitButton: HTMLButtonElement;
   attachButton: HTMLButtonElement;
+  voiceButton: HTMLButtonElement;
   newSessionButton: HTMLButtonElement;
   busySubmitElement: HTMLElement | undefined;
   diffSummaryElement: HTMLElement;
@@ -108,6 +109,7 @@ export class ComposerController {
       this.options.postMessage({ type: 'selectPromptImages' });
       this.options.focusPromptInput();
     });
+    this.options.voiceButton.addEventListener('click', () => this.toggleVoiceRecording());
 
     for (const button of this.options.streamingBehaviorButtonElements) {
       button.addEventListener('click', () => this.selectStreamingBehavior(button));
@@ -425,6 +427,7 @@ export class ComposerController {
 
   public syncComposer(options: { preserveBottom?: boolean; forceResize?: boolean } = {}): void {
     const shouldPreserveBottom = Boolean(options.preserveBottom) && this.options.isMessagesAtBottom();
+    this.syncVoiceButton();
     this.syncSubmit();
     this.syncBusySubmitMode();
     this.syncTextareaHeightIfNeeded(Boolean(options.forceResize));
@@ -436,6 +439,59 @@ export class ComposerController {
 
   public syncSlashMenu(): void {
     this.suggestionMenu.sync();
+  }
+
+  private toggleVoiceRecording(): void {
+    const voice = this.options.getState().voice;
+    const status = voice?.recordingStatus;
+
+    if (status === 'recording') {
+      this.options.postMessage({ type: 'voiceStopRecording' });
+      return;
+    }
+
+    if (status === 'transcribing') {
+      return;
+    }
+
+    const selectedModel = voice?.models.find((model) => model.id === voice.selectedModelId);
+    const isReady = Boolean(voice?.enabled && voice.binary.status === 'downloaded' && selectedModel?.downloaded);
+
+    if (!isReady) {
+      this.options.postMessage({ type: 'showChatFace', chatFace: 'settings' });
+      this.options.postMessage({ type: 'setSettingsSection', section: 'voice' });
+      return;
+    }
+
+    this.options.postMessage({ type: 'voiceStartRecording' });
+  }
+
+  private syncVoiceButton(): void {
+    const voice = this.options.getState().voice;
+    const button = this.options.voiceButton;
+    const tooltip = button.querySelector<HTMLElement>('.composer__button-tooltip, .tauren-icon-action-tooltip');
+    const enabled = voice?.enabled === true;
+    const selectedModel = voice?.models.find((model) => model.id === voice.selectedModelId);
+    const isRecording = enabled && voice?.recordingStatus === 'recording';
+    const isTranscribing = voice?.recordingStatus === 'transcribing';
+    const isReady = Boolean(voice && voice.binary.status === 'downloaded' && selectedModel?.downloaded);
+
+    button.hidden = !enabled;
+    button.style.display = enabled ? '' : 'none';
+    button.classList.toggle('composer__voice--recording', isRecording);
+    button.classList.toggle('composer__voice--transcribing', isTranscribing);
+    button.disabled = isTranscribing;
+    button.setAttribute('aria-label', isRecording ? 'Stop voice input' : 'Start voice input');
+
+    if (tooltip) {
+      tooltip.textContent = isRecording
+        ? 'Stop voice input'
+        : isTranscribing
+        ? 'Transcribing…'
+        : isReady
+        ? 'Start voice input'
+        : 'Start voice input (setup required)';
+    }
   }
 
   public toggleStreamingBehavior(): void {

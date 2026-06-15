@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { parseWebviewCustomUiTheme } from '../webviewProtocol/values';
 import type { WebviewCustomUiTheme } from '../webviewProtocol/types';
+import type { VoiceModelId, VoiceTranscriptAction } from '../voice/types';
 import { settingDefinitions, type SettingValue, type TaurenBackend, type TaurenSettingId } from './settingsRegistry';
 
 export const welcomeDismissedStorageKey = 'tauren.welcomeDismissed';
@@ -60,6 +61,20 @@ export function getUseTaurenShareViewerSetting(): boolean {
 export function getCustomUiThemeSetting(): WebviewCustomUiTheme {
   const value = vscode.workspace.getConfiguration('tauren').get<string>('customUiTheme', 'default');
   return parseWebviewCustomUiTheme(value);
+}
+
+export function getVoiceEnabledSetting(): boolean {
+  return vscode.workspace.getConfiguration('tauren').get<boolean>('voice.enabled', false);
+}
+
+export function getVoiceModelSetting(): VoiceModelId {
+  const value = vscode.workspace.getConfiguration('tauren').get<string>('voice.model', 'base.en');
+  return value === 'tiny.en' || value === 'small.en' ? value : 'base.en';
+}
+
+export function getVoiceTranscriptActionSetting(): VoiceTranscriptAction {
+  const value = vscode.workspace.getConfiguration('tauren').get<string>('voice.transcriptAction', 'insert');
+  return value === 'submit' ? 'submit' : 'insert';
 }
 
 function getBlockHttpsImagesSetting(): boolean {
@@ -139,7 +154,10 @@ export function getTaurenSettingValues(globalState?: vscode.Memento): Partial<Re
     'tauren.rejectEditWriteOutsideWorkspace': getRejectEditWriteOutsideWorkspaceSetting(),
     'tauren.debugPerformance': getDebugPerformanceSetting(),
     'tauren.readyScript': getReadyScriptSetting() ?? '',
-    'tauren.readyScriptEnabled': getReadyScriptEnabledSetting()
+    'tauren.readyScriptEnabled': getReadyScriptEnabledSetting(),
+    'tauren.voice.enabled': getVoiceEnabledSetting(),
+    'tauren.voice.model': getVoiceModelSetting(),
+    'tauren.voice.transcriptAction': getVoiceTranscriptActionSetting()
   };
 }
 

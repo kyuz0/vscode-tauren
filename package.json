@@ -505,6 +505,39 @@
           "default": false,
           "description": "Collect Tauren performance diagnostics in the output channel and diagnostics view."
         },
+        "tauren.voice.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show the microphone control in the Tauren Chat Input and allow local speech-to-text."
+        },
+        "tauren.voice.model": {
+          "type": "string",
+          "default": "base.en",
+          "enum": [
+            "tiny.en",
+            "base.en",
+            "small.en"
+          ],
+          "enumDescriptions": [
+            "Fastest English Whisper model, about 75 MiB.",
+            "Balanced English Whisper model, about 142 MiB.",
+            "More accurate English Whisper model, about 466 MiB."
+          ],
+          "description": "Local Whisper model Tauren should use for speech-to-text. Models are downloaded from the Voice settings pane."
+        },
+        "tauren.voice.transcriptAction": {
+          "type": "string",
+          "default": "insert",
+          "enum": [
+            "insert",
+            "submit"
+          ],
+          "enumDescriptions": [
+            "Insert completed voice transcripts into the Chat Input for review.",
+            "Submit completed voice transcripts to Tauren automatically."
+          ],
+          "description": "Choose what Tauren does with completed voice transcripts."
+        },
         "tauren.customUiTheme": {
           "type": "string",
           "default": "default",

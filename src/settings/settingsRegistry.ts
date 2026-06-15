@@ -19,7 +19,10 @@ export type TaurenSettingId =
   | 'tauren.rejectEditWriteOutsideWorkspace'
   | 'tauren.debugPerformance'
   | 'tauren.readyScript'
-  | 'tauren.readyScriptEnabled';
+  | 'tauren.readyScriptEnabled'
+  | 'tauren.voice.enabled'
+  | 'tauren.voice.model'
+  | 'tauren.voice.transcriptAction';
 
 export type PiSettingId =
   | 'defaultProvider'
@@ -37,7 +40,7 @@ export type PiSettingId =
   | 'enabledModels'
   | 'enableSkillCommands';
 
-export type TaurenSettingsSection = 'appearance' | 'login' | 'extensions' | 'runtime' | 'scopedModels' | 'workspaceSafety' | 'advanced';
+export type TaurenSettingsSection = 'appearance' | 'login' | 'extensions' | 'runtime' | 'scopedModels' | 'voice' | 'workspaceSafety' | 'advanced';
 export type SettingsOwner = 'tauren' | 'pi';
 export type SettingControl = 'toggle' | 'select' | 'text' | 'readonlyList' | 'scopedModels';
 export type SettingValue = boolean | string | string[];
@@ -97,6 +100,17 @@ const customUiThemeOptions = [
   { value: 'matrix', label: 'Matrix' }
 ] as const satisfies readonly SettingOption[];
 
+const voiceModelOptions = [
+  { value: 'tiny.en', label: 'Tiny English' },
+  { value: 'base.en', label: 'Base English' },
+  { value: 'small.en', label: 'Small English' }
+] as const satisfies readonly SettingOption[];
+
+const voiceTranscriptActionOptions = [
+  { value: 'insert', label: 'Insert into Chat Input' },
+  { value: 'submit', label: 'Submit automatically' }
+] as const satisfies readonly SettingOption[];
+
 export const settingsSections = [
   {
     id: 'login',
@@ -132,6 +146,13 @@ export const settingsSections = [
     eyebrow: 'Agent runtime',
     title: 'Scoped Models',
     description: 'Choose and order the models Tauren sends to the selected backend for model cycling.'
+  },
+  {
+    id: 'voice',
+    label: 'Voice',
+    eyebrow: 'Local STT',
+    title: 'Voice',
+    description: 'Download local whisper.cpp assets and configure Tauren voice input.'
   },
   {
     id: 'workspaceSafety',
@@ -224,6 +245,39 @@ export const settingDefinitions = [
     control: 'select',
     options: customUiThemeOptions,
     defaultValue: 'default',
+    liveBehavior: 'immediate'
+  },
+  {
+    id: 'tauren.voice.enabled',
+    owner: 'tauren',
+    section: 'voice',
+    label: 'Voice input',
+    description: 'Show the microphone control in the Chat Input and allow local speech-to-text.',
+    control: 'toggle',
+    defaultValue: false,
+    liveBehavior: 'immediate'
+  },
+  {
+    id: 'tauren.voice.model',
+    owner: 'tauren',
+    section: 'voice',
+    label: 'Voice model',
+    description: 'Local Whisper model Tauren should use for speech-to-text.',
+    control: 'select',
+    options: voiceModelOptions,
+    defaultValue: 'base.en',
+    helper: 'Download the selected model below before using voice input.',
+    liveBehavior: 'immediate'
+  },
+  {
+    id: 'tauren.voice.transcriptAction',
+    owner: 'tauren',
+    section: 'voice',
+    label: 'After transcription',
+    description: 'Choose what Tauren does with completed voice transcripts.',
+    control: 'select',
+    options: voiceTranscriptActionOptions,
+    defaultValue: 'insert',
     liveBehavior: 'immediate'
   },
   {

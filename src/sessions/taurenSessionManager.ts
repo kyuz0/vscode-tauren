@@ -276,6 +276,11 @@ export class TaurenSessionManager {
     session.controller.appendComposerText(text);
   }
 
+  public async submitTextFromVoice(text: string): Promise<void> {
+    const session = this.isActiveComposerVisible() ? this.active() : this.createSession({ activate: true });
+    await session.controller.submitTextFromVoice(text);
+  }
+
   public postState(): void {
     this.postActiveState();
   }
@@ -1009,6 +1014,7 @@ export class TaurenSessionManager {
       extensionStatus: this.extensionSettings.statusBarEnabled ? formatExtensionStatuses(active.extensionStatuses) : [],
       extensionFooter: this.extensionSettings.statusBarEnabled ? active.extensionFooterHost.getEntry() : undefined,
       extensionWidgets: this.filterEnabledExtensionWidgets(active.extensionWidgetHost.getEntries()),
+      ...(this.options.voiceController ? { voice: this.options.voiceController.getState() } : {}),
       outputColors: this.options.getOutputColors?.() ?? true,
       animationsEnabled: this.options.getAnimationsEnabled?.() ?? true,
       customUiTheme: this.options.getCustomUiTheme?.() ?? 'default'
