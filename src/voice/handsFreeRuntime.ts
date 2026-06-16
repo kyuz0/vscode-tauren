@@ -29,6 +29,7 @@ type HandsFreeRuntimeOptions = {
   silenceSeconds: number;
   maxUtteranceSeconds: number;
   onStatus: (status: 'listening' | 'recording') => void;
+  onAudioLevel: (level: number) => void;
   onUtterance: (audioFile: string) => Promise<void> | void;
   onError: (error: Error) => void;
   getShouldContinue: () => boolean;
@@ -46,6 +47,7 @@ export class HandsFreeRuntime {
   private silenceMs = 0;
   private sequence = 0;
   private handlingUtterance = false;
+  private lastAudioLevelUpdate = 0;
 
   public constructor(private readonly options: HandsFreeRuntimeOptions) {}
 
@@ -95,7 +97,9 @@ export class HandsFreeRuntime {
   }
 
   private async handleFrame(frame: Buffer): Promise<void> {
-    const speech = isSpeechLevel(calculatePcm16Dbfs(frame), speechThresholdDbfsBySensitivity[this.options.sensitivity]);
+    const dbfs = calculatePcm16Dbfs(frame);
+    this.postAudioLevel(dbfs);
+    const speech = isSpeechLevel(dbfs, speechThresholdDbfsBySensitivity[this.options.sensitivity]);
 
     if (this.phase === 'listening') {
       this.pushPreRoll(frame);
@@ -126,6 +130,16 @@ export class HandsFreeRuntime {
     if (reachedSilence || reachedMaxUtterance) {
       await this.finishUtterance();
     }
+  }
+
+  private postAudioLevel(dbfs: number): void {
+    const now = Date.now();
+    if (now - this.lastAudioLevelUpdate < 120) {
+      return;
+    }
+
+    this.lastAudioLevelUpdate = now;
+    this.options.onAudioLevel(normalizeAudioLevel(dbfs));
   }
 
   private pushPreRoll(frame: Buffer): void {
@@ -179,6 +193,7 @@ export class HandsFreeRuntime {
     this.speechMs = 0;
     this.utteranceMs = 0;
     this.silenceMs = 0;
+    this.options.onAudioLevel(0);
   }
 
   private fail(error: Error): void {
@@ -209,6 +224,15 @@ export class HandsFreeRuntime {
       child.kill('SIGINT');
     });
   }
+}
+
+function normalizeAudioLevel(dbfs: number): number {
+  if (!Number.isFinite(dbfs)) {
+    return 0;
+  }
+
+  const normalized = (dbfs + 60) / 40;
+  return Math.max(0, Math.min(1, normalized));
 }
 
 function getFfmpegErrorMessage(stderr: string, code: number | null): string {

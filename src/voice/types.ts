@@ -70,6 +70,7 @@ export type VoiceState = {
   binary: VoiceBinaryState;
   inputDevices: VoiceInputDevicesState;
   recordingStatus: VoiceRecordingStatus;
+  audioLevel: number;
   error?: string;
 };
 

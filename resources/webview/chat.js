@@ -3684,6 +3684,8 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
       const isRecording = enabled && voice?.recordingStatus === "recording";
       const isTranscribing = voice?.recordingStatus === "transcribing";
       const isReady = Boolean(voice && voice.binary.status === "downloaded" && selectedModel?.downloaded);
+      const audioLevel = voice?.audioLevel ?? 0;
+      button.style.setProperty("--voice-level", audioLevel.toFixed(3));
       button.hidden = !enabled;
       button.style.display = enabled ? "" : "none";
       button.classList.toggle("composer__voice--starting", isStarting);
@@ -9903,6 +9905,7 @@ ${after}`;
     const maxRecordingSeconds = typeof value.maxRecordingSeconds === "number" ? value.maxRecordingSeconds : 60;
     const handsFreeSensitivity = value.handsFreeSensitivity === "low" || value.handsFreeSensitivity === "high" ? value.handsFreeSensitivity : "normal";
     const handsFreeSilenceSeconds = typeof value.handsFreeSilenceSeconds === "number" ? value.handsFreeSilenceSeconds : 1.2;
+    const audioLevel = typeof value.audioLevel === "number" ? Math.max(0, Math.min(1, value.audioLevel)) : 0;
     const recordingStatus = value.recordingStatus === "listening" || value.recordingStatus === "recording" || value.recordingStatus === "transcribing" || value.recordingStatus === "error" ? value.recordingStatus : "idle";
     return {
       enabled: Boolean(value.enabled),
@@ -9930,6 +9933,7 @@ ${after}`;
       },
       inputDevices: parseVoiceInputDevicesState(value.inputDevices),
       recordingStatus,
+      audioLevel,
       ...typeof value.error === "string" && value.error ? { error: value.error } : {}
     };
   }

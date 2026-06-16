@@ -534,7 +534,9 @@ export class ComposerController {
     const isRecording = enabled && voice?.recordingStatus === 'recording';
     const isTranscribing = voice?.recordingStatus === 'transcribing';
     const isReady = Boolean(voice && voice.binary.status === 'downloaded' && selectedModel?.downloaded);
+    const audioLevel = voice?.audioLevel ?? 0;
 
+    button.style.setProperty('--voice-level', audioLevel.toFixed(3));
     button.hidden = !enabled;
     button.style.display = enabled ? '' : 'none';
     button.classList.toggle('composer__voice--starting', isStarting);

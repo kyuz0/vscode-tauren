@@ -47,6 +47,7 @@ export class VoiceController implements vscode.Disposable {
   private handsFreeRuntime: HandsFreeRuntime | undefined;
   private handsFreeActive = false;
   private recordingStatus: VoiceState['recordingStatus'] = 'idle';
+  private audioLevel = 0;
   private lastError: string | undefined;
 
   public constructor(private readonly options: VoiceControllerOptions) {
@@ -118,6 +119,7 @@ export class VoiceController implements vscode.Disposable {
         ...(this.inputDevicesError ? { error: this.inputDevicesError } : {})
       },
       recordingStatus: this.recordingStatus,
+      audioLevel: this.audioLevel,
       ...(this.lastError ? { error: this.lastError } : {})
     };
   }
@@ -324,6 +326,7 @@ export class VoiceController implements vscode.Disposable {
       this.handsFreeRuntime = undefined;
       await runtime.stop();
       this.recordingStatus = 'idle';
+      this.audioLevel = 0;
       this.options.onDidChangeState();
       return;
     }
@@ -387,11 +390,16 @@ export class VoiceController implements vscode.Disposable {
         this.recordingStatus = status;
         this.options.onDidChangeState();
       },
+      onAudioLevel: (level) => {
+        this.audioLevel = level;
+        this.options.onDidChangeState();
+      },
       onUtterance: (audioFile) => this.transcribeHandsFreeUtterance(audioFile),
       onError: (error) => {
         this.handsFreeRuntime = undefined;
         this.handsFreeActive = false;
         this.recordingStatus = 'error';
+        this.audioLevel = 0;
         this.lastError = getErrorMessage(error);
         this.options.onDidChangeState();
         this.options.showToast?.(`Voice listening stopped: ${this.lastError}`, 'error');

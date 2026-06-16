@@ -264,6 +264,7 @@ function parseVoiceState(value: unknown): WebviewState['voice'] {
   const maxRecordingSeconds = typeof value.maxRecordingSeconds === 'number' ? value.maxRecordingSeconds : 60;
   const handsFreeSensitivity = value.handsFreeSensitivity === 'low' || value.handsFreeSensitivity === 'high' ? value.handsFreeSensitivity : 'normal';
   const handsFreeSilenceSeconds = typeof value.handsFreeSilenceSeconds === 'number' ? value.handsFreeSilenceSeconds : 1.2;
+  const audioLevel = typeof value.audioLevel === 'number' ? Math.max(0, Math.min(1, value.audioLevel)) : 0;
   const recordingStatus = value.recordingStatus === 'listening' || value.recordingStatus === 'recording' || value.recordingStatus === 'transcribing' || value.recordingStatus === 'error'
     ? value.recordingStatus
     : 'idle';
@@ -294,6 +295,7 @@ function parseVoiceState(value: unknown): WebviewState['voice'] {
     },
     inputDevices: parseVoiceInputDevicesState(value.inputDevices),
     recordingStatus,
+    audioLevel,
     ...(typeof value.error === 'string' && value.error ? { error: value.error } : {})
   };
 }

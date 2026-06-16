@@ -714,6 +714,7 @@ export const composerStyles = /* css */ `    .tauren-view--has-extension-status 
     }
 
     .composer__voice {
+      --voice-level: 0;
       grid-column: 3;
       justify-self: end;
       width: 34px;
@@ -737,8 +738,9 @@ export const composerStyles = /* css */ `    .tauren-view--has-extension-status 
     .composer__voice::before {
       background:
         radial-gradient(circle at 50% 0, #a6ffbf 0 2px, #35f080 3px, transparent 4px),
-        radial-gradient(circle, transparent 58%, color-mix(in srgb, #35f080 72%, transparent) 60%, transparent 66%);
-      filter: drop-shadow(0 0 4px color-mix(in srgb, #35f080 62%, transparent));
+        radial-gradient(circle, transparent 58%, color-mix(in srgb, #35f080 calc(48% + var(--voice-level) * 34%), transparent) 60%, transparent 66%);
+      filter: drop-shadow(0 0 calc(3px + var(--voice-level) * 5px) color-mix(in srgb, #35f080 calc(44% + var(--voice-level) * 42%), transparent));
+      transform: scale(calc(1 + var(--voice-level) * 0.08));
       z-index: -2;
     }
 
@@ -771,7 +773,7 @@ export const composerStyles = /* css */ `    .tauren-view--has-extension-status 
     }
 
     .composer__voice--listening::before {
-      opacity: 0.6;
+      opacity: calc(0.42 + var(--voice-level) * 0.42);
       animation-duration: 1800ms;
     }
 
