@@ -12,11 +12,12 @@ const frameMs = 30;
 const frameBytes = sampleRate * channels * bytesPerSample * frameMs / 1000;
 const preRollMs = 500;
 const preRollFrameCount = Math.ceil(preRollMs / frameMs);
-const speechThresholdDbfsBySensitivity: Record<VoiceHandsFreeSensitivity, number> = {
+const speechStartThresholdDbfsBySensitivity: Record<VoiceHandsFreeSensitivity, number> = {
   low: -28,
   normal: -35,
   high: -42
 };
+const speechStopThresholdOffsetDb = 6;
 const minSpeechMs = 300;
 const minUtteranceMs = 450;
 
@@ -99,11 +100,12 @@ export class HandsFreeRuntime {
   private async handleFrame(frame: Buffer): Promise<void> {
     const dbfs = calculatePcm16Dbfs(frame);
     this.postAudioLevel(dbfs);
-    const speech = isSpeechLevel(dbfs, speechThresholdDbfsBySensitivity[this.options.sensitivity]);
+    const startThreshold = speechStartThresholdDbfsBySensitivity[this.options.sensitivity];
+    const stopThreshold = startThreshold - speechStopThresholdOffsetDb;
 
     if (this.phase === 'listening') {
       this.pushPreRoll(frame);
-      if (speech) {
+      if (isSpeechLevel(dbfs, startThreshold)) {
         this.beginUtterance();
       }
       return;
@@ -116,7 +118,7 @@ export class HandsFreeRuntime {
     this.utterance.push(frame);
     this.utteranceMs += frameMs;
 
-    if (speech) {
+    if (isSpeechLevel(dbfs, stopThreshold)) {
       this.speechMs += frameMs;
       this.silenceMs = 0;
     } else {
