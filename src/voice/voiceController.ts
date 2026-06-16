@@ -7,6 +7,8 @@ import * as path from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 import * as vscode from 'vscode';
 import { defaultVoiceModelId, getVoiceBinaryAsset, getVoiceModelAsset, voiceModelAssets } from './voiceAssetCatalog';
+import { HandsFreeRuntime } from './handsFreeRuntime';
+import { getFfmpegRecordingCommand, listInputDevices } from './voiceInputDevices';
 import type { VoiceAssetDownloadState, VoiceInputDevice, VoiceLanguage, VoiceModelId, VoiceState, VoiceTranscriptAction } from './types';
 import { getVoiceActivationModeSetting, getVoiceEnabledSetting, getVoiceInputDeviceSetting, getVoiceLanguageSetting, getVoiceMaxRecordingSecondsSetting, getVoiceModeSetting, getVoiceModelSetting, getVoiceTranscriptActionSetting } from '../settings/taurenSettings';
 import { getErrorMessage } from '../controller/errors';
@@ -32,8 +34,6 @@ type ActiveRecording = {
   stderr: string;
   stopping: boolean;
   maxDurationTimer?: NodeJS.Timeout;
-  handsFree?: boolean;
-  heardSpeech?: boolean;
 };
 
 export class VoiceController implements vscode.Disposable {
@@ -44,6 +44,7 @@ export class VoiceController implements vscode.Disposable {
   private inputDevices: VoiceInputDevice[] = [{ id: 'default', label: 'Default microphone', isDefault: true }];
   private inputDevicesError: string | undefined;
   private activeRecording: ActiveRecording | undefined;
+  private handsFreeRuntime: HandsFreeRuntime | undefined;
   private handsFreeActive = false;
   private recordingStatus: VoiceState['recordingStatus'] = 'idle';
   private lastError: string | undefined;
@@ -261,26 +262,22 @@ export class VoiceController implements vscode.Disposable {
       return;
     }
 
+    if (handsFree) {
+      this.startHandsFreeRuntime();
+      return;
+    }
+
     const audioFile = path.join(os.tmpdir(), `tauren-voice-${Date.now()}.wav`);
-    const command = getFfmpegRecordingCommand(audioFile, getVoiceInputDeviceSetting(), { detectSilence: handsFree });
+    const command = getFfmpegRecordingCommand(audioFile, getVoiceInputDeviceSetting());
     const recording: ActiveRecording = {
       process: spawn(command.executable, command.args, { stdio: ['ignore', 'pipe', 'pipe'] }),
       audioFile,
       stderr: '',
-      stopping: false,
-      handsFree
+      stopping: false
     };
 
-    if (handsFree) {
-      this.handsFreeActive = true;
-    }
-
     recording.process.stderr?.on('data', (chunk) => {
-      const text = String(chunk);
-      recording.stderr += text;
-      if (recording.handsFree) {
-        this.handleHandsFreeRecorderOutput(recording, text);
-      }
+      recording.stderr += String(chunk);
     });
 
     recording.process.on('error', (error) => {
@@ -318,15 +315,23 @@ export class VoiceController implements vscode.Disposable {
     this.options.onDidChangeState();
   }
 
-  public async stopRecording(options: { reason?: 'user' | 'maxDuration' | 'silence'; continueHandsFree?: boolean } = {}): Promise<void> {
+  public async stopRecording(options: { reason?: 'user' | 'maxDuration' } = {}): Promise<void> {
+    if (this.handsFreeRuntime) {
+      this.handsFreeActive = false;
+      const runtime = this.handsFreeRuntime;
+      this.handsFreeRuntime = undefined;
+      await runtime.stop();
+      this.recordingStatus = 'idle';
+      this.options.onDidChangeState();
+      return;
+    }
+
     const recording = this.activeRecording;
     if (!recording) {
       return;
     }
 
-    if (!options.continueHandsFree) {
-      this.handsFreeActive = false;
-    }
+    this.handsFreeActive = false;
 
     recording.stopping = true;
     if (recording.maxDurationTimer) {
@@ -364,25 +369,53 @@ export class VoiceController implements vscode.Disposable {
       this.options.showNotification(`Voice transcription failed: ${this.lastError}`, 'warning');
     } finally {
       await fs.rm(recording.audioFile, { force: true }).catch(() => undefined);
-      if (options.continueHandsFree && this.handsFreeActive && getVoiceModeSetting() === 'handsFree') {
-        void this.startRecording();
-      }
     }
   }
 
-  private handleHandsFreeRecorderOutput(recording: ActiveRecording, text: string): void {
-    if (recording.stopping || this.activeRecording !== recording) {
-      return;
-    }
+  private startHandsFreeRuntime(): void {
+    this.handsFreeActive = true;
+    this.handsFreeRuntime = new HandsFreeRuntime({
+      inputDeviceId: getVoiceInputDeviceSetting(),
+      tempDirectory: os.tmpdir(),
+      maxUtteranceSeconds: getVoiceMaxRecordingSecondsSetting(),
+      getShouldContinue: () => this.handsFreeActive,
+      onStatus: (status) => {
+        this.recordingStatus = status;
+        this.options.onDidChangeState();
+      },
+      onUtterance: (audioFile) => this.transcribeHandsFreeUtterance(audioFile),
+      onError: (error) => {
+        this.handsFreeRuntime = undefined;
+        this.handsFreeActive = false;
+        this.recordingStatus = 'error';
+        this.lastError = getErrorMessage(error);
+        this.options.onDidChangeState();
+        this.options.showToast?.(`Voice listening stopped: ${this.lastError}`, 'error');
+      }
+    });
+    this.handsFreeRuntime.start();
+  }
 
-    if (text.includes('silence_end')) {
-      recording.heardSpeech = true;
-      this.recordingStatus = 'recording';
-      this.options.onDidChangeState();
-    }
+  private async transcribeHandsFreeUtterance(audioFile: string): Promise<void> {
+    this.recordingStatus = 'transcribing';
+    this.options.onDidChangeState();
 
-    if (recording.heardSpeech && text.includes('silence_start')) {
-      void this.stopRecording({ reason: 'silence', continueHandsFree: true });
+    try {
+      const transcript = await this.transcribe(audioFile);
+      this.lastError = undefined;
+      if (transcript.trim()) {
+        await this.options.onTranscript(transcript.trim(), getVoiceTranscriptActionSetting());
+      }
+    } catch (error) {
+      this.lastError = getErrorMessage(error);
+      this.options.showToast?.(`Voice transcription failed: ${this.lastError}`, 'error');
+      this.options.showNotification(`Voice transcription failed: ${this.lastError}`, 'warning');
+    } finally {
+      await fs.rm(audioFile, { force: true }).catch(() => undefined);
+      if (this.handsFreeActive) {
+        this.recordingStatus = 'listening';
+        this.options.onDidChangeState();
+      }
     }
   }
 
@@ -443,6 +476,13 @@ export class VoiceController implements vscode.Disposable {
   }
 
   private async stopRecorderProcess(): Promise<void> {
+    this.handsFreeActive = false;
+    if (this.handsFreeRuntime) {
+      const runtime = this.handsFreeRuntime;
+      this.handsFreeRuntime = undefined;
+      await runtime.stop().catch(() => undefined);
+    }
+
     const recording = this.activeRecording;
     if (!recording) {
       return;
@@ -595,106 +635,6 @@ function normalizeInputDevices(value: VoiceInputDevice[] | undefined): VoiceInpu
   return devices;
 }
 
-function getFfmpegRecordingCommand(audioFile: string, inputDeviceId: string, options: { detectSilence?: boolean } = {}): { executable: string; args: string[] } {
-  const deviceId = inputDeviceId || 'default';
-  const outputArgs = options.detectSilence
-    ? ['-af', 'silencedetect=noise=-35dB:d=1.5', '-ar', '16000', '-ac', '1', audioFile]
-    : ['-ar', '16000', '-ac', '1', audioFile];
-
-  if (process.platform === 'darwin') {
-    const input = deviceId === 'default' ? ':0' : `:${deviceId}`;
-    return { executable: 'ffmpeg', args: ['-y', '-f', 'avfoundation', '-i', input, ...outputArgs] };
-  }
-
-  if (process.platform === 'win32') {
-    const input = deviceId === 'default' ? 'audio=default' : `audio=${deviceId}`;
-    return { executable: 'ffmpeg', args: ['-y', '-f', 'dshow', '-i', input, ...outputArgs] };
-  }
-
-  const input = deviceId === 'default' ? 'default' : deviceId;
-  return { executable: 'ffmpeg', args: ['-y', '-f', 'pulse', '-i', input, ...outputArgs] };
-}
-
-async function listInputDevices(): Promise<VoiceInputDevice[]> {
-  if (process.platform === 'darwin') {
-    return listMacInputDevices();
-  }
-
-  if (process.platform === 'win32') {
-    return listWindowsInputDevices();
-  }
-
-  return listLinuxInputDevices();
-}
-
-async function listMacInputDevices(): Promise<VoiceInputDevice[]> {
-  const result = await runCommandWithOutput('ffmpeg', ['-f', 'avfoundation', '-list_devices', 'true', '-i', ''], { allowFailure: true });
-  const devices: VoiceInputDevice[] = [{ id: 'default', label: 'Default microphone', isDefault: true }];
-  let inAudioSection = false;
-
-  for (const line of result.stderr.split('\n')) {
-    if (line.includes('AVFoundation audio devices:')) {
-      inAudioSection = true;
-      continue;
-    }
-    if (line.includes('AVFoundation video devices:')) {
-      inAudioSection = false;
-      continue;
-    }
-    if (!inAudioSection) {
-      continue;
-    }
-
-    const match = line.match(/\[(\d+)\]\s+(.+)$/);
-    if (match) {
-      devices.push({ id: match[1], label: match[2].trim() });
-    }
-  }
-
-  return devices;
-}
-
-async function listWindowsInputDevices(): Promise<VoiceInputDevice[]> {
-  const result = await runCommandWithOutput('ffmpeg', ['-list_devices', 'true', '-f', 'dshow', '-i', 'dummy'], { allowFailure: true });
-  const devices: VoiceInputDevice[] = [{ id: 'default', label: 'Default microphone', isDefault: true }];
-  let inAudioSection = false;
-
-  for (const line of result.stderr.split('\n')) {
-    if (line.includes('DirectShow audio devices')) {
-      inAudioSection = true;
-      continue;
-    }
-    if (line.includes('DirectShow video devices')) {
-      inAudioSection = false;
-      continue;
-    }
-    if (!inAudioSection) {
-      continue;
-    }
-
-    const match = line.match(/"([^"]+)"/);
-    if (match && !line.includes('Alternative name')) {
-      devices.push({ id: match[1], label: match[1] });
-    }
-  }
-
-  return devices;
-}
-
-async function listLinuxInputDevices(): Promise<VoiceInputDevice[]> {
-  const devices: VoiceInputDevice[] = [{ id: 'default', label: 'Default microphone', isDefault: true }];
-  const result = await runCommandWithOutput('pactl', ['list', 'short', 'sources']);
-
-  for (const line of result.stdout.split('\n')) {
-    const parts = line.trim().split(/\s+/);
-    if (parts.length >= 2) {
-      devices.push({ id: parts[1], label: parts[1] });
-    }
-  }
-
-  return devices;
-}
-
 function getFfmpegErrorMessage(stderr: string, code: number | null): string {
   const lines = stderr
     .split('\n')
@@ -768,7 +708,7 @@ async function cleanupStaleVoiceTempFiles(): Promise<void> {
   const entries = await fs.readdir(tempDirectory).catch(() => []);
 
   await Promise.all(entries
-    .filter((entry) => /^tauren-voice-\d+\.wav$/.test(entry))
+    .filter((entry) => /^tauren-voice-\d+(?:-\d+)?\.wav$/.test(entry))
     .map((entry) => fs.rm(path.join(tempDirectory, entry), { force: true }).catch(() => undefined)));
 }
 
@@ -808,20 +748,14 @@ async function commandExists(command: string): Promise<boolean> {
 }
 
 async function runCommand(command: string, args: string[]): Promise<void> {
-  await runCommandWithOutput(command, args).then(() => undefined);
-}
-
-async function runCommandWithOutput(command: string, args: string[], options: { allowFailure?: boolean } = {}): Promise<{ stdout: string; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
-    let stdout = '';
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(command, args, { stdio: ['ignore', 'ignore', 'pipe'] });
     let stderr = '';
-    child.stdout.on('data', (chunk) => { stdout += String(chunk); });
     child.stderr.on('data', (chunk) => { stderr += String(chunk); });
     child.on('error', reject);
     child.on('close', (code) => {
-      if (code === 0 || options.allowFailure) {
-        resolve({ stdout, stderr });
+      if (code === 0) {
+        resolve();
       } else {
         reject(new Error(stderr.trim() || `${command} exited with code ${code}.`));
       }
