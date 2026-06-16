@@ -1014,7 +1014,6 @@ export class TaurenSessionManager {
       extensionStatus: this.extensionSettings.statusBarEnabled ? formatExtensionStatuses(active.extensionStatuses) : [],
       extensionFooter: this.extensionSettings.statusBarEnabled ? active.extensionFooterHost.getEntry() : undefined,
       extensionWidgets: this.filterEnabledExtensionWidgets(active.extensionWidgetHost.getEntries()),
-      ...(this.options.voiceController ? { voice: this.options.voiceController.getState() } : {}),
       outputColors: this.options.getOutputColors?.() ?? true,
       animationsEnabled: this.options.getAnimationsEnabled?.() ?? true,
       customUiTheme: this.options.getCustomUiTheme?.() ?? 'default'

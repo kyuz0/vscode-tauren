@@ -24,6 +24,7 @@ import {
   parseWebviewStateMessage,
   type ProvisionalExtensionUiSnapshot
 } from './state';
+import type { VoiceState } from '../voice/types';
 import type { WebviewScrollCommand } from '../webviewProtocol/types';
 import {
   createKwardQuestionUiState,
@@ -337,6 +338,15 @@ window.addEventListener('message', (event) => {
     return;
   }
 
+  if (event.data?.type === 'voiceState') {
+    const voice = parseHostVoiceState(event.data.voice);
+    if (voice) {
+      state = { ...state, voice };
+      scheduleRender();
+    }
+    return;
+  }
+
   if (event.data?.type !== 'state') {
     return;
   }
@@ -526,6 +536,11 @@ function createToastIcon(kind: 'success' | 'warning' | 'error'): HTMLElement {
   icon.setAttribute('aria-hidden', 'true');
   icon.textContent = kind === 'warning' ? '⚠' : kind === 'error' ? '✕' : '✓';
   return icon;
+}
+
+function parseHostVoiceState(value: unknown): VoiceState | undefined {
+  const parsedState = parseWebviewStateMessage({ type: 'state', voice: value }, state);
+  return parsedState.voice;
 }
 
 function scheduleRender(options: { returnToChatMain?: boolean; refreshSessionsAfterRender?: boolean } = {}): void {

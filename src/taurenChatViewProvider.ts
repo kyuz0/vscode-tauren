@@ -185,7 +185,7 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
     };
     this.voiceController = new VoiceController({
       storageUri: this.sessionMetadataStorageUri,
-      onDidChangeState: () => this.controller.postState(),
+      onDidChangeState: () => this.postVoiceState(),
       onTranscript: async (text, action) => {
         if (action === 'submit') {
           await this.controller.submitTextFromVoice(text);
@@ -304,6 +304,13 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
 
         if (affectsTaurenSettings) {
           this.controller.postState();
+        }
+
+        if (event.affectsConfiguration('tauren.voice.enabled')
+          || event.affectsConfiguration('tauren.voice.model')
+          || event.affectsConfiguration('tauren.voice.inputDevice')
+          || event.affectsConfiguration('tauren.voice.transcriptAction')) {
+          this.postVoiceState();
         }
 
         if (event.affectsConfiguration('tauren.rejectEditWriteOutsideWorkspace')) {
@@ -978,6 +985,10 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
     }
   }
 
+  private postVoiceState(): void {
+    void this.webviewView?.webview.postMessage({ type: 'voiceState', voice: this.voiceController.getState() });
+  }
+
   private withProviderState(message: WebviewStateMessage): WebviewStateMessage {
     if (message.lane) {
       this.lastWebviewLane = message.lane;
@@ -990,6 +1001,7 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
       customUiTheme: getCustomUiThemeSetting(),
       allowRemoteImages: getAllowRemoteImagesSetting(),
       welcomeDismissed: this.isWelcomeDismissed(),
+      voice: this.voiceController.getState(),
       perfEnabled: this.debugPerformanceEnabled
     };
   }

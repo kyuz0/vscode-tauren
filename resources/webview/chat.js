@@ -3610,10 +3610,12 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
       const voice = this.options.getState().voice;
       const status = voice?.recordingStatus;
       if (status === "recording") {
+        this.showVoiceFeedback("Stopping recording\u2026");
         this.options.postMessage({ type: "voiceStopRecording" });
         return;
       }
       if (status === "transcribing") {
+        this.showVoiceFeedback("Voice input is still transcribing.");
         return;
       }
       const selectedModel = voice?.models.find((model) => model.id === voice.selectedModelId);
@@ -3623,7 +3625,14 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
         this.options.postMessage({ type: "setSettingsSection", section: "voice" });
         return;
       }
+      this.showVoiceFeedback("Starting recording\u2026");
       this.options.postMessage({ type: "voiceStartRecording" });
+    }
+    showVoiceFeedback(message) {
+      const tooltip = this.options.voiceButton.querySelector(".composer__button-tooltip, .tauren-icon-action-tooltip");
+      if (tooltip) {
+        tooltip.textContent = message;
+      }
     }
     syncVoiceButton() {
       const voice = this.options.getState().voice;
@@ -3641,7 +3650,7 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
       button.disabled = isTranscribing;
       button.setAttribute("aria-label", isRecording ? "Stop voice input" : "Start voice input");
       if (tooltip) {
-        tooltip.textContent = isRecording ? "Stop voice input" : isTranscribing ? "Transcribing\u2026" : isReady ? "Start voice input" : "Start voice input (setup required)";
+        tooltip.textContent = isRecording ? "Stop voice input" : voice?.recordingStatus === "error" && voice.error ? voice.error : isTranscribing ? "Transcribing\u2026" : isReady ? "Start voice input" : "Start voice input (setup required)";
       }
     }
     toggleStreamingBehavior() {
@@ -10358,6 +10367,14 @@ ${after}`;
       focusPromptInput();
       return;
     }
+    if (event.data?.type === "voiceState") {
+      const voice = parseHostVoiceState(event.data.voice);
+      if (voice) {
+        state = { ...state, voice };
+        scheduleRender();
+      }
+      return;
+    }
     if (event.data?.type !== "state") {
       return;
     }
@@ -10505,6 +10522,10 @@ ${after}`;
     icon.setAttribute("aria-hidden", "true");
     icon.textContent = kind === "warning" ? "\u26A0" : kind === "error" ? "\u2715" : "\u2713";
     return icon;
+  }
+  function parseHostVoiceState(value) {
+    const parsedState = parseWebviewStateMessage({ type: "state", voice: value }, state);
+    return parsedState.voice;
   }
   function scheduleRender(options = {}) {
     pendingReturnToChatAfterRender ||= Boolean(options.returnToChatMain);

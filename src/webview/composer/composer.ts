@@ -446,11 +446,13 @@ export class ComposerController {
     const status = voice?.recordingStatus;
 
     if (status === 'recording') {
+      this.showVoiceFeedback('Stopping recording…');
       this.options.postMessage({ type: 'voiceStopRecording' });
       return;
     }
 
     if (status === 'transcribing') {
+      this.showVoiceFeedback('Voice input is still transcribing.');
       return;
     }
 
@@ -463,7 +465,15 @@ export class ComposerController {
       return;
     }
 
+    this.showVoiceFeedback('Starting recording…');
     this.options.postMessage({ type: 'voiceStartRecording' });
+  }
+
+  private showVoiceFeedback(message: string): void {
+    const tooltip = this.options.voiceButton.querySelector<HTMLElement>('.composer__button-tooltip, .tauren-icon-action-tooltip');
+    if (tooltip) {
+      tooltip.textContent = message;
+    }
   }
 
   private syncVoiceButton(): void {
@@ -486,6 +496,8 @@ export class ComposerController {
     if (tooltip) {
       tooltip.textContent = isRecording
         ? 'Stop voice input'
+        : voice?.recordingStatus === 'error' && voice.error
+        ? voice.error
         : isTranscribing
         ? 'Transcribing…'
         : isReady

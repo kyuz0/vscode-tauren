@@ -27,6 +27,8 @@ export type VoiceControllerOptions = {
 type ActiveRecording = {
   process: ChildProcess;
   audioFile: string;
+  stderr: string;
+  stopping: boolean;
 };
 
 export class VoiceController implements vscode.Disposable {
@@ -205,11 +207,21 @@ export class VoiceController implements vscode.Disposable {
   }
 
   public async startRecording(): Promise<void> {
-    if (this.activeRecording || this.recordingStatus === 'recording' || this.recordingStatus === 'transcribing') {
+    if (this.activeRecording || this.recordingStatus === 'recording') {
+      this.options.showToast?.('Voice input is already recording. Click the microphone again to stop.', 'warning');
+      return;
+    }
+
+    if (this.recordingStatus === 'transcribing') {
+      this.options.showToast?.('Voice input is still transcribing.', 'warning');
       return;
     }
 
     if (!getVoiceEnabledSetting()) {
+      this.lastError = 'Voice input is disabled.';
+      this.recordingStatus = 'error';
+      this.options.onDidChangeState();
+      this.options.showToast?.(this.lastError, 'warning');
       return;
     }
 
@@ -225,16 +237,41 @@ export class VoiceController implements vscode.Disposable {
 
     const audioFile = path.join(os.tmpdir(), `tauren-voice-${Date.now()}.wav`);
     const command = getFfmpegRecordingCommand(audioFile, getVoiceInputDeviceSetting());
-    const recorder = spawn(command.executable, command.args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const recording: ActiveRecording = {
+      process: spawn(command.executable, command.args, { stdio: ['ignore', 'pipe', 'pipe'] }),
+      audioFile,
+      stderr: '',
+      stopping: false
+    };
 
-    recorder.on('error', (error) => {
+    recording.process.stderr?.on('data', (chunk) => {
+      recording.stderr += String(chunk);
+    });
+
+    recording.process.on('error', (error) => {
+      if (this.activeRecording !== recording) {
+        return;
+      }
       this.activeRecording = undefined;
       this.recordingStatus = 'error';
       this.lastError = getErrorMessage(error);
       this.options.onDidChangeState();
+      this.options.showToast?.(`Voice recording failed: ${this.lastError}`, 'error');
     });
 
-    this.activeRecording = { process: recorder, audioFile };
+    recording.process.on('close', (code) => {
+      if (this.activeRecording !== recording || recording.stopping) {
+        return;
+      }
+      this.activeRecording = undefined;
+      this.recordingStatus = 'error';
+      this.lastError = getFfmpegErrorMessage(recording.stderr, code);
+      this.options.onDidChangeState();
+      this.options.showToast?.(`Voice recording stopped: ${this.lastError}`, 'error');
+      void fs.rm(recording.audioFile, { force: true }).catch(() => undefined);
+    });
+
+    this.activeRecording = recording;
     this.recordingStatus = 'recording';
     this.options.onDidChangeState();
   }
@@ -245,12 +282,16 @@ export class VoiceController implements vscode.Disposable {
       return;
     }
 
+    recording.stopping = true;
     this.activeRecording = undefined;
     this.recordingStatus = 'transcribing';
     this.options.onDidChangeState();
 
     try {
       await stopProcess(recording.process);
+      if (!(await fileExists(recording.audioFile))) {
+        throw new Error(getFfmpegErrorMessage(recording.stderr, recording.process.exitCode));
+      }
       const transcript = await this.transcribe(recording.audioFile);
       this.recordingStatus = 'idle';
       this.lastError = undefined;
@@ -266,6 +307,7 @@ export class VoiceController implements vscode.Disposable {
       this.recordingStatus = 'error';
       this.lastError = getErrorMessage(error);
       this.options.onDidChangeState();
+      this.options.showToast?.(`Voice transcription failed: ${this.lastError}`, 'error');
       this.options.showNotification(`Voice transcription failed: ${this.lastError}`, 'warning');
     } finally {
       await fs.rm(recording.audioFile, { force: true }).catch(() => undefined);
@@ -332,6 +374,7 @@ export class VoiceController implements vscode.Disposable {
       return;
     }
 
+    recording.stopping = true;
     this.activeRecording = undefined;
     await stopProcess(recording.process).catch(() => undefined);
     await fs.rm(recording.audioFile, { force: true }).catch(() => undefined);
@@ -546,6 +589,15 @@ async function listLinuxInputDevices(): Promise<VoiceInputDevice[]> {
   }
 
   return devices;
+}
+
+function getFfmpegErrorMessage(stderr: string, code: number | null): string {
+  const lines = stderr
+    .split('\n')
+    .map((line) => line.replace(/^\[[^\]]+\]\s*/, '').trim())
+    .filter(Boolean);
+  const importantLine = [...lines].reverse().find((line) => /error|denied|busy|unavailable|invalid|failed|not found|no such/i.test(line));
+  return importantLine ?? (code === null ? 'ffmpeg stopped before audio was captured.' : `ffmpeg exited with code ${code}.`);
 }
 
 function cleanWhisperOutput(value: string): string {
