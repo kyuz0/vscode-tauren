@@ -747,16 +747,23 @@ export const composerStyles = /* css */ `    .tauren-view--has-extension-status 
     }
 
     .composer__voice:hover:not(:disabled),
+    .composer__voice--listening:not(:disabled),
     .composer__voice--recording:not(:disabled),
     .composer__voice--transcribing {
       color: var(--vscode-input-background);
       background: var(--vscode-foreground);
     }
 
+    .composer__voice--listening::before,
     .composer__voice--recording::before,
     .composer__voice--transcribing::before {
       opacity: 1;
       animation: composer-voice-led-orbit 900ms linear infinite;
+    }
+
+    .composer__voice--listening::before {
+      opacity: 0.7;
+      animation-duration: 1800ms;
     }
 
     .composer__voice--transcribing::before {

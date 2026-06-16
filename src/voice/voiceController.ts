@@ -8,7 +8,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import * as vscode from 'vscode';
 import { defaultVoiceModelId, getVoiceBinaryAsset, getVoiceModelAsset, voiceModelAssets } from './voiceAssetCatalog';
 import type { VoiceAssetDownloadState, VoiceInputDevice, VoiceLanguage, VoiceModelId, VoiceState, VoiceTranscriptAction } from './types';
-import { getVoiceActivationModeSetting, getVoiceEnabledSetting, getVoiceInputDeviceSetting, getVoiceLanguageSetting, getVoiceMaxRecordingSecondsSetting, getVoiceModelSetting, getVoiceTranscriptActionSetting } from '../settings/taurenSettings';
+import { getVoiceActivationModeSetting, getVoiceEnabledSetting, getVoiceInputDeviceSetting, getVoiceLanguageSetting, getVoiceMaxRecordingSecondsSetting, getVoiceModeSetting, getVoiceModelSetting, getVoiceTranscriptActionSetting } from '../settings/taurenSettings';
 import { getErrorMessage } from '../controller/errors';
 
 const voiceStorageDirectoryName = 'voice';
@@ -32,6 +32,8 @@ type ActiveRecording = {
   stderr: string;
   stopping: boolean;
   maxDurationTimer?: NodeJS.Timeout;
+  handsFree?: boolean;
+  heardSpeech?: boolean;
 };
 
 export class VoiceController implements vscode.Disposable {
@@ -42,6 +44,7 @@ export class VoiceController implements vscode.Disposable {
   private inputDevices: VoiceInputDevice[] = [{ id: 'default', label: 'Default microphone', isDefault: true }];
   private inputDevicesError: string | undefined;
   private activeRecording: ActiveRecording | undefined;
+  private handsFreeActive = false;
   private recordingStatus: VoiceState['recordingStatus'] = 'idle';
   private lastError: string | undefined;
 
@@ -51,6 +54,8 @@ export class VoiceController implements vscode.Disposable {
       this.inputDevices = cachedDevices;
       this.inputDevicesStatus = 'ready';
     }
+
+    void cleanupStaleVoiceTempFiles();
   }
 
   public dispose(): void {
@@ -76,6 +81,7 @@ export class VoiceController implements vscode.Disposable {
       enabled: getVoiceEnabledSetting(),
       selectedModelId,
       transcriptAction: getVoiceTranscriptActionSetting(),
+      mode: getVoiceModeSetting(),
       activationMode: getVoiceActivationModeSetting(),
       maxRecordingSeconds: getVoiceMaxRecordingSecondsSetting(),
       language,
@@ -226,7 +232,8 @@ export class VoiceController implements vscode.Disposable {
   }
 
   public async startRecording(): Promise<void> {
-    if (this.activeRecording || this.recordingStatus === 'recording') {
+    const handsFree = getVoiceModeSetting() === 'handsFree';
+    if (this.activeRecording || this.recordingStatus === 'recording' || this.recordingStatus === 'listening') {
       this.options.showToast?.('Voice input is already recording. Click the microphone again to stop.', 'warning');
       return;
     }
@@ -255,16 +262,25 @@ export class VoiceController implements vscode.Disposable {
     }
 
     const audioFile = path.join(os.tmpdir(), `tauren-voice-${Date.now()}.wav`);
-    const command = getFfmpegRecordingCommand(audioFile, getVoiceInputDeviceSetting());
+    const command = getFfmpegRecordingCommand(audioFile, getVoiceInputDeviceSetting(), { detectSilence: handsFree });
     const recording: ActiveRecording = {
       process: spawn(command.executable, command.args, { stdio: ['ignore', 'pipe', 'pipe'] }),
       audioFile,
       stderr: '',
-      stopping: false
+      stopping: false,
+      handsFree
     };
 
+    if (handsFree) {
+      this.handsFreeActive = true;
+    }
+
     recording.process.stderr?.on('data', (chunk) => {
-      recording.stderr += String(chunk);
+      const text = String(chunk);
+      recording.stderr += text;
+      if (recording.handsFree) {
+        this.handleHandsFreeRecorderOutput(recording, text);
+      }
     });
 
     recording.process.on('error', (error) => {
@@ -298,14 +314,18 @@ export class VoiceController implements vscode.Disposable {
     }
 
     this.activeRecording = recording;
-    this.recordingStatus = 'recording';
+    this.recordingStatus = handsFree ? 'listening' : 'recording';
     this.options.onDidChangeState();
   }
 
-  public async stopRecording(options: { reason?: 'user' | 'maxDuration' } = {}): Promise<void> {
+  public async stopRecording(options: { reason?: 'user' | 'maxDuration' | 'silence'; continueHandsFree?: boolean } = {}): Promise<void> {
     const recording = this.activeRecording;
     if (!recording) {
       return;
+    }
+
+    if (!options.continueHandsFree) {
+      this.handsFreeActive = false;
     }
 
     recording.stopping = true;
@@ -344,6 +364,25 @@ export class VoiceController implements vscode.Disposable {
       this.options.showNotification(`Voice transcription failed: ${this.lastError}`, 'warning');
     } finally {
       await fs.rm(recording.audioFile, { force: true }).catch(() => undefined);
+      if (options.continueHandsFree && this.handsFreeActive && getVoiceModeSetting() === 'handsFree') {
+        void this.startRecording();
+      }
+    }
+  }
+
+  private handleHandsFreeRecorderOutput(recording: ActiveRecording, text: string): void {
+    if (recording.stopping || this.activeRecording !== recording) {
+      return;
+    }
+
+    if (text.includes('silence_end')) {
+      recording.heardSpeech = true;
+      this.recordingStatus = 'recording';
+      this.options.onDidChangeState();
+    }
+
+    if (recording.heardSpeech && text.includes('silence_start')) {
+      void this.stopRecording({ reason: 'silence', continueHandsFree: true });
     }
   }
 
@@ -556,21 +595,24 @@ function normalizeInputDevices(value: VoiceInputDevice[] | undefined): VoiceInpu
   return devices;
 }
 
-function getFfmpegRecordingCommand(audioFile: string, inputDeviceId: string): { executable: string; args: string[] } {
+function getFfmpegRecordingCommand(audioFile: string, inputDeviceId: string, options: { detectSilence?: boolean } = {}): { executable: string; args: string[] } {
   const deviceId = inputDeviceId || 'default';
+  const outputArgs = options.detectSilence
+    ? ['-af', 'silencedetect=noise=-35dB:d=1.5', '-ar', '16000', '-ac', '1', audioFile]
+    : ['-ar', '16000', '-ac', '1', audioFile];
 
   if (process.platform === 'darwin') {
     const input = deviceId === 'default' ? ':0' : `:${deviceId}`;
-    return { executable: 'ffmpeg', args: ['-y', '-f', 'avfoundation', '-i', input, '-ar', '16000', '-ac', '1', audioFile] };
+    return { executable: 'ffmpeg', args: ['-y', '-f', 'avfoundation', '-i', input, ...outputArgs] };
   }
 
   if (process.platform === 'win32') {
     const input = deviceId === 'default' ? 'audio=default' : `audio=${deviceId}`;
-    return { executable: 'ffmpeg', args: ['-y', '-f', 'dshow', '-i', input, '-ar', '16000', '-ac', '1', audioFile] };
+    return { executable: 'ffmpeg', args: ['-y', '-f', 'dshow', '-i', input, ...outputArgs] };
   }
 
   const input = deviceId === 'default' ? 'default' : deviceId;
-  return { executable: 'ffmpeg', args: ['-y', '-f', 'pulse', '-i', input, '-ar', '16000', '-ac', '1', audioFile] };
+  return { executable: 'ffmpeg', args: ['-y', '-f', 'pulse', '-i', input, ...outputArgs] };
 }
 
 async function listInputDevices(): Promise<VoiceInputDevice[]> {
@@ -719,6 +761,15 @@ async function hashFile(file: string, algorithm: 'sha1' | 'sha256'): Promise<str
     hash.update(chunk);
   }
   return hash.digest('hex');
+}
+
+async function cleanupStaleVoiceTempFiles(): Promise<void> {
+  const tempDirectory = os.tmpdir();
+  const entries = await fs.readdir(tempDirectory).catch(() => []);
+
+  await Promise.all(entries
+    .filter((entry) => /^tauren-voice-\d+\.wav$/.test(entry))
+    .map((entry) => fs.rm(path.join(tempDirectory, entry), { force: true }).catch(() => undefined)));
 }
 
 async function extractZip(zipFile: string, destination: string): Promise<void> {

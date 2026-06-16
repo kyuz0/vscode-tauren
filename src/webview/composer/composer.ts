@@ -446,7 +446,7 @@ export class ComposerController {
   }
 
   private handleVoiceButtonClick(): void {
-    if (this.options.getState().voice?.activationMode === 'hold') {
+    if (this.options.getState().voice?.mode === 'pushToTalk' && this.options.getState().voice?.activationMode === 'hold') {
       return;
     }
 
@@ -454,7 +454,8 @@ export class ComposerController {
   }
 
   private handleVoicePointerDown(event: PointerEvent): void {
-    if (this.options.getState().voice?.activationMode !== 'hold' || event.button !== 0) {
+    const voice = this.options.getState().voice;
+    if (voice?.mode !== 'pushToTalk' || voice.activationMode !== 'hold' || event.button !== 0) {
       return;
     }
 
@@ -464,7 +465,8 @@ export class ComposerController {
   }
 
   private handleVoicePointerUp(): void {
-    if (this.options.getState().voice?.activationMode !== 'hold') {
+    const voice = this.options.getState().voice;
+    if (voice?.mode !== 'pushToTalk' || voice.activationMode !== 'hold') {
       return;
     }
 
@@ -478,7 +480,7 @@ export class ComposerController {
     const voice = this.options.getState().voice;
     const status = voice?.recordingStatus;
 
-    if (status === 'recording') {
+    if (status === 'recording' || status === 'listening') {
       this.showVoiceFeedback('Stopping recording…');
       this.options.postMessage({ type: 'voiceStopRecording' });
       return;
@@ -520,20 +522,24 @@ export class ComposerController {
     const tooltip = button.querySelector<HTMLElement>('.composer__button-tooltip, .tauren-icon-action-tooltip');
     const enabled = voice?.enabled === true;
     const selectedModel = voice?.models.find((model) => model.id === voice.selectedModelId);
+    const isListening = enabled && voice?.recordingStatus === 'listening';
     const isRecording = enabled && voice?.recordingStatus === 'recording';
     const isTranscribing = voice?.recordingStatus === 'transcribing';
     const isReady = Boolean(voice && voice.binary.status === 'downloaded' && selectedModel?.downloaded);
 
     button.hidden = !enabled;
     button.style.display = enabled ? '' : 'none';
+    button.classList.toggle('composer__voice--listening', isListening);
     button.classList.toggle('composer__voice--recording', isRecording);
     button.classList.toggle('composer__voice--transcribing', isTranscribing);
     button.disabled = isTranscribing;
-    button.setAttribute('aria-label', isRecording ? 'Stop voice input' : 'Start voice input');
+    button.setAttribute('aria-label', isRecording || isListening ? 'Stop voice input' : 'Start voice input');
 
     if (tooltip) {
       tooltip.textContent = isRecording
         ? 'Stop voice input'
+        : isListening
+        ? 'Listening… click to stop'
         : voice?.recordingStatus === 'error' && voice.error
         ? voice.error
         : isTranscribing

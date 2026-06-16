@@ -1,5 +1,7 @@
 export type VoiceTranscriptAction = 'insert' | 'submit';
 
+export type VoiceMode = 'pushToTalk' | 'handsFree';
+
 export type VoiceActivationMode = 'toggle' | 'hold';
 
 export type VoiceModelId = 'tiny.en' | 'base.en' | 'small.en' | 'tiny' | 'base' | 'small';
@@ -35,7 +37,7 @@ export type VoiceBinaryState = {
   download: VoiceAssetDownloadState;
 };
 
-export type VoiceRecordingStatus = 'idle' | 'recording' | 'transcribing' | 'error';
+export type VoiceRecordingStatus = 'idle' | 'listening' | 'recording' | 'transcribing' | 'error';
 
 export type VoiceInputDevice = {
   id: string;
@@ -54,6 +56,7 @@ export type VoiceState = {
   enabled: boolean;
   selectedModelId: VoiceModelId;
   transcriptAction: VoiceTranscriptAction;
+  mode: VoiceMode;
   activationMode: VoiceActivationMode;
   maxRecordingSeconds: number;
   language: VoiceLanguage;

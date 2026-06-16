@@ -3611,13 +3611,14 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
       this.suggestionMenu.sync();
     }
     handleVoiceButtonClick() {
-      if (this.options.getState().voice?.activationMode === "hold") {
+      if (this.options.getState().voice?.mode === "pushToTalk" && this.options.getState().voice?.activationMode === "hold") {
         return;
       }
       this.toggleVoiceRecording();
     }
     handleVoicePointerDown(event) {
-      if (this.options.getState().voice?.activationMode !== "hold" || event.button !== 0) {
+      const voice = this.options.getState().voice;
+      if (voice?.mode !== "pushToTalk" || voice.activationMode !== "hold" || event.button !== 0) {
         return;
       }
       event.preventDefault();
@@ -3625,7 +3626,8 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
       this.startVoiceRecording();
     }
     handleVoicePointerUp() {
-      if (this.options.getState().voice?.activationMode !== "hold") {
+      const voice = this.options.getState().voice;
+      if (voice?.mode !== "pushToTalk" || voice.activationMode !== "hold") {
         return;
       }
       if (this.options.getState().voice?.recordingStatus === "recording") {
@@ -3636,7 +3638,7 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
     toggleVoiceRecording() {
       const voice = this.options.getState().voice;
       const status = voice?.recordingStatus;
-      if (status === "recording") {
+      if (status === "recording" || status === "listening") {
         this.showVoiceFeedback("Stopping recording\u2026");
         this.options.postMessage({ type: "voiceStopRecording" });
         return;
@@ -3671,17 +3673,19 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
       const tooltip = button.querySelector(".composer__button-tooltip, .tauren-icon-action-tooltip");
       const enabled = voice?.enabled === true;
       const selectedModel = voice?.models.find((model) => model.id === voice.selectedModelId);
+      const isListening = enabled && voice?.recordingStatus === "listening";
       const isRecording = enabled && voice?.recordingStatus === "recording";
       const isTranscribing = voice?.recordingStatus === "transcribing";
       const isReady = Boolean(voice && voice.binary.status === "downloaded" && selectedModel?.downloaded);
       button.hidden = !enabled;
       button.style.display = enabled ? "" : "none";
+      button.classList.toggle("composer__voice--listening", isListening);
       button.classList.toggle("composer__voice--recording", isRecording);
       button.classList.toggle("composer__voice--transcribing", isTranscribing);
       button.disabled = isTranscribing;
-      button.setAttribute("aria-label", isRecording ? "Stop voice input" : "Start voice input");
+      button.setAttribute("aria-label", isRecording || isListening ? "Stop voice input" : "Start voice input");
       if (tooltip) {
-        tooltip.textContent = isRecording ? "Stop voice input" : voice?.recordingStatus === "error" && voice.error ? voice.error : isTranscribing ? "Transcribing\u2026" : isReady ? "Start voice input" : "Start voice input (setup required)";
+        tooltip.textContent = isRecording ? "Stop voice input" : isListening ? "Listening\u2026 click to stop" : voice?.recordingStatus === "error" && voice.error ? voice.error : isTranscribing ? "Transcribing\u2026" : isReady ? "Start voice input" : "Start voice input (setup required)";
       }
     }
     toggleStreamingBehavior() {
@@ -5786,6 +5790,10 @@ ${after}`;
     { value: "ko", label: "Korean" },
     { value: "zh", label: "Chinese" }
   ];
+  var voiceModeOptions = [
+    { value: "pushToTalk", label: "Push to talk" },
+    { value: "handsFree", label: "Hands-free" }
+  ];
   var voiceActivationModeOptions = [
     { value: "toggle", label: "Click to toggle" },
     { value: "hold", label: "Hold to talk" }
@@ -5979,6 +5987,18 @@ ${after}`;
       options: voiceLanguageOptions,
       defaultValue: "auto",
       helper: "English-only models always use English. Choose a multilingual model for auto-detect or non-English input.",
+      liveBehavior: "immediate"
+    },
+    {
+      id: "tauren.voice.mode",
+      owner: "tauren",
+      section: "voice",
+      label: "Voice mode",
+      description: "Choose manual recording or explicit hands-free listening.",
+      control: "select",
+      options: voiceModeOptions,
+      defaultValue: "pushToTalk",
+      helper: "Hands-free keeps the selected microphone open locally while enabled.",
       liveBehavior: "immediate"
     },
     {
@@ -9836,13 +9856,15 @@ ${after}`;
     const language = parseVoiceLanguage(value.language);
     const effectiveLanguage = parseVoiceLanguage(value.effectiveLanguage);
     const languageForced = Boolean(value.languageForced);
+    const mode = value.mode === "handsFree" ? "handsFree" : "pushToTalk";
     const activationMode = value.activationMode === "hold" ? "hold" : "toggle";
     const maxRecordingSeconds = typeof value.maxRecordingSeconds === "number" ? value.maxRecordingSeconds : 60;
-    const recordingStatus = value.recordingStatus === "recording" || value.recordingStatus === "transcribing" || value.recordingStatus === "error" ? value.recordingStatus : "idle";
+    const recordingStatus = value.recordingStatus === "listening" || value.recordingStatus === "recording" || value.recordingStatus === "transcribing" || value.recordingStatus === "error" ? value.recordingStatus : "idle";
     return {
       enabled: Boolean(value.enabled),
       selectedModelId,
       transcriptAction,
+      mode,
       activationMode,
       maxRecordingSeconds,
       language,

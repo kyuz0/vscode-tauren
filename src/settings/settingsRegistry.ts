@@ -24,6 +24,7 @@ export type TaurenSettingId =
   | 'tauren.voice.model'
   | 'tauren.voice.inputDevice'
   | 'tauren.voice.language'
+  | 'tauren.voice.mode'
   | 'tauren.voice.activationMode'
   | 'tauren.voice.maxRecordingSeconds'
   | 'tauren.voice.transcriptAction';
@@ -126,6 +127,11 @@ const voiceLanguageOptions = [
   { value: 'ja', label: 'Japanese' },
   { value: 'ko', label: 'Korean' },
   { value: 'zh', label: 'Chinese' }
+] as const satisfies readonly SettingOption[];
+
+const voiceModeOptions = [
+  { value: 'pushToTalk', label: 'Push to talk' },
+  { value: 'handsFree', label: 'Hands-free' }
 ] as const satisfies readonly SettingOption[];
 
 const voiceActivationModeOptions = [
@@ -325,6 +331,18 @@ export const settingDefinitions = [
     options: voiceLanguageOptions,
     defaultValue: 'auto',
     helper: 'English-only models always use English. Choose a multilingual model for auto-detect or non-English input.',
+    liveBehavior: 'immediate'
+  },
+  {
+    id: 'tauren.voice.mode',
+    owner: 'tauren',
+    section: 'voice',
+    label: 'Voice mode',
+    description: 'Choose manual recording or explicit hands-free listening.',
+    control: 'select',
+    options: voiceModeOptions,
+    defaultValue: 'pushToTalk',
+    helper: 'Hands-free keeps the selected microphone open locally while enabled.',
     liveBehavior: 'immediate'
   },
   {

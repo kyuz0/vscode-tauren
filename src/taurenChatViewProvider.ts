@@ -314,6 +314,7 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
           || event.affectsConfiguration('tauren.voice.model')
           || event.affectsConfiguration('tauren.voice.inputDevice')
           || event.affectsConfiguration('tauren.voice.language')
+          || event.affectsConfiguration('tauren.voice.mode')
           || event.affectsConfiguration('tauren.voice.activationMode')
           || event.affectsConfiguration('tauren.voice.maxRecordingSeconds')
           || event.affectsConfiguration('tauren.voice.transcriptAction')) {
