@@ -17,6 +17,7 @@ const voiceStorageDirectoryName = 'voice';
 const modelsDirectoryName = 'models';
 const runtimeDirectoryName = 'runtime';
 const downloadsDirectoryName = 'downloads';
+const voiceTempFilePattern = /^tauren-voice-\d+(?:-\d+)?\.wav$/;
 
 export type VoiceControllerOptions = {
   storageUri: vscode.Uri | undefined;
@@ -490,6 +491,8 @@ export class VoiceController implements vscode.Disposable {
       this.handsFreeTranscribing = false;
       this.restartHandsFreeAfterTranscription = false;
 
+      this.audioLevel = 0;
+
       if (this.handsFreeActive) {
         this.recordingStatus = 'listening';
         this.options.onDidChangeState();
@@ -823,7 +826,7 @@ async function cleanupStaleVoiceTempFiles(): Promise<void> {
   const entries = await fs.readdir(tempDirectory).catch(() => []);
 
   await Promise.all(entries
-    .filter((entry) => /^tauren-voice-\d+(?:-\d+)?\.wav$/.test(entry))
+    .filter((entry) => voiceTempFilePattern.test(entry))
     .map((entry) => fs.rm(path.join(tempDirectory, entry), { force: true }).catch(() => undefined)));
 }
 
