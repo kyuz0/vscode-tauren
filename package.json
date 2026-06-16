@@ -516,12 +516,18 @@
           "enum": [
             "tiny.en",
             "base.en",
-            "small.en"
+            "small.en",
+            "tiny",
+            "base",
+            "small"
           ],
           "enumDescriptions": [
             "Fastest English Whisper model, about 75 MiB.",
             "Balanced English Whisper model, about 142 MiB.",
-            "More accurate English Whisper model, about 466 MiB."
+            "More accurate English Whisper model, about 466 MiB.",
+            "Fastest multilingual Whisper model, about 74 MiB.",
+            "Balanced multilingual Whisper model, about 141 MiB.",
+            "More accurate multilingual Whisper model, about 465 MiB."
           ],
           "description": "Local Whisper model Tauren should use for speech-to-text. Models are downloaded from the Voice settings pane."
         },
@@ -529,6 +535,39 @@
           "type": "string",
           "default": "default",
           "description": "Microphone or audio input source Tauren should record from. Use Default, or select a detected device from the Voice settings pane."
+        },
+        "tauren.voice.language": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "en",
+            "de",
+            "fr",
+            "es",
+            "it",
+            "pt",
+            "nl",
+            "pl",
+            "ja",
+            "ko",
+            "zh"
+          ],
+          "enumDescriptions": [
+            "Let whisper.cpp auto-detect the spoken language.",
+            "English",
+            "German",
+            "French",
+            "Spanish",
+            "Italian",
+            "Portuguese",
+            "Dutch",
+            "Polish",
+            "Japanese",
+            "Korean",
+            "Chinese"
+          ],
+          "description": "Language Tauren passes to whisper.cpp for speech-to-text. English-only models always use English."
         },
         "tauren.voice.transcriptAction": {
           "type": "string",

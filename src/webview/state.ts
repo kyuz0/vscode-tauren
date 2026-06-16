@@ -254,8 +254,11 @@ function parseVoiceState(value: unknown): WebviewState['voice'] {
     return undefined;
   }
 
-  const selectedModelId = value.selectedModelId === 'tiny.en' || value.selectedModelId === 'small.en' ? value.selectedModelId : 'base.en';
+  const selectedModelId = parseVoiceModelId(value.selectedModelId);
   const transcriptAction = value.transcriptAction === 'submit' ? 'submit' : 'insert';
+  const language = parseVoiceLanguage(value.language);
+  const effectiveLanguage = parseVoiceLanguage(value.effectiveLanguage);
+  const languageForced = Boolean(value.languageForced);
   const recordingStatus = value.recordingStatus === 'recording' || value.recordingStatus === 'transcribing' || value.recordingStatus === 'error'
     ? value.recordingStatus
     : 'idle';
@@ -264,6 +267,9 @@ function parseVoiceState(value: unknown): WebviewState['voice'] {
     enabled: Boolean(value.enabled),
     selectedModelId,
     transcriptAction,
+    language,
+    effectiveLanguage,
+    languageForced,
     models: value.models.filter(isVoiceModelOption).map((model) => ({
       ...model,
       download: parseVoiceDownloadState(model.download)
@@ -280,6 +286,18 @@ function parseVoiceState(value: unknown): WebviewState['voice'] {
     recordingStatus,
     ...(typeof value.error === 'string' && value.error ? { error: value.error } : {})
   };
+}
+
+function parseVoiceModelId(value: unknown): NonNullable<WebviewState['voice']>['selectedModelId'] {
+  return value === 'tiny.en' || value === 'base.en' || value === 'small.en' || value === 'tiny' || value === 'base' || value === 'small'
+    ? value
+    : 'base.en';
+}
+
+function parseVoiceLanguage(value: unknown): NonNullable<WebviewState['voice']>['language'] {
+  return value === 'en' || value === 'de' || value === 'fr' || value === 'es' || value === 'it' || value === 'pt' || value === 'nl' || value === 'pl' || value === 'ja' || value === 'ko' || value === 'zh'
+    ? value
+    : 'auto';
 }
 
 function parseVoiceInputDevicesState(value: unknown): NonNullable<WebviewState['voice']>['inputDevices'] {
@@ -310,7 +328,7 @@ function isVoiceInputDevice(value: unknown): value is NonNullable<WebviewState['
 
 function isVoiceModelOption(value: unknown): value is NonNullable<WebviewState['voice']>['models'][number] {
   return isRecord(value)
-    && (value.id === 'tiny.en' || value.id === 'base.en' || value.id === 'small.en')
+    && (value.id === 'tiny.en' || value.id === 'base.en' || value.id === 'small.en' || value.id === 'tiny' || value.id === 'base' || value.id === 'small')
     && typeof value.label === 'string'
     && typeof value.description === 'string'
     && typeof value.sizeBytes === 'number'

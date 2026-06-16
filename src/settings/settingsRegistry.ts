@@ -23,6 +23,7 @@ export type TaurenSettingId =
   | 'tauren.voice.enabled'
   | 'tauren.voice.model'
   | 'tauren.voice.inputDevice'
+  | 'tauren.voice.language'
   | 'tauren.voice.transcriptAction';
 
 export type PiSettingId =
@@ -104,7 +105,25 @@ const customUiThemeOptions = [
 const voiceModelOptions = [
   { value: 'tiny.en', label: 'Tiny English' },
   { value: 'base.en', label: 'Base English' },
-  { value: 'small.en', label: 'Small English' }
+  { value: 'small.en', label: 'Small English' },
+  { value: 'tiny', label: 'Tiny Multilingual' },
+  { value: 'base', label: 'Base Multilingual' },
+  { value: 'small', label: 'Small Multilingual' }
+] as const satisfies readonly SettingOption[];
+
+const voiceLanguageOptions = [
+  { value: 'auto', label: 'Auto-detect' },
+  { value: 'en', label: 'English' },
+  { value: 'de', label: 'German' },
+  { value: 'fr', label: 'French' },
+  { value: 'es', label: 'Spanish' },
+  { value: 'it', label: 'Italian' },
+  { value: 'pt', label: 'Portuguese' },
+  { value: 'nl', label: 'Dutch' },
+  { value: 'pl', label: 'Polish' },
+  { value: 'ja', label: 'Japanese' },
+  { value: 'ko', label: 'Korean' },
+  { value: 'zh', label: 'Chinese' }
 ] as const satisfies readonly SettingOption[];
 
 const voiceTranscriptActionOptions = [
@@ -279,6 +298,18 @@ export const settingDefinitions = [
     control: 'text',
     defaultValue: 'default',
     helper: 'Use the device selector below to change this setting.',
+    liveBehavior: 'immediate'
+  },
+  {
+    id: 'tauren.voice.language',
+    owner: 'tauren',
+    section: 'voice',
+    label: 'Voice language',
+    description: 'Language Tauren should pass to whisper.cpp for speech-to-text.',
+    control: 'select',
+    options: voiceLanguageOptions,
+    defaultValue: 'auto',
+    helper: 'English-only models always use English. Choose a multilingual model for auto-detect or non-English input.',
     liveBehavior: 'immediate'
   },
   {

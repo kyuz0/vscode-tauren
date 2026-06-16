@@ -1,6 +1,8 @@
 export type VoiceTranscriptAction = 'insert' | 'submit';
 
-export type VoiceModelId = 'tiny.en' | 'base.en' | 'small.en';
+export type VoiceModelId = 'tiny.en' | 'base.en' | 'small.en' | 'tiny' | 'base' | 'small';
+
+export type VoiceLanguage = 'auto' | 'en' | 'de' | 'fr' | 'es' | 'it' | 'pt' | 'nl' | 'pl' | 'ja' | 'ko' | 'zh';
 
 export type VoiceDownloadStatus = 'idle' | 'downloading' | 'downloaded' | 'failed' | 'unavailable';
 
@@ -50,6 +52,9 @@ export type VoiceState = {
   enabled: boolean;
   selectedModelId: VoiceModelId;
   transcriptAction: VoiceTranscriptAction;
+  language: VoiceLanguage;
+  effectiveLanguage: VoiceLanguage;
+  languageForced: boolean;
   models: VoiceModelOption[];
   binary: VoiceBinaryState;
   inputDevices: VoiceInputDevicesState;
@@ -64,7 +69,8 @@ export type VoiceModelAsset = {
   fileName: string;
   sizeBytes: number;
   url: string;
-  sha1: string;
+  sha1?: string;
+  sha256?: string;
 };
 
 export type VoiceBinaryAsset = {

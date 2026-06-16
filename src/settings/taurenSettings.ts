@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parseWebviewCustomUiTheme } from '../webviewProtocol/values';
 import type { WebviewCustomUiTheme } from '../webviewProtocol/types';
-import type { VoiceModelId, VoiceTranscriptAction } from '../voice/types';
+import type { VoiceLanguage, VoiceModelId, VoiceTranscriptAction } from '../voice/types';
 import { settingDefinitions, type SettingValue, type TaurenBackend, type TaurenSettingId } from './settingsRegistry';
 
 export const welcomeDismissedStorageKey = 'tauren.welcomeDismissed';
@@ -69,12 +69,19 @@ export function getVoiceEnabledSetting(): boolean {
 
 export function getVoiceModelSetting(): VoiceModelId {
   const value = vscode.workspace.getConfiguration('tauren').get<string>('voice.model', 'base.en');
-  return value === 'tiny.en' || value === 'small.en' ? value : 'base.en';
+  return value === 'tiny.en' || value === 'small.en' || value === 'tiny' || value === 'base' || value === 'small' ? value : 'base.en';
 }
 
 export function getVoiceInputDeviceSetting(): string {
   const value = vscode.workspace.getConfiguration('tauren').get<string>('voice.inputDevice', 'default').trim();
   return value || 'default';
+}
+
+export function getVoiceLanguageSetting(): VoiceLanguage {
+  const value = vscode.workspace.getConfiguration('tauren').get<string>('voice.language', 'auto');
+  return value === 'en' || value === 'de' || value === 'fr' || value === 'es' || value === 'it' || value === 'pt' || value === 'nl' || value === 'pl' || value === 'ja' || value === 'ko' || value === 'zh'
+    ? value
+    : 'auto';
 }
 
 export function getVoiceTranscriptActionSetting(): VoiceTranscriptAction {
@@ -163,6 +170,7 @@ export function getTaurenSettingValues(globalState?: vscode.Memento): Partial<Re
     'tauren.voice.enabled': getVoiceEnabledSetting(),
     'tauren.voice.model': getVoiceModelSetting(),
     'tauren.voice.inputDevice': getVoiceInputDeviceSetting(),
+    'tauren.voice.language': getVoiceLanguageSetting(),
     'tauren.voice.transcriptAction': getVoiceTranscriptActionSetting()
   };
 }

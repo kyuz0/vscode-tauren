@@ -7,8 +7,8 @@ import * as path from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 import * as vscode from 'vscode';
 import { defaultVoiceModelId, getVoiceBinaryAsset, getVoiceModelAsset, voiceModelAssets } from './voiceAssetCatalog';
-import type { VoiceAssetDownloadState, VoiceInputDevice, VoiceModelId, VoiceState, VoiceTranscriptAction } from './types';
-import { getVoiceEnabledSetting, getVoiceInputDeviceSetting, getVoiceModelSetting, getVoiceTranscriptActionSetting } from '../settings/taurenSettings';
+import type { VoiceAssetDownloadState, VoiceInputDevice, VoiceLanguage, VoiceModelId, VoiceState, VoiceTranscriptAction } from './types';
+import { getVoiceEnabledSetting, getVoiceInputDeviceSetting, getVoiceLanguageSetting, getVoiceModelSetting, getVoiceTranscriptActionSetting } from '../settings/taurenSettings';
 import { getErrorMessage } from '../controller/errors';
 
 const voiceStorageDirectoryName = 'voice';
@@ -68,10 +68,16 @@ export class VoiceController implements vscode.Disposable {
     const binaryPath = downloadedBinaryAvailable ? downloadedBinaryPath : systemBinaryPath;
     const binaryAvailable = Boolean(binaryPath);
 
+    const language = getVoiceLanguageSetting();
+    const effectiveLanguage = getEffectiveVoiceLanguage(selectedModelId, language);
+
     return {
       enabled: getVoiceEnabledSetting(),
       selectedModelId,
       transcriptAction: getVoiceTranscriptActionSetting(),
+      language,
+      effectiveLanguage,
+      languageForced: effectiveLanguage !== language,
       models: voiceModelAssets.map((model) => {
         const downloaded = fileExistsSync(this.getModelPath(model.id));
         return {
@@ -129,7 +135,8 @@ export class VoiceController implements vscode.Disposable {
     await this.downloadFile(model.url, target, {
       state: (state) => this.modelDownloads.set(model.id, state),
       onProgress: () => this.options.onDidChangeState(),
-      expectedSha1: model.sha1
+      ...(model.sha1 ? { expectedSha1: model.sha1 } : {}),
+      ...(model.sha256 ? { expectedSha256: model.sha256 } : {})
     });
   }
 
@@ -329,8 +336,10 @@ export class VoiceController implements vscode.Disposable {
       throw new Error(`Install whisper.cpp before using voice input. ${getSystemWhisperInstallHint()}`);
     }
 
-    const model = this.getModelPath(getVoiceModelSetting());
-    const args = ['-m', model, '-f', audioFile, '-nt'];
+    const selectedModelId = getVoiceModelSetting();
+    const model = this.getModelPath(selectedModelId);
+    const language = getEffectiveVoiceLanguage(selectedModelId, getVoiceLanguageSetting());
+    const args = ['-m', model, '-f', audioFile, '-nt', '-l', language];
 
     return new Promise((resolve, reject) => {
       const child = spawn(executable, args, { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -408,6 +417,7 @@ export class VoiceController implements vscode.Disposable {
       state: (state: VoiceAssetDownloadState) => void;
       onProgress: () => void;
       expectedSha1?: string;
+      expectedSha256?: string;
     }
   ): Promise<void> {
     const partialTarget = `${target}.partial`;
@@ -423,8 +433,15 @@ export class VoiceController implements vscode.Disposable {
       });
 
       if (options.expectedSha1) {
-        const actualSha1 = await sha1File(partialTarget);
+        const actualSha1 = await hashFile(partialTarget, 'sha1');
         if (actualSha1 !== options.expectedSha1) {
+          throw new Error('Downloaded file checksum did not match the expected model checksum.');
+        }
+      }
+
+      if (options.expectedSha256) {
+        const actualSha256 = await hashFile(partialTarget, 'sha256');
+        if (actualSha256 !== options.expectedSha256) {
           throw new Error('Downloaded file checksum did not match the expected model checksum.');
         }
       }
@@ -501,6 +518,10 @@ function getSystemWhisperInstallHint(): string {
   return process.platform === 'darwin'
     ? 'On macOS, install it with Homebrew: brew install whisper-cpp.'
     : 'Install whisper.cpp and ensure whisper-cli is available on PATH.';
+}
+
+function getEffectiveVoiceLanguage(modelId: VoiceModelId, language: VoiceLanguage): VoiceLanguage {
+  return modelId.endsWith('.en') ? 'en' : language;
 }
 
 function normalizeInputDevices(value: VoiceInputDevice[] | undefined): VoiceInputDevice[] {
@@ -671,8 +692,8 @@ function parseContentLength(value: string | string[] | undefined): number | unde
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
-async function sha1File(file: string): Promise<string> {
-  const hash = crypto.createHash('sha1');
+async function hashFile(file: string, algorithm: 'sha1' | 'sha256'): Promise<string> {
+  const hash = crypto.createHash(algorithm);
   const stream = require('node:fs').createReadStream(file);
   for await (const chunk of stream) {
     hash.update(chunk);

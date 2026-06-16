@@ -5736,7 +5736,24 @@ ${after}`;
   var voiceModelOptions = [
     { value: "tiny.en", label: "Tiny English" },
     { value: "base.en", label: "Base English" },
-    { value: "small.en", label: "Small English" }
+    { value: "small.en", label: "Small English" },
+    { value: "tiny", label: "Tiny Multilingual" },
+    { value: "base", label: "Base Multilingual" },
+    { value: "small", label: "Small Multilingual" }
+  ];
+  var voiceLanguageOptions = [
+    { value: "auto", label: "Auto-detect" },
+    { value: "en", label: "English" },
+    { value: "de", label: "German" },
+    { value: "fr", label: "French" },
+    { value: "es", label: "Spanish" },
+    { value: "it", label: "Italian" },
+    { value: "pt", label: "Portuguese" },
+    { value: "nl", label: "Dutch" },
+    { value: "pl", label: "Polish" },
+    { value: "ja", label: "Japanese" },
+    { value: "ko", label: "Korean" },
+    { value: "zh", label: "Chinese" }
   ];
   var voiceTranscriptActionOptions = [
     { value: "insert", label: "Insert into Chat Input" },
@@ -5908,6 +5925,18 @@ ${after}`;
       control: "text",
       defaultValue: "default",
       helper: "Use the device selector below to change this setting.",
+      liveBehavior: "immediate"
+    },
+    {
+      id: "tauren.voice.language",
+      owner: "tauren",
+      section: "voice",
+      label: "Voice language",
+      description: "Language Tauren should pass to whisper.cpp for speech-to-text.",
+      control: "select",
+      options: voiceLanguageOptions,
+      defaultValue: "auto",
+      helper: "English-only models always use English. Choose a multilingual model for auto-detect or non-English input.",
       liveBehavior: "immediate"
     },
     {
@@ -8943,6 +8972,13 @@ ${after}`;
         cards.append(card);
         return;
       }
+      if (voice.languageForced) {
+        const card = document.createElement("article");
+        card.className = "settings-surface__card";
+        card.append(createTextElement("h4", "settings-surface__card-title", "Language forced to English"));
+        card.append(createTextElement("p", "settings-surface__card-helper", "The selected English-only Whisper model always uses English. Choose a multilingual model for auto-detect or non-English input."));
+        cards.append(card);
+      }
       cards.append(this.createVoiceInputDeviceCard(voice));
       cards.append(this.createVoiceBinaryCard(voice));
       cards.append(this.createVoiceModelCard(voice));
@@ -9730,13 +9766,19 @@ ${after}`;
     if (!isRecord(value) || !Array.isArray(value.models) || !isRecord(value.binary)) {
       return void 0;
     }
-    const selectedModelId = value.selectedModelId === "tiny.en" || value.selectedModelId === "small.en" ? value.selectedModelId : "base.en";
+    const selectedModelId = parseVoiceModelId(value.selectedModelId);
     const transcriptAction = value.transcriptAction === "submit" ? "submit" : "insert";
+    const language = parseVoiceLanguage(value.language);
+    const effectiveLanguage = parseVoiceLanguage(value.effectiveLanguage);
+    const languageForced = Boolean(value.languageForced);
     const recordingStatus = value.recordingStatus === "recording" || value.recordingStatus === "transcribing" || value.recordingStatus === "error" ? value.recordingStatus : "idle";
     return {
       enabled: Boolean(value.enabled),
       selectedModelId,
       transcriptAction,
+      language,
+      effectiveLanguage,
+      languageForced,
       models: value.models.filter(isVoiceModelOption).map((model) => ({
         ...model,
         download: parseVoiceDownloadState(model.download)
@@ -9753,6 +9795,12 @@ ${after}`;
       recordingStatus,
       ...typeof value.error === "string" && value.error ? { error: value.error } : {}
     };
+  }
+  function parseVoiceModelId(value) {
+    return value === "tiny.en" || value === "base.en" || value === "small.en" || value === "tiny" || value === "base" || value === "small" ? value : "base.en";
+  }
+  function parseVoiceLanguage(value) {
+    return value === "en" || value === "de" || value === "fr" || value === "es" || value === "it" || value === "pt" || value === "nl" || value === "pl" || value === "ja" || value === "ko" || value === "zh" ? value : "auto";
   }
   function parseVoiceInputDevicesState(value) {
     if (!isRecord(value) || !Array.isArray(value.devices)) {
@@ -9775,7 +9823,7 @@ ${after}`;
     return isRecord(value) && typeof value.id === "string" && typeof value.label === "string";
   }
   function isVoiceModelOption(value) {
-    return isRecord(value) && (value.id === "tiny.en" || value.id === "base.en" || value.id === "small.en") && typeof value.label === "string" && typeof value.description === "string" && typeof value.sizeBytes === "number" && typeof value.downloaded === "boolean";
+    return isRecord(value) && (value.id === "tiny.en" || value.id === "base.en" || value.id === "small.en" || value.id === "tiny" || value.id === "base" || value.id === "small") && typeof value.label === "string" && typeof value.description === "string" && typeof value.sizeBytes === "number" && typeof value.downloaded === "boolean";
   }
   function parseVoiceDownloadState(value) {
     if (!isRecord(value)) {

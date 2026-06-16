@@ -313,6 +313,7 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
         if (event.affectsConfiguration('tauren.voice.enabled')
           || event.affectsConfiguration('tauren.voice.model')
           || event.affectsConfiguration('tauren.voice.inputDevice')
+          || event.affectsConfiguration('tauren.voice.language')
           || event.affectsConfiguration('tauren.voice.transcriptAction')) {
           this.postVoiceState();
         }

@@ -29,6 +29,33 @@ export const voiceModelAssets = [
     sizeBytes: 466 * 1024 * 1024,
     url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin',
     sha1: 'db8a495a91d927739e50b3fc1cc4c6b8f6c2d022'
+  },
+  {
+    id: 'tiny',
+    label: 'Tiny Multilingual',
+    description: 'Fastest multilingual model. Lower accuracy, about 74 MiB.',
+    fileName: 'ggml-tiny.bin',
+    sizeBytes: 77691713,
+    url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin',
+    sha256: 'be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21'
+  },
+  {
+    id: 'base',
+    label: 'Base Multilingual',
+    description: 'Balanced multilingual model, about 141 MiB.',
+    fileName: 'ggml-base.bin',
+    sizeBytes: 147951465,
+    url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin',
+    sha256: '60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe'
+  },
+  {
+    id: 'small',
+    label: 'Small Multilingual',
+    description: 'Better multilingual accuracy, larger download, about 465 MiB.',
+    fileName: 'ggml-small.bin',
+    sizeBytes: 487601967,
+    url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin',
+    sha256: '1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b'
   }
 ] as const satisfies readonly VoiceModelAsset[];
 

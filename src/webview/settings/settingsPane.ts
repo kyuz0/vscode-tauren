@@ -381,6 +381,14 @@ export class SettingsPaneController {
       return;
     }
 
+    if (voice.languageForced) {
+      const card = document.createElement('article');
+      card.className = 'settings-surface__card';
+      card.append(createTextElement('h4', 'settings-surface__card-title', 'Language forced to English'));
+      card.append(createTextElement('p', 'settings-surface__card-helper', 'The selected English-only Whisper model always uses English. Choose a multilingual model for auto-detect or non-English input.'));
+      cards.append(card);
+    }
+
     cards.append(this.createVoiceInputDeviceCard(voice));
     cards.append(this.createVoiceBinaryCard(voice));
     cards.append(this.createVoiceModelCard(voice));
