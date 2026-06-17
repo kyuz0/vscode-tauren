@@ -365,12 +365,6 @@ export class SettingsPaneController {
   }
 
   private appendVoiceCards(cards: HTMLElement, state: WebviewState): void {
-    for (const definition of getVisibleSettingsForSection('voice', state)) {
-      if (definition.id !== 'tauren.voice.inputDevice') {
-        cards.append(this.createSettingCard(definition, state));
-      }
-    }
-
     const voice = state.voice;
     if (!voice) {
       const card = document.createElement('article');
@@ -379,6 +373,12 @@ export class SettingsPaneController {
       card.append(createTextElement('p', 'settings-surface__card-body', 'Voice state is not available yet.'));
       cards.append(card);
       return;
+    }
+
+    for (const definition of getVisibleSettingsForSection('voice', state)) {
+      if (definition.id !== 'tauren.voice.inputDevice') {
+        cards.append(this.createSettingCard(definition, state));
+      }
     }
 
     if (voice.languageForced) {

@@ -449,7 +449,7 @@ export class VoiceController implements vscode.Disposable {
         this.handsFreeRuntime = undefined;
         this.handsFreeActive = false;
         this.recordingStatus = 'error';
-        this.audioLevel = 0;
+        this.resetAudioDiagnostics();
         this.lastError = getErrorMessage(error);
         this.options.onDidChangeState();
         this.options.showToast?.(`Voice listening stopped: ${this.lastError}`, 'error');
@@ -469,15 +469,16 @@ export class VoiceController implements vscode.Disposable {
   private async transcribeHandsFreeUtterance(audioFile: string): Promise<void> {
     this.handsFreeTranscribing = true;
     this.recordingStatus = 'transcribing';
-    this.audioLevel = 0;
+    this.resetAudioDiagnostics();
     this.options.onDidChangeState();
 
     try {
       const context = this.createTranscriptionContext();
       const transcript = await this.transcribe(audioFile, context);
       this.lastError = undefined;
-      if (transcript.trim()) {
-        await this.options.onTranscript(transcript.trim(), context.transcriptAction);
+      const normalizedTranscript = normalizeHandsFreeTranscript(transcript);
+      if (normalizedTranscript) {
+        await this.options.onTranscript(normalizedTranscript, 'insert');
       }
     } catch (error) {
       this.lastError = getErrorMessage(error);
@@ -491,7 +492,7 @@ export class VoiceController implements vscode.Disposable {
       this.handsFreeTranscribing = false;
       this.restartHandsFreeAfterTranscription = false;
 
-      this.audioLevel = 0;
+      this.resetAudioDiagnostics();
 
       if (this.handsFreeActive) {
         this.recordingStatus = 'listening';
@@ -505,6 +506,10 @@ export class VoiceController implements vscode.Disposable {
         this.options.onDidChangeState();
       }
     }
+  }
+
+  private resetAudioDiagnostics(): void {
+    this.audioLevel = 0;
   }
 
   private createTranscriptionContext(): TranscriptionContext {
@@ -760,6 +765,23 @@ function getFfmpegErrorMessage(stderr: string, code: number | null): string {
     .filter(Boolean);
   const importantLine = [...lines].reverse().find((line) => /error|denied|busy|unavailable|invalid|failed|not found|no such/i.test(line));
   return importantLine ?? (code === null ? 'ffmpeg stopped before audio was captured.' : `ffmpeg exited with code ${code}.`);
+}
+
+function normalizeHandsFreeTranscript(value: string): string {
+  const text = value.trim();
+  if (!text) {
+    return '';
+  }
+
+  if (/^\((?:[^)]*(?:music|applause|laughter|laughing|birds?|chirping|noise|silence|background)[^)]*)\)$/i.test(text)) {
+    return '';
+  }
+
+  if (/^\[(?:[^\]]*(?:music|applause|laughter|laughing|birds?|chirping|noise|silence|background)[^\]]*)\]$/i.test(text)) {
+    return '';
+  }
+
+  return text;
 }
 
 function cleanWhisperOutput(value: string): string {

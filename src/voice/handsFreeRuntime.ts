@@ -17,7 +17,11 @@ const speechStartThresholdDbfsBySensitivity: Record<VoiceHandsFreeSensitivity, n
   normal: -65,
   high: -75
 };
-const speechStopThresholdOffsetDb = 0;
+const speechContinueThresholdDbfsBySensitivity: Record<VoiceHandsFreeSensitivity, number> = {
+  low: -38,
+  normal: -45,
+  high: -52
+};
 const minSpeechMs = 180;
 const minUtteranceMs = 450;
 const audioStartupTimeoutMs = 2500;
@@ -50,6 +54,7 @@ export class HandsFreeRuntime {
   private speechMs = 0;
   private utteranceMs = 0;
   private silenceMs = 0;
+  private utterancePeakDbfs = Number.NEGATIVE_INFINITY;
   private sequence = 0;
   private handlingUtterance = false;
   private lastAudioLevelUpdate = 0;
@@ -125,14 +130,14 @@ export class HandsFreeRuntime {
 
   private async handleFrame(frame: Buffer): Promise<void> {
     const dbfs = calculatePcm16Dbfs(frame);
-    this.postAudioLevel(dbfs);
     const startThreshold = speechStartThresholdDbfsBySensitivity[this.settings.sensitivity];
-    const stopThreshold = startThreshold - speechStopThresholdOffsetDb;
+    const continueThreshold = speechContinueThresholdDbfsBySensitivity[this.settings.sensitivity];
+    this.postAudioLevel(dbfs);
 
     if (this.phase === 'listening') {
       this.pushPreRoll(frame);
       if (isSpeechLevel(dbfs, startThreshold)) {
-        this.beginUtterance();
+        this.beginUtterance(dbfs);
       }
       return;
     }
@@ -141,10 +146,12 @@ export class HandsFreeRuntime {
       return;
     }
 
+    const dynamicContinueThreshold = Math.max(continueThreshold, this.utterancePeakDbfs - 10);
     this.utterance.push(frame);
     this.utteranceMs += frameMs;
 
-    if (isSpeechLevel(dbfs, stopThreshold)) {
+    if (isSpeechLevel(dbfs, dynamicContinueThreshold)) {
+      this.utterancePeakDbfs = Math.max(this.utterancePeakDbfs, dbfs);
       this.speechMs += frameMs;
       this.silenceMs = 0;
     } else {
@@ -162,7 +169,7 @@ export class HandsFreeRuntime {
 
   private postAudioLevel(dbfs: number): void {
     const now = Date.now();
-    if (now - this.lastAudioLevelUpdate < 120) {
+    if (now - this.lastAudioLevelUpdate < 500) {
       return;
     }
 
@@ -177,12 +184,13 @@ export class HandsFreeRuntime {
     }
   }
 
-  private beginUtterance(): void {
+  private beginUtterance(dbfs: number): void {
     this.phase = 'recording';
     this.utterance = [...this.preRoll];
     this.utteranceMs = this.utterance.length * frameMs;
     this.speechMs = frameMs;
     this.silenceMs = 0;
+    this.utterancePeakDbfs = dbfs;
     this.options.onStatus('recording');
   }
 
@@ -190,16 +198,15 @@ export class HandsFreeRuntime {
     const utterance = this.utterance;
     const utteranceMs = this.utteranceMs;
     const speechMs = this.speechMs;
-    this.phase = 'listening';
+    this.handlingUtterance = true;
     this.resetAudioState();
-    this.options.onStatus('listening');
 
     if (utteranceMs < minUtteranceMs || speechMs < minSpeechMs) {
+      this.handlingUtterance = false;
       return;
     }
 
     const audioFile = path.join(this.options.tempDirectory, `tauren-voice-${Date.now()}-${this.sequence++}.wav`);
-    this.handlingUtterance = true;
     try {
       await writePcm16Wav(audioFile, utterance, sampleRate, channels);
       await this.options.onUtterance(audioFile);
@@ -221,6 +228,7 @@ export class HandsFreeRuntime {
     this.speechMs = 0;
     this.utteranceMs = 0;
     this.silenceMs = 0;
+    this.utterancePeakDbfs = Number.NEGATIVE_INFINITY;
     this.options.onAudioLevel(0);
   }
 

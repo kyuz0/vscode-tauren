@@ -9088,11 +9088,6 @@ ${after}`;
       }
     }
     appendVoiceCards(cards, state2) {
-      for (const definition of getVisibleSettingsForSection("voice", state2)) {
-        if (definition.id !== "tauren.voice.inputDevice") {
-          cards.append(this.createSettingCard(definition, state2));
-        }
-      }
       const voice = state2.voice;
       if (!voice) {
         const card = document.createElement("article");
@@ -9101,6 +9096,11 @@ ${after}`;
         card.append(createTextElement("p", "settings-surface__card-body", "Voice state is not available yet."));
         cards.append(card);
         return;
+      }
+      for (const definition of getVisibleSettingsForSection("voice", state2)) {
+        if (definition.id !== "tauren.voice.inputDevice") {
+          cards.append(this.createSettingCard(definition, state2));
+        }
       }
       if (voice.languageForced) {
         const card = document.createElement("article");
