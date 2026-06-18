@@ -169,7 +169,8 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
     private readonly globalState?: vscode.Memento,
     private readonly workspaceCwdProvider: () => string | undefined = () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
     private readonly devRenderInstrumentation = false,
-    private readonly sessionMetadataStorageUri?: vscode.Uri
+    private readonly sessionMetadataStorageUri?: vscode.Uri,
+    private readonly voiceStorageUri?: vscode.Uri
   ) {
     this.cachedQuietStartup = this.workspaceState?.get<boolean>(quietStartupStorageKey);
 
@@ -186,7 +187,7 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
       })
     };
     this.voiceController = new VoiceController({
-      storageUri: this.sessionMetadataStorageUri,
+      storageUri: this.voiceStorageUri ?? this.sessionMetadataStorageUri,
       onDidChangeState: () => this.postVoiceState(),
       onTranscript: async (text, action) => {
         if (action === 'submit') {
