@@ -27,6 +27,7 @@ import {
 import { SessionSearchIndex } from './sessionSearchIndex';
 
 const sessionSearchBackgroundIndexDelayMs = 150;
+const sessionListFreshMs = 30_000;
 
 export type SessionViewState = {
   sessions: WebviewSessionItem[];
@@ -79,6 +80,7 @@ export class SessionViewController {
   private treeError = '';
   private sessionsRefreshSequence = 0;
   private sessionsRefreshPromise: Promise<void> | undefined;
+  private sessionsRefreshedAt = 0;
   private treeRefreshSequence = 0;
   private readonly sessionSearchIndex = new SessionSearchIndex();
   private sessionSearchState: WebviewSessionSearchState | undefined;
@@ -155,9 +157,17 @@ export class SessionViewController {
     this.options.postState();
     this.scheduleSessionSearchIndexing();
 
-    if (!hasCachedSessions || this.options.shouldRefreshSessionsOnShow?.() === true) {
+    if (!hasCachedSessions || this.shouldRefreshCachedSessionsOnShow()) {
       void this.refreshSessions('showSessions');
     }
+  }
+
+  private shouldRefreshCachedSessionsOnShow(): boolean {
+    if (this.options.shouldRefreshSessionsOnShow?.() === true) {
+      return true;
+    }
+
+    return Date.now() - this.sessionsRefreshedAt > sessionListFreshMs;
   }
 
   public showTree(): void {
@@ -264,6 +274,7 @@ export class SessionViewController {
       }
 
       this.applySessionList(sessions);
+      this.sessionsRefreshedAt = Date.now();
     } catch (error) {
       if (refreshId === this.sessionsRefreshSequence) {
         this.sessionsError = getErrorMessage(error);
