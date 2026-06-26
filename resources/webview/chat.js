@@ -3363,9 +3363,11 @@
         }
       });
       this.options.textarea.addEventListener("input", () => {
-        this.suggestionMenu.clearDismissedSlashQuery();
-        this.syncComposer({ preserveBottom: true });
-        this.syncSlashMenu();
+        this.options.measurePerfEvent("composer.input", () => {
+          this.suggestionMenu.clearDismissedSlashQuery();
+          this.syncComposer({ preserveBottom: true });
+          this.options.measurePerfEvent("composer.slashMenuSync", () => this.syncSlashMenu());
+        });
       });
       this.options.textarea.addEventListener("click", () => this.syncSlashMenu());
       this.options.textarea.addEventListener("blur", () => this.closeSlashMenu());
@@ -3592,13 +3594,20 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
       this.options.focusPromptInput();
     }
     syncComposer(options = {}) {
-      const shouldPreserveBottom = Boolean(options.preserveBottom) && this.options.isMessagesAtBottom();
-      this.syncSubmit();
-      this.syncBusySubmitMode();
-      this.syncTextareaHeightIfNeeded(Boolean(options.forceResize));
-      if (shouldPreserveBottom) {
-        this.options.scrollMessagesToBottom();
-      }
+      this.options.measurePerfEvent("composer.sync", () => {
+        let shouldPreserveBottom = false;
+        this.options.measurePerfEvent("composer.scrollPreserve", () => {
+          shouldPreserveBottom = Boolean(options.preserveBottom) && this.options.isMessagesAtBottom();
+        });
+        this.syncSubmit();
+        this.syncBusySubmitMode();
+        this.options.measurePerfEvent("composer.textareaResize", () => {
+          this.syncTextareaHeightIfNeeded(Boolean(options.forceResize));
+        });
+        if (shouldPreserveBottom) {
+          this.options.measurePerfEvent("composer.scrollPreserve", () => this.options.scrollMessagesToBottom());
+        }
+      });
     }
     syncSlashMenu() {
       this.suggestionMenu.sync();
@@ -9876,6 +9885,7 @@ ${after}`;
   var hasReceivedHostState = false;
   var faceTransitionSuppressionFrame;
   var renderInstrumentationEnabled = document.body.dataset.taurenDevRenderInstrumentation === "true";
+  var perfEventThresholdMs = 8;
   var busySubmitHomeMarker = document.createComment("busy-submit-home");
   busySubmitElement.after(busySubmitHomeMarker);
   var widgetDimensionSignatures = /* @__PURE__ */ new Map();
@@ -9944,7 +9954,8 @@ ${after}`;
     cancelSessionNameEdit: () => sessionsController.cancelSessionNameEdit(),
     closeSessionCommandMenu: () => sessionsController.closeSessionCommandMenu(),
     isMessagesAtBottom: () => messagesController.isMessagesAtBottom(),
-    scrollMessagesToBottom: () => messagesController.scrollMessagesToBottom()
+    scrollMessagesToBottom: () => messagesController.scrollMessagesToBottom(),
+    measurePerfEvent
   });
   settingsController = new SettingsPaneController({
     getState: () => state,
@@ -10241,11 +10252,11 @@ ${after}`;
   }
   function renderWithInstrumentation() {
     if (!renderInstrumentationEnabled) {
-      render();
+      measurePerfEvent("chat.render", render);
       return;
     }
     const started = performance.now();
-    render();
+    measurePerfEvent("chat.render", render);
     const duration = performance.now() - started;
     if (duration > 8) {
       console.debug(`[Tauren] render ${duration.toFixed(1)}ms`, {
@@ -10255,6 +10266,34 @@ ${after}`;
         lane: state.lane
       });
     }
+  }
+  function measurePerfEvent(name, measure) {
+    if (!state.perfEnabled) {
+      measure();
+      return;
+    }
+    const started = performance.now();
+    measure();
+    const durationMs = performance.now() - started;
+    if (durationMs < perfEventThresholdMs) {
+      return;
+    }
+    vscode.postMessage({
+      type: "perfEvent",
+      event: {
+        name,
+        durationMs,
+        lane: state.lane,
+        messageCount: state.messages.length,
+        sessionCount: state.sessions.length,
+        currentSessionFile: state.currentSessionFile,
+        sessionLoading: state.sessionLoading,
+        textareaLength: textarea.value.length,
+        promptContextCount: state.promptContext.length,
+        promptImageCount: state.promptImages.length,
+        busy: state.busy
+      }
+    });
   }
   function measureRenderBoundary(name, renderBoundary) {
     if (!state.perfEnabled) {

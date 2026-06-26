@@ -34,11 +34,15 @@ suite('Tauren perf recorder', () => {
     recorder.finish(timer, { cacheMisses: 2, ignored: undefined });
     recorder.record('transcript.render', 4, { messageCount: 10 });
     recorder.record('sessionList.render', 5, { visibleItemCount: 7 });
+    recorder.record('composer.input', 9, { textareaLength: 12, promptContextCount: 1, busy: false });
 
-    assert.strictEqual(lines.length, 3);
+    assert.strictEqual(lines.length, 4);
     assert.ok(lines[0].includes('[Tauren perf] sessionList.load durationMs=12.3'));
     assert.ok(lines[0].includes('cacheHits=1'));
     assert.ok(lines[0].includes('cacheMisses=2'));
-    assert.deepStrictEqual(recorder.getEvents().map((event) => event.name), ['transcript.render', 'sessionList.render']);
+    assert.ok(lines[3].includes('[Tauren perf] composer.input durationMs=9'));
+    assert.ok(lines[3].includes('textareaLength=12'));
+    assert.ok(lines[3].includes('promptContextCount=1'));
+    assert.deepStrictEqual(recorder.getEvents().map((event) => event.name), ['sessionList.render', 'composer.input']);
   });
 });

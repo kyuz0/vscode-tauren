@@ -4,7 +4,13 @@ export type TaurenPerfEventName =
   | 'transcript.render'
   | 'sessionList.render'
   | 'tree.render'
-  | 'sessionList.load';
+  | 'sessionList.load'
+  | 'chat.render'
+  | 'composer.input'
+  | 'composer.sync'
+  | 'composer.textareaResize'
+  | 'composer.scrollPreserve'
+  | 'composer.slashMenuSync';
 
 export type TaurenPerfEventDetails = Record<string, string | number | boolean | undefined>;
 

@@ -191,6 +191,36 @@ suite('Chat webview helpers', () => {
         }
       }
     );
+    assert.deepStrictEqual(
+      parseWebviewMessage({
+        type: 'perfEvent',
+        event: {
+          name: 'composer.input',
+          durationMs: 9,
+          lane: 'chat',
+          messageCount: 100,
+          textareaLength: 12,
+          promptContextCount: 1,
+          promptImageCount: 2,
+          busy: false,
+          atBottom: true
+        }
+      }),
+      {
+        type: 'perfEvent',
+        event: {
+          name: 'composer.input',
+          durationMs: 9,
+          lane: 'chat',
+          messageCount: 100,
+          textareaLength: 12,
+          promptContextCount: 1,
+          promptImageCount: 2,
+          busy: false,
+          atBottom: true
+        }
+      }
+    );
     assert.deepStrictEqual(parseWebviewMessage({ type: 'newSession' }), { type: 'newSession' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'showLane', lane: 'sessions' }), { type: 'showLane', lane: 'sessions' });
     assert.deepStrictEqual(parseWebviewMessage({ type: 'showLane', lane: 'tree' }), { type: 'showLane', lane: 'tree' });

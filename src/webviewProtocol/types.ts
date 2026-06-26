@@ -82,7 +82,16 @@ export type WebviewKwardQuestionAnswer = {
   answer: string;
 };
 
-export type WebviewPerfEventName = 'transcript.render' | 'sessionList.render' | 'tree.render';
+export type WebviewPerfEventName =
+  | 'transcript.render'
+  | 'sessionList.render'
+  | 'tree.render'
+  | 'chat.render'
+  | 'composer.input'
+  | 'composer.sync'
+  | 'composer.textareaResize'
+  | 'composer.scrollPreserve'
+  | 'composer.slashMenuSync';
 
 export type WebviewPerfEvent = {
   name: WebviewPerfEventName;
@@ -93,6 +102,11 @@ export type WebviewPerfEvent = {
   visibleItemCount?: number;
   currentSessionFile?: string;
   sessionLoading?: boolean;
+  textareaLength?: number;
+  promptContextCount?: number;
+  promptImageCount?: number;
+  busy?: boolean;
+  atBottom?: boolean;
 };
 
 export type WebviewAuthType = 'oauth' | 'api_key';

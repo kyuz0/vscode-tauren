@@ -15,7 +15,7 @@ import {
   type ComposerDragState
 } from './promptImages';
 import { SuggestionMenuController } from './suggestionMenuController';
-import type { WebviewStreamingBehavior } from '../../webviewProtocol/types';
+import type { WebviewPerfEventName, WebviewStreamingBehavior } from '../../webviewProtocol/types';
 import type {
   PromptContextAttachment,
   PromptImageAttachment,
@@ -23,6 +23,7 @@ import type {
 } from '../types';
 
 type PostMessage = (message: unknown) => void;
+type MeasurePerfEvent = (name: WebviewPerfEventName, measure: () => void) => void;
 
 export type ComposerControllerOptions = {
   getState: () => WebviewState;
@@ -52,6 +53,7 @@ export type ComposerControllerOptions = {
   closeSessionCommandMenu: () => void;
   isMessagesAtBottom: () => boolean;
   scrollMessagesToBottom: () => void;
+  measurePerfEvent: MeasurePerfEvent;
 };
 
 export class ComposerController {
@@ -132,9 +134,11 @@ export class ComposerController {
     });
 
     this.options.textarea.addEventListener('input', () => {
-      this.suggestionMenu.clearDismissedSlashQuery();
-      this.syncComposer({ preserveBottom: true });
-      this.syncSlashMenu();
+      this.options.measurePerfEvent('composer.input', () => {
+        this.suggestionMenu.clearDismissedSlashQuery();
+        this.syncComposer({ preserveBottom: true });
+        this.options.measurePerfEvent('composer.slashMenuSync', () => this.syncSlashMenu());
+      });
     });
 
     this.options.textarea.addEventListener('click', () => this.syncSlashMenu());
@@ -424,14 +428,21 @@ export class ComposerController {
   }
 
   public syncComposer(options: { preserveBottom?: boolean; forceResize?: boolean } = {}): void {
-    const shouldPreserveBottom = Boolean(options.preserveBottom) && this.options.isMessagesAtBottom();
-    this.syncSubmit();
-    this.syncBusySubmitMode();
-    this.syncTextareaHeightIfNeeded(Boolean(options.forceResize));
+    this.options.measurePerfEvent('composer.sync', () => {
+      let shouldPreserveBottom = false;
+      this.options.measurePerfEvent('composer.scrollPreserve', () => {
+        shouldPreserveBottom = Boolean(options.preserveBottom) && this.options.isMessagesAtBottom();
+      });
+      this.syncSubmit();
+      this.syncBusySubmitMode();
+      this.options.measurePerfEvent('composer.textareaResize', () => {
+        this.syncTextareaHeightIfNeeded(Boolean(options.forceResize));
+      });
 
-    if (shouldPreserveBottom) {
-      this.options.scrollMessagesToBottom();
-    }
+      if (shouldPreserveBottom) {
+        this.options.measurePerfEvent('composer.scrollPreserve', () => this.options.scrollMessagesToBottom());
+      }
+    });
   }
 
   public syncSlashMenu(): void {

@@ -24,7 +24,7 @@ import {
   parseWebviewStateMessage,
   type ProvisionalExtensionUiSnapshot
 } from './state';
-import type { WebviewScrollCommand } from '../webviewProtocol/types';
+import type { WebviewPerfEventName, WebviewScrollCommand } from '../webviewProtocol/types';
 import {
   createKwardQuestionUiState,
   getKwardQuestionAnswerForIndex,
@@ -140,6 +140,7 @@ let sessionRefreshRequested = false;
 let hasReceivedHostState = false;
 let faceTransitionSuppressionFrame: number | undefined;
 const renderInstrumentationEnabled = document.body.dataset.taurenDevRenderInstrumentation === 'true';
+const perfEventThresholdMs = 8;
 const busySubmitHomeMarker = document.createComment('busy-submit-home');
 busySubmitElement.after(busySubmitHomeMarker);
 const widgetDimensionSignatures = new Map<string, string>();
@@ -214,7 +215,8 @@ const composerController = new ComposerController({
   cancelSessionNameEdit: () => sessionsController.cancelSessionNameEdit(),
   closeSessionCommandMenu: () => sessionsController.closeSessionCommandMenu(),
   isMessagesAtBottom: () => messagesController.isMessagesAtBottom(),
-  scrollMessagesToBottom: () => messagesController.scrollMessagesToBottom()
+  scrollMessagesToBottom: () => messagesController.scrollMessagesToBottom(),
+  measurePerfEvent
 });
 
 settingsController = new SettingsPaneController({
@@ -586,12 +588,12 @@ function suppressFaceTransitionForNextRender(): void {
 
 function renderWithInstrumentation(): void {
   if (!renderInstrumentationEnabled) {
-    render();
+    measurePerfEvent('chat.render', render);
     return;
   }
 
   const started = performance.now();
-  render();
+  measurePerfEvent('chat.render', render);
   const duration = performance.now() - started;
 
   if (duration > 8) {
@@ -602,6 +604,38 @@ function renderWithInstrumentation(): void {
       lane: state.lane
     });
   }
+}
+
+function measurePerfEvent(name: WebviewPerfEventName, measure: () => void): void {
+  if (!state.perfEnabled) {
+    measure();
+    return;
+  }
+
+  const started = performance.now();
+  measure();
+  const durationMs = performance.now() - started;
+
+  if (durationMs < perfEventThresholdMs) {
+    return;
+  }
+
+  vscode.postMessage({
+    type: 'perfEvent',
+    event: {
+      name,
+      durationMs,
+      lane: state.lane,
+      messageCount: state.messages.length,
+      sessionCount: state.sessions.length,
+      currentSessionFile: state.currentSessionFile,
+      sessionLoading: state.sessionLoading,
+      textareaLength: textarea.value.length,
+      promptContextCount: state.promptContext.length,
+      promptImageCount: state.promptImages.length,
+      busy: state.busy
+    }
+  });
 }
 
 function measureRenderBoundary(name: 'transcript.render' | 'sessionList.render' | 'tree.render', renderBoundary: () => void): void {

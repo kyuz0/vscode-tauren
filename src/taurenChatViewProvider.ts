@@ -883,7 +883,12 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
       sessionCount: event.sessionCount,
       visibleItemCount: event.visibleItemCount,
       currentSessionFile: event.currentSessionFile,
-      sessionLoading: event.sessionLoading
+      sessionLoading: event.sessionLoading,
+      textareaLength: event.textareaLength,
+      promptContextCount: event.promptContextCount,
+      promptImageCount: event.promptImageCount,
+      busy: event.busy,
+      atBottom: event.atBottom
     });
 
     if (this.pendingLaneSwitch && this.pendingLaneSwitch.target === event.lane) {

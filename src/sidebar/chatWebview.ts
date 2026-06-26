@@ -853,12 +853,25 @@ function parseWebviewPerfEvent(value: unknown): WebviewPerfEvent | undefined {
     ...(isNonNegativeFiniteNumber(value.sessionCount) ? { sessionCount: value.sessionCount } : {}),
     ...(isNonNegativeFiniteNumber(value.visibleItemCount) ? { visibleItemCount: value.visibleItemCount } : {}),
     ...(typeof value.currentSessionFile === 'string' ? { currentSessionFile: value.currentSessionFile } : {}),
-    ...(typeof value.sessionLoading === 'boolean' ? { sessionLoading: value.sessionLoading } : {})
+    ...(typeof value.sessionLoading === 'boolean' ? { sessionLoading: value.sessionLoading } : {}),
+    ...(isNonNegativeFiniteNumber(value.textareaLength) ? { textareaLength: value.textareaLength } : {}),
+    ...(isNonNegativeFiniteNumber(value.promptContextCount) ? { promptContextCount: value.promptContextCount } : {}),
+    ...(isNonNegativeFiniteNumber(value.promptImageCount) ? { promptImageCount: value.promptImageCount } : {}),
+    ...(typeof value.busy === 'boolean' ? { busy: value.busy } : {}),
+    ...(typeof value.atBottom === 'boolean' ? { atBottom: value.atBottom } : {})
   };
 }
 
 function parseWebviewPerfEventName(value: unknown): WebviewPerfEventName | undefined {
-  return value === 'transcript.render' || value === 'sessionList.render' || value === 'tree.render'
+  return value === 'transcript.render'
+    || value === 'sessionList.render'
+    || value === 'tree.render'
+    || value === 'chat.render'
+    || value === 'composer.input'
+    || value === 'composer.sync'
+    || value === 'composer.textareaResize'
+    || value === 'composer.scrollPreserve'
+    || value === 'composer.slashMenuSync'
     ? value
     : undefined;
 }
