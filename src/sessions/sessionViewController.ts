@@ -27,8 +27,6 @@ import {
 import { SessionSearchIndex } from './sessionSearchIndex';
 
 const sessionSearchBackgroundIndexDelayMs = 150;
-const sessionListFreshMs = 5 * 60_000;
-
 export type SessionViewState = {
   sessions: WebviewSessionItem[];
   refreshing: boolean;
@@ -80,7 +78,6 @@ export class SessionViewController {
   private treeError = '';
   private sessionsRefreshSequence = 0;
   private sessionsRefreshPromise: Promise<void> | undefined;
-  private sessionsRefreshedAt = 0;
   private treeRefreshSequence = 0;
   private readonly sessionSearchIndex = new SessionSearchIndex();
   private sessionSearchState: WebviewSessionSearchState | undefined;
@@ -157,19 +154,9 @@ export class SessionViewController {
     this.options.postState();
     this.scheduleSessionSearchIndexing();
 
-    if (!hasCachedSessions || this.shouldRefreshCachedSessionsOnShow()) {
+    if (!hasCachedSessions) {
       void this.refreshSessions('showSessions');
     }
-  }
-
-  private shouldRefreshCachedSessionsOnShow(): boolean {
-    const hasFreshSessionList = Date.now() - this.sessionsRefreshedAt <= sessionListFreshMs;
-
-    if (hasFreshSessionList) {
-      return false;
-    }
-
-    return this.options.shouldRefreshSessionsOnShow?.() === true;
   }
 
   public showTree(): void {
@@ -705,7 +692,6 @@ export class SessionViewController {
   }
 
   private applySessionList(sessions: WebviewSessionItem[]): void {
-    this.sessionsRefreshedAt = Date.now();
     this.sessions = this.applyPendingSessionItemNames(this.mergeCurrentSessionFallback(sessions));
     this.sessionSearchIndex.setSessions(this.sessions);
     this.refreshSessionSearchState({ post: false });
