@@ -10307,11 +10307,15 @@ ${after}`;
     }
     const started = performance.now();
     renderBoundary();
+    const durationMs = performance.now() - started;
+    if (durationMs < perfEventThresholdMs) {
+      return;
+    }
     vscode.postMessage({
       type: "perfEvent",
       event: {
         name,
-        durationMs: performance.now() - started,
+        durationMs,
         lane: state.lane,
         messageCount: state.messages.length,
         sessionCount: state.sessions.length,
