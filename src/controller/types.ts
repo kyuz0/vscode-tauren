@@ -13,6 +13,7 @@ import type { StatePublisherScheduler } from './statePublisher';
 export type SessionListProgressOptions = {
   onProgress?: (sessions: WebviewSessionItem[]) => void;
   previousSessions?: readonly WebviewSessionItem[];
+  reason?: string;
 };
 
 export type TaurenChatControllerOptions = {

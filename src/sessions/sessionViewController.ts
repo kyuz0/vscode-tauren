@@ -156,7 +156,7 @@ export class SessionViewController {
     this.scheduleSessionSearchIndexing();
 
     if (!hasCachedSessions || this.options.shouldRefreshSessionsOnShow?.() === true) {
-      void this.refreshSessions();
+      void this.refreshSessions('showSessions');
     }
   }
 
@@ -226,18 +226,18 @@ export class SessionViewController {
     this.options.onSessionFileChange?.(undefined);
   }
 
-  public refreshSessions(): Promise<void> {
+  public refreshSessions(reason = 'manual'): Promise<void> {
     if (this.sessionsRefreshPromise) {
       return this.sessionsRefreshPromise;
     }
 
-    this.sessionsRefreshPromise = this.refreshSessionsNow().finally(() => {
+    this.sessionsRefreshPromise = this.refreshSessionsNow(reason).finally(() => {
       this.sessionsRefreshPromise = undefined;
     });
     return this.sessionsRefreshPromise;
   }
 
-  private async refreshSessionsNow(): Promise<void> {
+  private async refreshSessionsNow(reason: string): Promise<void> {
     const refreshId = ++this.sessionsRefreshSequence;
     this.sessionsRefreshing = true;
     this.sessionsError = '';
@@ -248,6 +248,7 @@ export class SessionViewController {
       const listSessions = this.options.listSessions ?? defaultListSessions;
       const sessions = await listSessions(this.options.getCwd?.(), this.sessionFile, {
         previousSessions: this.sessions,
+        reason,
         onProgress: (progressSessions) => {
           if (refreshId !== this.sessionsRefreshSequence) {
             return;

@@ -328,7 +328,8 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
       sessionCount: metrics?.sessionCount ?? sessions.length,
       totalBytes: metrics?.totalBytes,
       cacheHits: metrics?.cacheHits,
-      cacheMisses: metrics?.cacheMisses
+      cacheMisses: metrics?.cacheMisses,
+      reason: options?.reason
     });
     return sessions;
   }
