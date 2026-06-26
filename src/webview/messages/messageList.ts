@@ -18,6 +18,10 @@ import type { Activity, ChatImage, ChatMessage, StartupResourceSection, WebviewS
 
 type PostMessage = (message: unknown) => void;
 
+const largeTranscriptCollapseThreshold = 250;
+const largeTranscriptHeadCount = 20;
+const largeTranscriptTailCount = 180;
+
 type RenderedMessageView = {
   element: HTMLElement;
   message: ChatMessage;
@@ -42,6 +46,7 @@ export class MessageListController {
   private readonly scrollFollowState: ScrollFollowState = createScrollFollowState();
   private savedChatScroll: { sessionKey: string; scrollTop: number; followOutput: boolean } | undefined;
   private bottomScrollScheduled = false;
+  private collapsedTranscriptElement: HTMLElement | undefined;
 
   public constructor(private readonly options: MessageListControllerOptions) {}
 
@@ -64,24 +69,38 @@ export class MessageListController {
       this.options.messagesContentElement.replaceChildren();
     }
 
+    const renderPlan = this.getMessageRenderPlan(state.messages.length);
+    const renderedIndexes = new Set<number>();
+    const nodes: Node[] = [];
     let previousMessageRole: string | undefined;
 
-    for (const [index, message] of state.messages.entries()) {
-      const showRole = message.role !== previousMessageRole;
-      const view = this.renderMessageAtIndex(index, message, showRole);
-      const currentNode = this.options.messagesContentElement.children[index];
-
-      if (currentNode !== view.element) {
-        this.options.messagesContentElement.insertBefore(view.element, currentNode ?? null);
+    for (const item of renderPlan) {
+      if (item.kind === 'collapse') {
+        nodes.push(this.getCollapsedTranscriptElement(item.count));
+        previousMessageRole = undefined;
+        continue;
       }
 
+      const message = state.messages[item.index];
+
+      if (!message) {
+        continue;
+      }
+
+      const showRole = message.role !== previousMessageRole;
+      const view = this.renderMessageAtIndex(item.index, message, showRole);
+      renderedIndexes.add(item.index);
+      nodes.push(view.element);
       previousMessageRole = message.role;
     }
 
-    for (let index = this.renderedMessageViews.length - 1; index >= state.messages.length; index -= 1) {
-      this.renderedMessageViews[index]?.element.remove();
+    for (const [index, view] of this.renderedMessageViews.entries()) {
+      if (view && !renderedIndexes.has(index)) {
+        view.element.remove();
+      }
     }
 
+    this.options.messagesContentElement.replaceChildren(...nodes);
     this.renderedMessageViews.length = state.messages.length;
     pruneActivityRenderState(getActiveActivityIds(state.messages));
     pruneDisconnectedMessageRenderState();
@@ -328,6 +347,43 @@ export class MessageListController {
       event.preventDefault();
       this.options.postMessage({ type: 'openExternal', url: externalLink.href });
     }
+  }
+
+  private getMessageRenderPlan(messageCount: number): Array<{ kind: 'message'; index: number } | { kind: 'collapse'; count: number }> {
+    if (messageCount <= largeTranscriptCollapseThreshold) {
+      return Array.from({ length: messageCount }, (_, index) => ({ kind: 'message', index }));
+    }
+
+    const headCount = Math.min(largeTranscriptHeadCount, messageCount);
+    const tailStart = Math.max(headCount, messageCount - largeTranscriptTailCount);
+    const collapsedCount = Math.max(0, tailStart - headCount);
+    const plan: Array<{ kind: 'message'; index: number } | { kind: 'collapse'; count: number }> = [];
+
+    for (let index = 0; index < headCount; index += 1) {
+      plan.push({ kind: 'message', index });
+    }
+
+    if (collapsedCount > 0) {
+      plan.push({ kind: 'collapse', count: collapsedCount });
+    }
+
+    for (let index = tailStart; index < messageCount; index += 1) {
+      plan.push({ kind: 'message', index });
+    }
+
+    return plan;
+  }
+
+  private getCollapsedTranscriptElement(count: number): HTMLElement {
+    if (!this.collapsedTranscriptElement) {
+      const element = document.createElement('div');
+      element.className = 'message message--collapsed-transcript';
+      element.setAttribute('role', 'note');
+      this.collapsedTranscriptElement = element;
+    }
+
+    this.collapsedTranscriptElement.textContent = `${count} earlier messages hidden to keep this large session responsive.`;
+    return this.collapsedTranscriptElement;
   }
 
   private createEmptyStateElement(): HTMLElement {

@@ -113,6 +113,16 @@ export const messageStyles = /* css */ `    .tauren-transcript-search {
       margin-bottom: 0;
     }
 
+    .message--collapsed-transcript {
+      padding: 10px 12px;
+      color: var(--vscode-descriptionForeground);
+      font-size: 12px;
+      text-align: center;
+      background: color-mix(in srgb, var(--vscode-foreground) 5%, transparent);
+      border: 1px solid color-mix(in srgb, var(--vscode-foreground) 12%, transparent);
+      border-radius: 8px;
+    }
+
     .message__role {
       margin-bottom: 4px;
       color: var(--vscode-descriptionForeground);

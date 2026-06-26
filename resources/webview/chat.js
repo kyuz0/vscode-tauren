@@ -4722,6 +4722,9 @@ ${after}`;
   }
 
   // src/webview/messages/messageList.ts
+  var largeTranscriptCollapseThreshold = 250;
+  var largeTranscriptHeadCount = 20;
+  var largeTranscriptTailCount = 180;
   var MessageListController = class {
     constructor(options) {
       this.options = options;
@@ -4731,6 +4734,7 @@ ${after}`;
     scrollFollowState = createScrollFollowState();
     savedChatScroll;
     bottomScrollScheduled = false;
+    collapsedTranscriptElement;
     renderMessageList() {
       const state2 = this.options.getState();
       if (state2.messages.length === 0) {
@@ -4747,19 +4751,32 @@ ${after}`;
       if (this.options.messagesContentElement.querySelector(".empty-state")) {
         this.options.messagesContentElement.replaceChildren();
       }
+      const renderPlan = this.getMessageRenderPlan(state2.messages.length);
+      const renderedIndexes = /* @__PURE__ */ new Set();
+      const nodes = [];
       let previousMessageRole;
-      for (const [index, message] of state2.messages.entries()) {
-        const showRole = message.role !== previousMessageRole;
-        const view = this.renderMessageAtIndex(index, message, showRole);
-        const currentNode = this.options.messagesContentElement.children[index];
-        if (currentNode !== view.element) {
-          this.options.messagesContentElement.insertBefore(view.element, currentNode ?? null);
+      for (const item of renderPlan) {
+        if (item.kind === "collapse") {
+          nodes.push(this.getCollapsedTranscriptElement(item.count));
+          previousMessageRole = void 0;
+          continue;
         }
+        const message = state2.messages[item.index];
+        if (!message) {
+          continue;
+        }
+        const showRole = message.role !== previousMessageRole;
+        const view = this.renderMessageAtIndex(item.index, message, showRole);
+        renderedIndexes.add(item.index);
+        nodes.push(view.element);
         previousMessageRole = message.role;
       }
-      for (let index = this.renderedMessageViews.length - 1; index >= state2.messages.length; index -= 1) {
-        this.renderedMessageViews[index]?.element.remove();
+      for (const [index, view] of this.renderedMessageViews.entries()) {
+        if (view && !renderedIndexes.has(index)) {
+          view.element.remove();
+        }
       }
+      this.options.messagesContentElement.replaceChildren(...nodes);
       this.renderedMessageViews.length = state2.messages.length;
       pruneActivityRenderState(getActiveActivityIds(state2.messages));
       pruneDisconnectedMessageRenderState();
@@ -4948,6 +4965,35 @@ ${after}`;
         event.preventDefault();
         this.options.postMessage({ type: "openExternal", url: externalLink.href });
       }
+    }
+    getMessageRenderPlan(messageCount) {
+      if (messageCount <= largeTranscriptCollapseThreshold) {
+        return Array.from({ length: messageCount }, (_, index) => ({ kind: "message", index }));
+      }
+      const headCount = Math.min(largeTranscriptHeadCount, messageCount);
+      const tailStart = Math.max(headCount, messageCount - largeTranscriptTailCount);
+      const collapsedCount = Math.max(0, tailStart - headCount);
+      const plan = [];
+      for (let index = 0; index < headCount; index += 1) {
+        plan.push({ kind: "message", index });
+      }
+      if (collapsedCount > 0) {
+        plan.push({ kind: "collapse", count: collapsedCount });
+      }
+      for (let index = tailStart; index < messageCount; index += 1) {
+        plan.push({ kind: "message", index });
+      }
+      return plan;
+    }
+    getCollapsedTranscriptElement(count) {
+      if (!this.collapsedTranscriptElement) {
+        const element = document.createElement("div");
+        element.className = "message message--collapsed-transcript";
+        element.setAttribute("role", "note");
+        this.collapsedTranscriptElement = element;
+      }
+      this.collapsedTranscriptElement.textContent = `${count} earlier messages hidden to keep this large session responsive.`;
+      return this.collapsedTranscriptElement;
     }
     createEmptyStateElement() {
       const state2 = this.options.getState();
