@@ -27,7 +27,7 @@ import {
 import { SessionSearchIndex } from './sessionSearchIndex';
 
 const sessionSearchBackgroundIndexDelayMs = 150;
-const sessionListFreshMs = 30_000;
+const sessionListFreshMs = 5 * 60_000;
 
 export type SessionViewState = {
   sessions: WebviewSessionItem[];
@@ -163,11 +163,13 @@ export class SessionViewController {
   }
 
   private shouldRefreshCachedSessionsOnShow(): boolean {
-    if (this.options.shouldRefreshSessionsOnShow?.() === true) {
-      return true;
+    const hasFreshSessionList = Date.now() - this.sessionsRefreshedAt <= sessionListFreshMs;
+
+    if (hasFreshSessionList) {
+      return false;
     }
 
-    return Date.now() - this.sessionsRefreshedAt > sessionListFreshMs;
+    return this.options.shouldRefreshSessionsOnShow?.() === true;
   }
 
   public showTree(): void {
