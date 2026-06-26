@@ -3324,6 +3324,7 @@
     busySubmitHideTimeout;
     composerDragDepth = 0;
     textareaLayoutSignature = "";
+    cachedMaxTextareaHeight = maxTextareaHeight;
     pasteBuffer = new ComposerPasteBuffer();
     addedDiffCounter;
     removedDiffCounter;
@@ -3596,15 +3597,18 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
     syncComposer(options = {}) {
       this.options.measurePerfEvent("composer.sync", () => {
         let shouldPreserveBottom = false;
-        this.options.measurePerfEvent("composer.scrollPreserve", () => {
-          shouldPreserveBottom = Boolean(options.preserveBottom) && this.options.isMessagesAtBottom();
-        });
+        if (options.preserveBottom) {
+          this.options.measurePerfEvent("composer.scrollPreserve", () => {
+            shouldPreserveBottom = this.options.isMessagesAtBottom();
+          });
+        }
         this.syncSubmit();
         this.syncBusySubmitMode();
+        let textareaHeightChanged = false;
         this.options.measurePerfEvent("composer.textareaResize", () => {
-          this.syncTextareaHeightIfNeeded(Boolean(options.forceResize));
+          textareaHeightChanged = this.syncTextareaHeightIfNeeded(Boolean(options.forceResize));
         });
-        if (shouldPreserveBottom) {
+        if (textareaHeightChanged && shouldPreserveBottom) {
           this.options.measurePerfEvent("composer.scrollPreserve", () => this.options.scrollMessagesToBottom());
         }
       });
@@ -3840,25 +3844,26 @@ ${image.mimeType}, ${formatBytes(image.sizeBytes)}`;
     }
     syncTextareaHeightIfNeeded(force) {
       const nextSignature = this.getTextareaLayoutSignature();
-      if (!force && nextSignature === this.textareaLayoutSignature) {
-        return;
+      if (force || nextSignature !== this.textareaLayoutSignature) {
+        this.textareaLayoutSignature = nextSignature;
+        this.cachedMaxTextareaHeight = this.getMaxTextareaHeight();
       }
-      this.textareaLayoutSignature = nextSignature;
-      this.syncTextareaHeight();
+      return this.syncTextareaHeight(this.cachedMaxTextareaHeight);
     }
-    syncTextareaHeight() {
+    syncTextareaHeight(maxHeight) {
+      const previousHeight = parseCssPixelValue(this.options.textarea.style.height);
       this.options.textarea.style.height = "auto";
-      const maxHeight = this.getMaxTextareaHeight();
-      const nextHeight = Math.max(minTextareaHeight, Math.min(this.options.textarea.scrollHeight, maxHeight));
+      const scrollHeight = this.options.textarea.scrollHeight;
+      const nextHeight = Math.max(minTextareaHeight, Math.min(scrollHeight, maxHeight));
       this.options.textarea.style.height = nextHeight + "px";
-      this.options.textarea.style.overflowY = this.options.textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+      this.options.textarea.style.overflowY = scrollHeight > maxHeight ? "auto" : "hidden";
+      return Math.abs(previousHeight - nextHeight) > 0.5;
     }
     getTextareaLayoutSignature() {
       const state2 = this.options.getState();
       const promptContextSignature = state2.promptContext.map((attachment) => [attachment.id, attachment.label, attachment.title, attachment.xml?.length ?? 0].join("\0")).join("\0");
       const promptImagesSignature = state2.promptImages.map((attachment) => [attachment.id, attachment.label, attachment.title, attachment.mimeType, attachment.sizeBytes].join("\0")).join("\0");
       return [
-        this.options.textarea.value,
         window.innerWidth,
         window.innerHeight,
         state2.lane,

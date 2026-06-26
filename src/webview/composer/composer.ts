@@ -62,6 +62,7 @@ export class ComposerController {
   private busySubmitHideTimeout: ReturnType<typeof setTimeout> | undefined;
   private composerDragDepth = 0;
   private textareaLayoutSignature = '';
+  private cachedMaxTextareaHeight = maxTextareaHeight;
   private readonly pasteBuffer = new ComposerPasteBuffer();
   private readonly addedDiffCounter: ReturnType<typeof createDiffCounter>;
   private readonly removedDiffCounter: ReturnType<typeof createDiffCounter>;
@@ -430,16 +431,21 @@ export class ComposerController {
   public syncComposer(options: { preserveBottom?: boolean; forceResize?: boolean } = {}): void {
     this.options.measurePerfEvent('composer.sync', () => {
       let shouldPreserveBottom = false;
-      this.options.measurePerfEvent('composer.scrollPreserve', () => {
-        shouldPreserveBottom = Boolean(options.preserveBottom) && this.options.isMessagesAtBottom();
-      });
+      if (options.preserveBottom) {
+        this.options.measurePerfEvent('composer.scrollPreserve', () => {
+          shouldPreserveBottom = this.options.isMessagesAtBottom();
+        });
+      }
+
       this.syncSubmit();
       this.syncBusySubmitMode();
+
+      let textareaHeightChanged = false;
       this.options.measurePerfEvent('composer.textareaResize', () => {
-        this.syncTextareaHeightIfNeeded(Boolean(options.forceResize));
+        textareaHeightChanged = this.syncTextareaHeightIfNeeded(Boolean(options.forceResize));
       });
 
-      if (shouldPreserveBottom) {
+      if (textareaHeightChanged && shouldPreserveBottom) {
         this.options.measurePerfEvent('composer.scrollPreserve', () => this.options.scrollMessagesToBottom());
       }
     });
@@ -740,24 +746,27 @@ export class ComposerController {
     }, 160);
   }
 
-  private syncTextareaHeightIfNeeded(force: boolean): void {
+  private syncTextareaHeightIfNeeded(force: boolean): boolean {
     const nextSignature = this.getTextareaLayoutSignature();
 
-    if (!force && nextSignature === this.textareaLayoutSignature) {
-      return;
+    if (force || nextSignature !== this.textareaLayoutSignature) {
+      this.textareaLayoutSignature = nextSignature;
+      this.cachedMaxTextareaHeight = this.getMaxTextareaHeight();
     }
 
-    this.textareaLayoutSignature = nextSignature;
-    this.syncTextareaHeight();
+    return this.syncTextareaHeight(this.cachedMaxTextareaHeight);
   }
 
-  private syncTextareaHeight(): void {
+  private syncTextareaHeight(maxHeight: number): boolean {
+    const previousHeight = parseCssPixelValue(this.options.textarea.style.height);
     this.options.textarea.style.height = 'auto';
 
-    const maxHeight = this.getMaxTextareaHeight();
-    const nextHeight = Math.max(minTextareaHeight, Math.min(this.options.textarea.scrollHeight, maxHeight));
+    const scrollHeight = this.options.textarea.scrollHeight;
+    const nextHeight = Math.max(minTextareaHeight, Math.min(scrollHeight, maxHeight));
     this.options.textarea.style.height = nextHeight + 'px';
-    this.options.textarea.style.overflowY = this.options.textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+    this.options.textarea.style.overflowY = scrollHeight > maxHeight ? 'auto' : 'hidden';
+
+    return Math.abs(previousHeight - nextHeight) > 0.5;
   }
 
   private getTextareaLayoutSignature(): string {
@@ -770,7 +779,6 @@ export class ComposerController {
       .join('\u0000');
 
     return [
-      this.options.textarea.value,
       window.innerWidth,
       window.innerHeight,
       state.lane,
