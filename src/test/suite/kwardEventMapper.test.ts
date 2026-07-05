@@ -150,6 +150,14 @@ suite('Kward event mapper', () => {
     );
 
     assert.deepStrictEqual(
+      mapKwardTurnEvent({ type: 'steeringApplied', payload: { count: 2 } }),
+      {
+        type: 'steering_applied',
+        count: 2
+      }
+    );
+
+    assert.deepStrictEqual(
       mapKwardTurnEvent({ type: 'turnCancelRequested', turnId: 'turn-1' }),
       { type: 'turn_cancel_requested', turnId: 'turn-1' }
     );

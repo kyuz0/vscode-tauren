@@ -391,10 +391,10 @@ suite('KwardClient', () => {
 
       const statePromise = client.getState();
       await waitForWriteCount(child, 1);
-      respond(client, 1, { capabilities: {} });
+      respond(client, 1, { capabilities: { extensionUi: { footer: { notification: 'kward/footer' } } } });
       await waitForWriteCount(child, 2);
 
-      notify(client, 'ui/footer', { sessionId: 'session-1', text: 'Early Kward footer' });
+      notify(client, 'kward/footer', { sessionId: 'session-1', text: 'Early Kward footer' });
       assert.deepStrictEqual(footerTexts, []);
       assert.deepStrictEqual(footers, []);
 
@@ -405,14 +405,14 @@ suite('KwardClient', () => {
 
       await waitForWriteCount(child, 3);
 
-      notify(client, 'ui/footer', { sessionId: 'other-session', text: 'Ignored footer' });
+      notify(client, 'kward/footer', { sessionId: 'other-session', text: 'Ignored footer' });
       assert.deepStrictEqual(footerTexts, ['Early Kward footer']);
 
-      notify(client, 'ui/footer', { sessionId: 'session-1', text: 'Kward footer' });
+      notify(client, 'kward/footer', { sessionId: 'session-1', text: 'Kward footer' });
       assert.deepStrictEqual(footerTexts, ['Early Kward footer', 'Kward footer']);
       assert.deepStrictEqual(footers, []);
 
-      notify(client, 'ui/footer', { sessionId: 'session-1', text: '' });
+      notify(client, 'kward/footer', { sessionId: 'session-1', text: '' });
       assert.deepStrictEqual(footerTexts, ['Early Kward footer', 'Kward footer', undefined]);
 
       respond(client, 3, { sessionId: 'persisted-1' });
@@ -436,10 +436,14 @@ suite('KwardClient', () => {
 
       const statePromise = client.getState();
       await waitForWriteCount(child, 1);
-      respond(client, 1, { capabilities: {} });
+      respond(client, 1, { capabilities: { events: { notification: 'kward/turn' } } });
       await waitForWriteCount(child, 2);
       respond(client, 2, { id: 'session-1', persistentId: 'persisted-1', path: '/tmp/session.jsonl' });
       await waitForWriteCount(child, 3);
+
+      notify(client, 'kward/turn', { sessionId: 'session-1', type: 'turnStarted', payload: {} });
+      assert.deepStrictEqual(events, [{ type: 'agent_start' }]);
+      events.length = 0;
 
       notify(client, 'session/event', { sessionId: 'other-session', type: 'compactionStart', payload: {} });
       assert.deepStrictEqual(events, []);

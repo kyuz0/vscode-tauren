@@ -92,6 +92,17 @@ export class KwardCapabilityResolver {
     return getString(isRecord(compact) ? compact : undefined, 'notification') ?? 'session/event';
   }
 
+  public getTurnEventNotificationMethod(): string {
+    const events = this.getGroup('events');
+    return getString(isRecord(events) ? events : undefined, 'notification') ?? 'turn/event';
+  }
+
+  public getFooterNotificationMethod(): string {
+    const extensionUi = this.getGroup('extensionUi');
+    const footer = isRecord(extensionUi) ? extensionUi.footer : undefined;
+    return getString(isRecord(footer) ? footer : undefined, 'notification') ?? 'ui/footer';
+  }
+
   private getGroup(groupName: string): unknown {
     return this.capabilities[groupName];
   }

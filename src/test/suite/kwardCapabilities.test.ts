@@ -63,12 +63,20 @@ suite('KwardCapabilityResolver', () => {
     assert.strictEqual(defaults.getQuestionNotificationMethod(), 'ui/question');
     assert.strictEqual(defaults.getQuestionAnswerMethod(), 'ui/answerQuestion');
     assert.strictEqual(defaults.getCompactionNotificationMethod(), 'session/event');
+    assert.strictEqual(defaults.getTurnEventNotificationMethod(), 'turn/event');
+    assert.strictEqual(defaults.getFooterNotificationMethod(), 'ui/footer');
 
     const resolver = new KwardCapabilityResolver({
+      events: {
+        notification: 'custom/turnEvent'
+      },
       extensionUi: {
         question: {
           notification: 'custom/question',
           method: 'custom/answerQuestion'
+        },
+        footer: {
+          notification: 'custom/footer'
         }
       },
       sessions: {
@@ -81,6 +89,8 @@ suite('KwardCapabilityResolver', () => {
     assert.strictEqual(resolver.getQuestionNotificationMethod(), 'custom/question');
     assert.strictEqual(resolver.getQuestionAnswerMethod(), 'custom/answerQuestion');
     assert.strictEqual(resolver.getCompactionNotificationMethod(), 'custom/sessionEvent');
+    assert.strictEqual(resolver.getTurnEventNotificationMethod(), 'custom/turnEvent');
+    assert.strictEqual(resolver.getFooterNotificationMethod(), 'custom/footer');
   });
 
   test('detects runtime settings, busy input modes, and attachment input', () => {

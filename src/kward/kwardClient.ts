@@ -793,7 +793,7 @@ export class KwardClient implements PiClient {
   }
 
   private handleNotification(notification: KwardJsonRpcNotification): void {
-    if (notification.method === 'turn/event') {
+    if (notification.method === this.capabilityResolver.getTurnEventNotificationMethod()) {
       const event = normalizeTurnEvent(notification.params);
       if (event.sessionId && !this.isCurrentRpcSession(event.sessionId)) {
         return;
@@ -826,7 +826,7 @@ export class KwardClient implements PiClient {
       return;
     }
 
-    if (notification.method === 'ui/footer') {
+    if (notification.method === this.capabilityResolver.getFooterNotificationMethod()) {
       const footer = normalizeFooterUpdate(notification.params);
       if (footer && (!footer.sessionId || this.isCurrentRpcSession(footer.sessionId))) {
         this.setExtensionFooter(footer.text);

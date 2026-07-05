@@ -107,6 +107,11 @@ export function mapKwardTurnEventToAgentEvent(event: KwardTurnEvent): AgentEvent
         type: 'turn_steered',
         ...payload
       };
+    case 'steeringApplied':
+      return {
+        type: 'steering_applied',
+        ...payload
+      };
     case 'turnCancelRequested':
       return {
         type: 'turn_cancel_requested',
