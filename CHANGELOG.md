@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Updated the bundled Pi SDK to 0.80.2 and surfaced Pi's post-compaction token estimate in Tauren compaction status text.
+
 ## [1.7.2] - 2026-06-26
 
 ### Fixed

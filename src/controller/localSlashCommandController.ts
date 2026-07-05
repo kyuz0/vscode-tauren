@@ -280,7 +280,7 @@ export class LocalSlashCommandController {
       const summary = typeof result.summary === 'string' ? result.summary.trim() : '';
       this.options.session.upsertActivity('compaction', {
         kind: 'compaction',
-        title: formatCompactionTitle(result.tokensBefore),
+        title: formatCompactionTitle(result.tokensBefore, result.estimatedTokensAfter),
         status: 'completed',
         ...(result.tokensBefore === undefined ? { summary: 'Completed' } : {}),
         ...(summary ? { body: summary } : {})

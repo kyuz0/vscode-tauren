@@ -337,13 +337,14 @@ export function mapPiActivity(
     case 'compaction_end': {
       const result = isRecord(event.result) ? event.result : undefined;
       const tokensBefore = getRecordNumber(result, 'tokensBefore');
+      const estimatedTokensAfter = getRecordNumber(result, 'estimatedTokensAfter');
       const summary = getRecordString(result ?? {}, 'summary');
       const errorMessage = getRecordString(event, 'errorMessage');
       const status = errorMessage ? 'error' : 'completed';
 
       return updateActivity('compaction', compactActivity({
         kind: 'compaction',
-        title: status === 'completed' ? formatCompactionTitle(tokensBefore) : 'Compacting context…',
+        title: status === 'completed' ? formatCompactionTitle(tokensBefore, estimatedTokensAfter) : 'Compacting context…',
         status,
         ...(errorMessage || tokensBefore === undefined ? { summary: errorMessage ?? 'Completed' } : {}),
         ...(summary ? { body: summary } : { body: formatKnownEventBody(event, ['type']) }),

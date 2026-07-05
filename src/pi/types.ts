@@ -240,6 +240,7 @@ export type PiCompactResult = {
   summary?: string;
   firstKeptEntryId?: string;
   tokensBefore?: number;
+  estimatedTokensAfter?: number;
   details?: unknown;
 };
 
@@ -290,6 +291,7 @@ export type PiAgentMessage = {
   errorMessage?: string;
   summary?: string;
   tokensBefore?: number;
+  estimatedTokensAfter?: number;
   display?: unknown;
   details?: unknown;
   toolCallId?: string;

@@ -87,9 +87,14 @@ export function formatAgentMessages(messages: AgentMessage[] | undefined): ChatM
     if (message.role === 'compactionSummary') {
       const summary = typeof message.summary === 'string' ? message.summary : '';
       const tokensBefore = typeof message.tokensBefore === 'number' ? message.tokensBefore : undefined;
+      const estimatedTokensAfter = typeof message.estimatedTokensAfter === 'number' ? message.estimatedTokensAfter : undefined;
 
       if (summary.trim() || tokensBefore !== undefined) {
-        transcript.push({ role: 'system', text: formatCompactionSystemMessage(summary, tokensBefore), variant: 'compactionSummary' });
+        transcript.push({
+          role: 'system',
+          text: formatCompactionSystemMessage(summary, tokensBefore, estimatedTokensAfter),
+          variant: 'compactionSummary'
+        });
       }
 
       lastAssistant = undefined;

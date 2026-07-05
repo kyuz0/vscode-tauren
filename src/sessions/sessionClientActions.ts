@@ -112,7 +112,7 @@ export async function cloneSessionWithClient(client: AgentClient, options: Sessi
 
 export async function compactSessionWithClient(client: AgentClient, options: SessionClientActionUi): Promise<void> {
   const result = await compactSession(client);
-  options.showToast?.(`${formatCompactionTitle(result.tokensBefore)}.`);
+  options.showToast?.(`${formatCompactionTitle(result.tokensBefore, result.estimatedTokensAfter)}.`);
 }
 
 export async function exportSessionWithClient(client: AgentClient, options: SessionClientActionUi): Promise<void> {
