@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-07-05
+
 ### Added
 
 - Added local whisper.cpp voice input with downloadable Whisper models, microphone selection, push-to-talk, hold-to-talk, and explicit hands-free listening.
