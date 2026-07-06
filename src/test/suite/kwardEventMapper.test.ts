@@ -50,6 +50,31 @@ suite('Kward event mapper', () => {
   test('maps canonical edit tool metadata to Pi-style tool execution events', () => {
     assert.deepStrictEqual(
       mapKwardTurnEvent({
+        type: 'toolUpdate',
+        payload: {
+          toolCallId: 'call-1',
+          toolName: 'edit',
+          args: {
+            path: 'src/file.ts',
+            edits: [{ oldText: 'old', newText: 'new' }]
+          },
+          delta: { content: 'edited' }
+        }
+      }),
+      {
+        type: 'tool_execution_update',
+        toolCallId: 'call-1',
+        toolName: 'edit',
+        args: {
+          path: 'src/file.ts',
+          edits: [{ oldText: 'old', newText: 'new' }]
+        },
+        partialResult: { content: 'edited' }
+      }
+    );
+
+    assert.deepStrictEqual(
+      mapKwardTurnEvent({
         type: 'toolResult',
         payload: {
           toolCallId: 'call-1',

@@ -124,6 +124,8 @@ export function mapKwardTurnEventToAgentEvent(event: KwardTurnEvent): AgentEvent
       };
     case 'toolCall':
       return mapKwardToolEvent(payload, 'tool_execution_start');
+    case 'toolUpdate':
+      return mapKwardToolEvent(payload, 'tool_execution_update');
     case 'toolResult':
       return mapKwardToolEvent(payload, 'tool_execution_end');
     case 'compactionStart':
@@ -164,13 +166,17 @@ function createThinkingEvent(type: 'thinking_start' | 'thinking_delta' | 'thinki
   };
 }
 
-function mapKwardToolEvent(payload: Record<string, unknown>, type: 'tool_execution_start' | 'tool_execution_end'): AgentEvent {
+function mapKwardToolEvent(payload: Record<string, unknown>, type: 'tool_execution_start' | 'tool_execution_update' | 'tool_execution_end'): AgentEvent {
   const toolCall = isRecord(payload.toolCall) ? payload.toolCall : undefined;
   const tool = isRecord(payload.tool) ? payload.tool : undefined;
   const toolCallId = getString(payload, 'toolCallId') ?? getString(toolCall, 'id') ?? getString(toolCall, 'tool_call_id') ?? getString(toolCall, 'callId');
   const toolName = getString(payload, 'toolName') ?? normalizeToolName(getString(toolCall, 'name') ?? getNestedFunctionName(toolCall), getString(tool, 'kind'));
   const args = isRecord(payload.args) ? payload.args : normalizeToolArgs(tool, toolCall);
   const payloadResult = isRecord(payload.result) ? payload.result : undefined;
+  const payloadDelta = isRecord(payload.delta) ? payload.delta : undefined;
+  const partialResult = type === 'tool_execution_update'
+    ? payloadDelta ?? payloadResult ?? (payload.content !== undefined ? { content: payload.content } : undefined)
+    : undefined;
   const result = type === 'tool_execution_end'
     ? payloadResult ?? { content: payload.content, ...(tool ? { details: { tool } } : {}) }
     : undefined;
@@ -183,6 +189,7 @@ function mapKwardToolEvent(payload: Record<string, unknown>, type: 'tool_executi
     ...(toolCallId ? { toolCallId } : {}),
     ...(toolName ? { toolName } : {}),
     ...(args ? { args } : {}),
+    ...(partialResult ? { partialResult } : {}),
     ...(result ? { result } : {}),
     ...(isError !== undefined ? { isError } : {})
   };
