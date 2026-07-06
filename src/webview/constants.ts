@@ -1,5 +1,6 @@
 import {
   hiddenLocalSlashCommandNames as sharedHiddenLocalSlashCommandNames,
+  kwardLocalSlashMenuCommands as sharedKwardLocalSlashMenuCommands,
   localSlashMenuCommands as sharedLocalSlashMenuCommands
 } from '../commands/slashCommands';
 import { kwardMemoryCommandOptions } from '../kward/memoryCommandOptions';
@@ -7,6 +8,7 @@ import type { SlashCommand } from './types';
 
 export const webviewHiddenLocalSlashCommandNames = sharedHiddenLocalSlashCommandNames;
 export const webviewLocalSlashCommands: SlashCommand[] = sharedLocalSlashMenuCommands.map((command) => ({ ...command }));
+export const webviewKwardLocalSlashCommands: SlashCommand[] = sharedKwardLocalSlashMenuCommands.map((command) => ({ ...command }));
 export const webviewKwardMemoryCommandOptions = kwardMemoryCommandOptions.map((option) => ({ ...option }));
 
 export const messagesBottomThreshold = 4;

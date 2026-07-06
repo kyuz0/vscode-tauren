@@ -17,6 +17,7 @@ import {
 import { cloneSession, compactSession, exportSessionHtml, forkSession } from '../sessions/sessionClientActions';
 import { formatTaurenHotkeys } from '../hotkeys/hotkeys';
 import { parseKwardMemorySlashArgs, runKwardMemoryAction } from '../kward/memoryActions';
+import { formatKwardMcpInventory, formatKwardToolInventory, hasKwardToolInventory } from '../kward/toolInventoryFormatting';
 import { formatShareTranscriptMessage, shareSessionWithGh } from './shareSession';
 
 export type LocalSlashCommand = { name: string; args: string };
@@ -82,6 +83,12 @@ export class LocalSlashCommandController {
         case 'memory':
           await this.handleMemorySlashCommand(command.args);
           return;
+        case 'mcp':
+          await this.handleKwardMcpSlashCommand();
+          return;
+        case 'tools':
+          await this.handleKwardToolsSlashCommand();
+          return;
         case 'model':
           await this.handleModelSlashCommand(command.args);
           return;
@@ -143,6 +150,28 @@ export class LocalSlashCommandController {
       this.options.session.addErrorMessage(getErrorMessage(error));
       this.options.postState();
     }
+  }
+
+  private async handleKwardMcpSlashCommand(): Promise<void> {
+    const client = this.options.getClient();
+    if (!hasKwardToolInventory(client)) {
+      return;
+    }
+
+    const inventory = await client.getToolInventory();
+    this.options.session.addSystemMessage(formatKwardMcpInventory(inventory));
+    this.options.postState();
+  }
+
+  private async handleKwardToolsSlashCommand(): Promise<void> {
+    const client = this.options.getClient();
+    if (!hasKwardToolInventory(client)) {
+      return;
+    }
+
+    const inventory = await client.getToolInventory();
+    this.options.session.addSystemMessage(formatKwardToolInventory(inventory));
+    this.options.postState();
   }
 
   private async handleMemorySlashCommand(args: string): Promise<void> {

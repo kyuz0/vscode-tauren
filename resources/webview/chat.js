@@ -1942,6 +1942,8 @@
     { name: "settings", description: "Open Tauren settings", source: "builtin", supported: true },
     { name: "scoped-models", description: "Configure scoped model cycling", source: "builtin", supported: true },
     { name: "memory", description: "Manage Kward memory", source: "builtin", supported: true },
+    { name: "mcp", description: "Show Kward MCP server and tool status", source: "builtin", supported: true, kwardOnly: true },
+    { name: "tools", description: "Show available Kward tools", source: "builtin", supported: true, kwardOnly: true },
     { name: "import", description: "Import and resume a JSONL session", source: "builtin", supported: true },
     { name: "share", description: "Share session as a secret GitHub gist", source: "builtin", supported: true },
     { name: "changelog", description: "Show Pi and Tauren changelogs", source: "builtin", supported: true },
@@ -1962,8 +1964,9 @@
   );
   var localSlashCommandNames = localSlashCommandDefinitions.map((command) => command.name);
   var hiddenLocalSlashCommandNames = localSlashCommandDefinitions.filter((command) => command.hidden).map((command) => command.name);
-  var localSlashCommands = localSlashCommandDefinitions.map(({ supported: _supported, hidden: _hidden, ...command }) => command);
-  var localSlashMenuCommands = localSlashCommandDefinitions.filter((command) => command.supported && !command.hidden).map(({ supported: _supported, hidden: _hidden, ...command }) => command);
+  var localSlashCommands = localSlashCommandDefinitions.map(({ supported: _supported, hidden: _hidden, kwardOnly: _kwardOnly, ...command }) => command);
+  var localSlashMenuCommands = localSlashCommandDefinitions.filter((command) => command.supported && !command.hidden && !command.kwardOnly).map(({ supported: _supported, hidden: _hidden, kwardOnly: _kwardOnly, ...command }) => command);
+  var kwardLocalSlashMenuCommands = localSlashCommandDefinitions.filter((command) => command.supported && !command.hidden && command.kwardOnly).map(({ supported: _supported, hidden: _hidden, kwardOnly: _kwardOnly, ...command }) => command);
 
   // src/kward/memoryCommandOptions.ts
   var kwardMemoryCommandOptions = [
@@ -1987,6 +1990,7 @@
   // src/webview/constants.ts
   var webviewHiddenLocalSlashCommandNames = hiddenLocalSlashCommandNames;
   var webviewLocalSlashCommands = localSlashMenuCommands.map((command) => ({ ...command }));
+  var webviewKwardLocalSlashCommands = kwardLocalSlashMenuCommands.map((command) => ({ ...command }));
   var webviewKwardMemoryCommandOptions = kwardMemoryCommandOptions.map((option) => ({ ...option }));
   var messagesBottomThreshold = 4;
   var maxTextareaHeight = 180;
@@ -2959,6 +2963,9 @@
       const state2 = this.options.getState();
       const backend = state2.settings.values["tauren.backend"];
       const commands = webviewLocalSlashCommands.filter((command) => command.name !== "memory" || backend === "kward");
+      if (backend === "kward") {
+        commands.push(...webviewKwardLocalSlashCommands);
+      }
       const names = /* @__PURE__ */ new Set([
         ...commands.map((command) => command.name),
         ...webviewHiddenLocalSlashCommandNames

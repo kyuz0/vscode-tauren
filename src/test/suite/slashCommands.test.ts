@@ -2,8 +2,10 @@ import * as assert from 'assert';
 import {
   hiddenLocalSlashCommandNames,
   isBuiltinSlashCommand,
+  isKwardOnlyBuiltinSlashCommand,
   isSupportedBuiltinSlashCommand,
   localSlashCommandNames,
+  kwardLocalSlashMenuCommands,
   localSlashCommands,
   localSlashMenuCommands
 } from '../../commands/slashCommands';
@@ -22,6 +24,8 @@ suite('Slash commands', () => {
     assert.ok(names.includes('login'));
     assert.ok(names.includes('logout'));
     assert.ok(names.includes('hotkeys'));
+    assert.ok(names.includes('mcp'));
+    assert.ok(names.includes('tools'));
     assert.deepStrictEqual(localSlashCommandNames, names);
     assert.deepStrictEqual(hiddenLocalSlashCommandNames, []);
 
@@ -41,6 +45,14 @@ suite('Slash commands', () => {
     assert.ok(menuNames.includes('login'));
     assert.ok(menuNames.includes('logout'));
     assert.ok(menuNames.includes('hotkeys'));
+    assert.strictEqual(menuNames.includes('mcp'), false);
+    assert.strictEqual(menuNames.includes('tools'), false);
+
+    const kwardMenuNames = kwardLocalSlashMenuCommands.map((command) => command.name);
+    assert.deepStrictEqual(kwardMenuNames, ['mcp', 'tools']);
+    assert.strictEqual(isKwardOnlyBuiltinSlashCommand('mcp'), true);
+    assert.strictEqual(isKwardOnlyBuiltinSlashCommand('tools'), true);
+    assert.strictEqual(isKwardOnlyBuiltinSlashCommand('model'), false);
 
     for (const command of localSlashMenuCommands) {
       assert.strictEqual(isBuiltinSlashCommand(command.name), true);

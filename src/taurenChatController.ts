@@ -29,6 +29,7 @@ import {
 } from './metadata/sessionMetadata';
 import { SessionDiffController } from './diff/sessionDiffController';
 import { getErrorMessage } from './controller/errors';
+import { isKwardOnlyBuiltinSlashCommand } from './commands/slashCommands';
 import { parseLocalSlashCommand, parseSlashCommand } from './controller/slashCommandParsing';
 import { LocalSlashCommandController } from './controller/localSlashCommandController';
 import { SessionHistoryController } from './sessions/sessionHistoryController';
@@ -418,7 +419,10 @@ export class TaurenChatController {
   }
 
   private async handleSubmitMessage(message: Extract<WebviewMessage, { type: 'submit' }>): Promise<void> {
-    const localSlashCommand = parseLocalSlashCommand(message.text);
+    const parsedLocalSlashCommand = parseLocalSlashCommand(message.text);
+    const localSlashCommand = parsedLocalSlashCommand && (!isKwardOnlyBuiltinSlashCommand(parsedLocalSlashCommand.name) || this.getBackend() === 'kward')
+      ? parsedLocalSlashCommand
+      : undefined;
 
     if (this.session.isBusy) {
       if (this.slashCommandController.isCompacting) {

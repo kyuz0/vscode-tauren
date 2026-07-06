@@ -7,6 +7,7 @@ type LocalSlashCommand = {
 
 type LocalSlashCommandDefinition = LocalSlashCommand & {
   hidden?: boolean;
+  kwardOnly?: boolean;
 };
 
 const localSlashCommandDefinitions: LocalSlashCommandDefinition[] = [
@@ -20,6 +21,8 @@ const localSlashCommandDefinitions: LocalSlashCommandDefinition[] = [
   { name: 'settings', description: 'Open Tauren settings', source: 'builtin', supported: true },
   { name: 'scoped-models', description: 'Configure scoped model cycling', source: 'builtin', supported: true },
   { name: 'memory', description: 'Manage Kward memory', source: 'builtin', supported: true },
+  { name: 'mcp', description: 'Show Kward MCP server and tool status', source: 'builtin', supported: true, kwardOnly: true },
+  { name: 'tools', description: 'Show available Kward tools', source: 'builtin', supported: true, kwardOnly: true },
   { name: 'import', description: 'Import and resume a JSONL session', source: 'builtin', supported: true },
   { name: 'share', description: 'Share session as a secret GitHub gist', source: 'builtin', supported: true },
   { name: 'changelog', description: 'Show Pi and Tauren changelogs', source: 'builtin', supported: true },
@@ -46,10 +49,13 @@ export const localSlashCommandNames = localSlashCommandDefinitions.map((command)
 export const hiddenLocalSlashCommandNames = localSlashCommandDefinitions
   .filter((command) => command.hidden)
   .map((command) => command.name);
-export const localSlashCommands = localSlashCommandDefinitions.map(({ supported: _supported, hidden: _hidden, ...command }) => command);
+export const localSlashCommands = localSlashCommandDefinitions.map(({ supported: _supported, hidden: _hidden, kwardOnly: _kwardOnly, ...command }) => command);
 export const localSlashMenuCommands = localSlashCommandDefinitions
-  .filter((command) => command.supported && !command.hidden)
-  .map(({ supported: _supported, hidden: _hidden, ...command }) => command);
+  .filter((command) => command.supported && !command.hidden && !command.kwardOnly)
+  .map(({ supported: _supported, hidden: _hidden, kwardOnly: _kwardOnly, ...command }) => command);
+export const kwardLocalSlashMenuCommands = localSlashCommandDefinitions
+  .filter((command) => command.supported && !command.hidden && command.kwardOnly)
+  .map(({ supported: _supported, hidden: _hidden, kwardOnly: _kwardOnly, ...command }) => command);
 
 export function isBuiltinSlashCommand(name: string): boolean {
   return builtinSlashCommandNames.has(name);
@@ -57,4 +63,8 @@ export function isBuiltinSlashCommand(name: string): boolean {
 
 export function isSupportedBuiltinSlashCommand(name: string): boolean {
   return supportedBuiltinSlashCommandNames.has(name);
+}
+
+export function isKwardOnlyBuiltinSlashCommand(name: string): boolean {
+  return localSlashCommandDefinitions.some((command) => command.name === name && command.kwardOnly === true);
 }

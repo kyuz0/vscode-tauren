@@ -1,5 +1,6 @@
 import {
   webviewHiddenLocalSlashCommandNames,
+  webviewKwardLocalSlashCommands,
   webviewKwardMemoryCommandOptions,
   webviewLocalSlashCommands
 } from '../constants';
@@ -407,6 +408,9 @@ export class SuggestionMenuController {
     const state = this.options.getState();
     const backend = state.settings.values['tauren.backend'];
     const commands = webviewLocalSlashCommands.filter((command) => command.name !== 'memory' || backend === 'kward');
+    if (backend === 'kward') {
+      commands.push(...webviewKwardLocalSlashCommands);
+    }
     const names = new Set([
       ...commands.map((command) => command.name),
       ...webviewHiddenLocalSlashCommandNames
