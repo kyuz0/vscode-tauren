@@ -47,6 +47,28 @@ suite('Kward event mapper', () => {
     );
   });
 
+  test('passes Kward tool metadata through tool execution events', () => {
+    const metadata = {
+      source: 'mcp',
+      serverName: 'github',
+      remoteName: 'search_issues',
+      displayName: 'github.search_issues'
+    };
+
+    assert.deepStrictEqual(
+      mapKwardTurnEvent({ type: 'toolCall', payload: { toolCallId: 'call-1', toolName: 'github__search_issues', metadata } }),
+      { type: 'tool_execution_start', toolCallId: 'call-1', toolName: 'github__search_issues', metadata }
+    );
+    assert.deepStrictEqual(
+      mapKwardTurnEvent({ type: 'toolUpdate', payload: { toolCallId: 'call-1', toolName: 'github__search_issues', delta: { content: 'working' }, metadata } }),
+      { type: 'tool_execution_update', toolCallId: 'call-1', toolName: 'github__search_issues', partialResult: { content: 'working' }, metadata }
+    );
+    assert.deepStrictEqual(
+      mapKwardTurnEvent({ type: 'toolResult', payload: { toolCallId: 'call-1', toolName: 'github__search_issues', result: { content: 'done' }, metadata } }),
+      { type: 'tool_execution_end', toolCallId: 'call-1', toolName: 'github__search_issues', result: { content: 'done' }, metadata }
+    );
+  });
+
   test('maps canonical edit tool metadata to Pi-style tool execution events', () => {
     assert.deepStrictEqual(
       mapKwardTurnEvent({

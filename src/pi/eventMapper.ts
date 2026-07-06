@@ -65,6 +65,7 @@ export type ToolExecutionActivityOptions = {
   partialResult?: unknown;
   result?: unknown;
   rendered?: PiRenderedContent;
+  metadata?: unknown;
   status: 'running' | 'completed' | 'error';
 };
 
@@ -74,9 +75,10 @@ export function formatToolExecutionActivity({
   partialResult,
   result,
   rendered,
+  metadata,
   status
 }: ToolExecutionActivityOptions): ChatActivityInput {
-  const display = formatToolExecutionDisplay({ toolName, args });
+  const display = formatToolExecutionDisplay({ toolName, args, metadata });
   const resultValue = status === 'running' ? partialResult : result;
   const images = extractToolResultImages(resultValue);
   const includeExpandedBody = !(status === 'running' && display.toolName === 'bash');
@@ -428,6 +430,7 @@ function mapToolExecutionStart(event: PiEvent, _fullCommunication: boolean): Act
     toolName: getToolName(event),
     args: event.args,
     rendered: getRenderedTool(event),
+    metadata: event.metadata,
     status: 'running'
   }));
 }
@@ -438,6 +441,7 @@ function mapToolExecutionUpdate(event: PiEvent, _fullCommunication: boolean): Ac
     args: event.args,
     partialResult: event.partialResult,
     rendered: getRenderedTool(event),
+    metadata: event.metadata,
     status: 'running'
   }));
 }
@@ -450,6 +454,7 @@ function mapToolExecutionEnd(event: PiEvent, _fullCommunication: boolean): Activ
     args: event.args,
     result: event.result,
     rendered: getRenderedTool(event),
+    metadata: event.metadata,
     status: isError ? 'error' : 'completed'
   }));
 }
@@ -553,9 +558,21 @@ function getRenderedTool(event: PiEvent): PiRenderedContent | undefined {
   };
 }
 
-function formatToolExecutionDisplay(input: { toolName?: string; args?: unknown }): { toolName: string; title: string; summary?: string } {
+function formatToolExecutionDisplay(input: { toolName?: string; args?: unknown; metadata?: unknown }): { toolName: string; title: string; summary?: string } {
   const toolName = input.toolName || 'tool';
   const args = isRecord(input.args) ? input.args : undefined;
+  const metadata = isRecord(input.metadata) ? input.metadata : {};
+  const metadataSource = getRecordString(metadata, 'source');
+  const metadataDisplayName = getRecordString(metadata, 'displayName');
+
+  if (metadataSource === 'mcp' && metadataDisplayName) {
+    const summary = summarizeToolArgs(input.args);
+    return {
+      toolName,
+      title: summary ? `MCP · ${metadataDisplayName} ${summary}` : `MCP · ${metadataDisplayName}`,
+      summary: undefined
+    };
+  }
 
   if (toolName === 'bash') {
     const command = args ? getRecordString(args, 'command') : undefined;

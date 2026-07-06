@@ -431,6 +431,32 @@ suite('Pi event mapper', () => {
     );
   });
 
+  test('mapPiActivity renders MCP tool metadata labels', () => {
+    assert.deepStrictEqual(
+      mapPiActivity({
+        type: 'tool_execution_start',
+        toolCallId: 'call-1',
+        toolName: 'github__search_issues',
+        args: { query: 'bug' },
+        metadata: {
+          source: 'mcp',
+          displayName: 'github.search_issues',
+          serverName: 'github',
+          remoteName: 'search_issues'
+        }
+      }),
+      {
+        type: 'activity_update',
+        sourceId: 'tool:call-1',
+        activity: {
+          kind: 'tool_execution',
+          title: 'MCP · github.search_issues { "query": "bug" }',
+          status: 'running'
+        }
+      }
+    );
+  });
+
   test('mapPiActivity omits expanded body for running bash output previews', () => {
     assert.deepStrictEqual(
       mapPiActivity({

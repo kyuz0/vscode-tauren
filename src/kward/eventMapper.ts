@@ -174,6 +174,7 @@ function mapKwardToolEvent(payload: Record<string, unknown>, type: 'tool_executi
   const args = isRecord(payload.args) ? payload.args : normalizeToolArgs(tool, toolCall);
   const payloadResult = isRecord(payload.result) ? payload.result : undefined;
   const payloadDelta = isRecord(payload.delta) ? payload.delta : undefined;
+  const metadata = isRecord(payload.metadata) ? payload.metadata : undefined;
   const partialResult = type === 'tool_execution_update'
     ? payloadDelta ?? payloadResult ?? (payload.content !== undefined ? { content: payload.content } : undefined)
     : undefined;
@@ -191,6 +192,7 @@ function mapKwardToolEvent(payload: Record<string, unknown>, type: 'tool_executi
     ...(args ? { args } : {}),
     ...(partialResult ? { partialResult } : {}),
     ...(result ? { result } : {}),
+    ...(metadata ? { metadata } : {}),
     ...(isError !== undefined ? { isError } : {})
   };
 }
