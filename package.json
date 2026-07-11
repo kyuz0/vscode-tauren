@@ -744,6 +744,7 @@
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
+    "analyze": "fallow --format compact",
     "watch": "npm run compile:sdk && node scripts/watch.js",
     "compile:sdk": "node scripts/build-sdk-bundle.js"
   },
