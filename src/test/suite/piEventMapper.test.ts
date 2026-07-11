@@ -549,6 +549,29 @@ suite('Pi event mapper', () => {
         }
       }
     );
+
+    assert.deepStrictEqual(
+      mapPiActivity({
+        type: 'tool_execution_end',
+        toolCallId: 'call-edit-location',
+        toolName: 'edit',
+        args: { path: 'src/example.ts', edits: [{ oldText: 'old', newText: 'new' }] },
+        result: { details: { firstChangedLine: 42 } }
+      }, { fullCommunication: false }),
+      {
+        type: 'activity_update',
+        sourceId: 'tool:call-edit-location',
+        activity: {
+          kind: 'tool_execution',
+          title: 'edit src/example.ts',
+          status: 'completed',
+          summary: '1 replacement',
+          body: '\x1b[31m-old\x1b[0m\n\x1b[32m+new\x1b[0m',
+          code: true,
+          fileReference: { path: 'src/example.ts', line: 42 }
+        }
+      }
+    );
   });
 
   test('mapPiActivity keeps concise tool execution visible when full communication is disabled', () => {

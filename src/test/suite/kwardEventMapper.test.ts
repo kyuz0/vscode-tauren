@@ -108,7 +108,8 @@ suite('Kward event mapper', () => {
           result: {
             content: 'edited',
             isError: false,
-            diff: '--- a/src/file.ts\n+++ b/src/file.ts\n'
+            diff: '--- a/src/file.ts\n+++ b/src/file.ts\n',
+            firstChangedLine: 42
           }
         }
       }),
@@ -123,7 +124,8 @@ suite('Kward event mapper', () => {
         result: {
           content: 'edited',
           isError: false,
-          diff: '--- a/src/file.ts\n+++ b/src/file.ts\n'
+          diff: '--- a/src/file.ts\n+++ b/src/file.ts\n',
+          firstChangedLine: 42
         },
         isError: false
       }

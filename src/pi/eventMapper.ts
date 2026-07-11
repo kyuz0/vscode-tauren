@@ -82,6 +82,7 @@ export function formatToolExecutionActivity({
   const resultValue = status === 'running' ? partialResult : result;
   const images = extractToolResultImages(resultValue);
   const includeExpandedBody = !(status === 'running' && display.toolName === 'bash');
+  const fileReference = getToolExecutionFileReference(display.toolName, args, resultValue, status);
   const preview = rendered
     ? { body: rendered.body, ...(rendered.expandedBody ? { expandedBody: rendered.expandedBody } : {}) }
     : status !== 'error' && display.toolName === 'edit'
@@ -94,7 +95,8 @@ export function formatToolExecutionActivity({
     status,
     ...(display.summary ? { summary: display.summary } : {}),
     ...(preview ? { body: preview.body, ...(preview.expandedBody ? { expandedBody: preview.expandedBody } : {}), code: rendered?.code ?? true } : {}),
-    ...(images.length > 0 ? { images } : {})
+    ...(images.length > 0 ? { images } : {}),
+    ...(fileReference ? { fileReference } : {})
   };
 }
 
@@ -624,6 +626,26 @@ function formatToolExecutionDisplay(input: { toolName?: string; args?: unknown; 
     title: summary ? `${toolName} ${summary}` : toolName,
     summary: undefined
   };
+}
+
+function getToolExecutionFileReference(
+  toolName: string,
+  args: unknown,
+  result: unknown,
+  status: ToolExecutionActivityOptions['status']
+): { path: string; line: number } | undefined {
+  if (toolName !== 'edit' || status !== 'completed' || !isRecord(args)) {
+    return undefined;
+  }
+
+  const path = getRecordString(args, 'path');
+  const line = getPositiveNumber(getRecordValue(result, 'firstChangedLine') ?? getRecordValue(getRecordValue(result, 'details'), 'firstChangedLine'));
+
+  return path && line ? { path, line } : undefined;
+}
+
+function getRecordValue(value: unknown, key: string): unknown {
+  return isRecord(value) ? value[key] : undefined;
 }
 
 function formatReadRange(args: Record<string, unknown>): string | undefined {

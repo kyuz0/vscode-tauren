@@ -451,6 +451,17 @@ suite('TaurenChatController', () => {
           toolName: 'bash',
           content: [{ type: 'text', text: 'hidden tool output' }]
         },
+        {
+          role: 'assistant',
+          content: [{ type: 'toolCall', id: 'call-2', name: 'edit', arguments: { path: 'src/example.ts', edits: [{ oldText: 'old', newText: 'new' }] } }]
+        },
+        {
+          role: 'toolResult',
+          toolCallId: 'call-2',
+          toolName: 'edit',
+          content: [{ type: 'text', text: 'edited' }],
+          details: { firstChangedLine: 42 }
+        },
         { role: 'assistant', content: [], errorMessage: 'Earlier failure' }
       ]
     });
@@ -481,6 +492,22 @@ suite('TaurenChatController', () => {
             status: 'completed',
             body: 'hidden tool output',
             code: true
+          }
+        ]
+      },
+      {
+        role: 'assistant',
+        text: '',
+        activities: [
+          {
+            id: 'restored-tool-2',
+            kind: 'tool_execution',
+            title: 'edit src/example.ts',
+            status: 'completed',
+            summary: '1 replacement',
+            body: '\x1b[31m-old\x1b[0m\n\x1b[32m+new\x1b[0m',
+            code: true,
+            fileReference: { path: 'src/example.ts', line: 42 }
           }
         ]
       },

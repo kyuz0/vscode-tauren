@@ -25,6 +25,11 @@ export type ChatImage = {
   alt?: string;
 };
 
+export type ChatActivityFileReference = {
+  path: string;
+  line?: number;
+};
+
 export type ChatActivity = {
   id: string;
   kind: ChatActivityKind;
@@ -35,6 +40,7 @@ export type ChatActivity = {
   expandedBody?: string;
   code?: boolean;
   images?: ChatImage[];
+  fileReference?: ChatActivityFileReference;
 };
 
 export type ChatActivityInput = Omit<ChatActivity, 'id'>;

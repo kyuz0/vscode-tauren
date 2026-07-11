@@ -187,7 +187,7 @@ function formatRestoredToolResultActivity(
   const toolName = typeof message.toolName === 'string'
     ? message.toolName
     : restoredToolCall?.name;
-  const result = { content: message.content };
+  const result = { content: message.content, details: message.details };
 
   if (!toolName && message.content === undefined) {
     return undefined;
