@@ -162,6 +162,7 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
   private pendingLaneSwitch: PendingPerfBoundary | undefined;
   private pendingSessionSwitch: PendingPerfBoundary | undefined;
   private lastWebviewLane: WebviewLane = 'chat';
+  private pendingComposerCompletion: { id: string; revision: number; controller: AbortController; webview: vscode.WebviewView } | undefined;
 
   public constructor(
     private readonly extensionUri: vscode.Uri,
@@ -371,6 +372,7 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
   }
 
   public dispose(): void {
+    this.abortPendingComposerCompletion();
     this.setSidebarFocusContext(false);
     this.setBusyContext(false);
     this.stopContextUsagePolling();
@@ -393,6 +395,7 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
   }
 
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
+    this.abortPendingComposerCompletion();
     this.stopContextUsagePolling();
     this.disposeWebviewDisposables();
     this.webviewView = webviewView;
@@ -411,6 +414,7 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
         }
 
         this.controller.setCustomUiViewAttached(false);
+        this.abortPendingComposerCompletion();
         this.webviewView = undefined;
         this.webviewReady = false;
         this.setSidebarFocusContext(false);
@@ -682,23 +686,37 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
   }
 
   private async requestComposerCompletions(message: Extract<WebviewMessage, { type: 'requestComposerCompletions' }>): Promise<void> {
+    this.abortPendingComposerCompletion();
+    const webview = this.webviewView;
+    if (!webview) {
+      return;
+    }
+    const controller = new AbortController();
+    const pending = { id: message.id, revision: message.revision, controller, webview };
+    this.pendingComposerCompletion = pending;
     const request: ComposerCompletionRequest = {
       id: message.id,
+      revision: message.revision,
       text: message.text,
       selectionStart: message.selectionStart,
       selectionEnd: message.selectionEnd
     };
-    const abort = new AbortController();
-    const result = await this.controller.getComposerCompletions(request, abort.signal);
-    if (!result) {
+    const result = await this.controller.getComposerCompletions(request, controller.signal);
+    if (controller.signal.aborted || this.pendingComposerCompletion !== pending || this.webviewView !== webview || !result) {
       return;
     }
 
-    void this.webviewView?.webview.postMessage({ type: 'composerCompletionsResult', ...result });
+    this.pendingComposerCompletion = undefined;
+    void webview.webview.postMessage({ type: 'composerCompletionsResult', ...result });
+  }
+
+  private abortPendingComposerCompletion(): void {
+    this.pendingComposerCompletion?.controller.abort();
+    this.pendingComposerCompletion = undefined;
   }
 
   private async applyComposerCompletion(message: Extract<WebviewMessage, { type: 'applyComposerCompletion' }>): Promise<void> {
-    const application: ComposerCompletionApplication = { id: message.id, itemId: message.itemId };
+    const application: ComposerCompletionApplication = { id: message.id, revision: message.revision, itemId: message.itemId };
     const result = await this.controller.applyComposerCompletion(application);
     if (result) {
       void this.webviewView?.webview.postMessage({ type: 'composerCompletionApplied', ...result });
@@ -926,6 +944,8 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
     if (message.type === 'ready') {
       this.webviewReady = true;
       this.controller.setCustomUiViewAttached(true);
+      const capabilities = await this.controller.getComposerCompletionCapabilities();
+      void this.webviewView?.webview.postMessage({ type: 'composerCompletionCapabilities', ...capabilities });
       this.codeRenderer.warmup();
       await this.controller.handleWebviewMessage(message);
       this.postInputFocusSoon();

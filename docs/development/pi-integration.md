@@ -84,4 +84,4 @@ The bridge should keep Pi extensions runtime-agnostic. Avoid making plugins depe
 
 Tauren supports Pi’s `ctx.ui.addAutocompleteProvider()` contract in the composer. Providers are stacked in registration order: the most recently registered factory wraps the current chain. An extension can return its own items, delegate to the current provider, and delegate `applyCompletion()` for ordinary insertion behavior.
 
-Tauren supplies the base `@` workspace-file provider, so extensions should delegate when they do not handle the current syntax. Provider results are applied by the extension host, allowing custom multiline text and cursor placement. TUI-only custom editor components remain unsupported.
+Tauren supplies the base `@` workspace-file provider, so extensions should delegate when they do not handle the current syntax. Registered `triggerCharacters` are unioned and drive automatic composer requests at token boundaries; `shouldTriggerFileCompletion()` can suppress only automatic file completion. Provider results are applied by the extension host, allowing custom multiline text and cursor placement. TUI-only custom editor components remain unsupported.

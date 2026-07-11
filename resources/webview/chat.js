@@ -2693,6 +2693,10 @@
     completionRequestId = 0;
     completionLoading = false;
     completionText = "";
+    completionSelectionStart = 0;
+    completionSelectionEnd = 0;
+    completionRevision = 0;
+    completionCapabilities = { triggerCharacters: ["@"], generation: 0 };
     isOpen() {
       return this.open;
     }
@@ -2716,6 +2720,7 @@
       this.completionItems = [];
       this.completionLoading = false;
       this.completionText = "";
+      this.completionRevision += 1;
       this.disablePointerHover();
       this.options.slashMenuElement?.removeAttribute("open");
       this.options.slashMenuElement?.setAttribute("aria-label", "Slash commands");
@@ -2723,10 +2728,16 @@
       this.options.textarea.removeAttribute("aria-activedescendant");
     }
     handleHostMessage(message) {
+      if (isComposerCompletionCapabilities(message)) {
+        this.completionCapabilities = message;
+        this.sync();
+        return true;
+      }
       if (isComposerCompletionsResult(message)) {
-        if (message.id !== String(this.completionRequestId) || this.options.textarea.value !== this.completionText) {
+        if (message.id !== String(this.completionRequestId) || message.revision !== this.completionRevision || this.options.textarea.value !== this.completionText || this.options.textarea.selectionStart !== this.completionSelectionStart || this.options.textarea.selectionEnd !== this.completionSelectionEnd) {
           return true;
         }
+        this.completionCapabilities = message.capabilities;
         this.completionLoading = false;
         this.completionItems = message.items;
         this.activeIndex = Math.min(this.activeIndex, Math.max(0, this.completionItems.length - 1));
@@ -2735,7 +2746,7 @@
         return true;
       }
       if (isComposerCompletionApplied(message)) {
-        if (message.id !== String(this.completionRequestId)) {
+        if (message.id !== String(this.completionRequestId) || message.revision !== this.completionRevision) {
           return true;
         }
         this.options.textarea.value = message.text;
@@ -2763,7 +2774,7 @@
       return true;
     }
     sync() {
-      const completionPrefix = getComposerCompletionPrefix(this.options.textarea);
+      const completionPrefix = getComposerCompletionPrefix(this.options.textarea, this.completionCapabilities.triggerCharacters);
       if (completionPrefix) {
         this.syncCompletionMenu();
         return;
@@ -2912,20 +2923,26 @@
       this.options.closeModelMenu();
       this.options.cancelSessionNameEdit();
       const text = this.options.textarea.value;
-      if (this.kind !== "completion" || text !== this.completionText) {
+      const selectionStart = this.options.textarea.selectionStart;
+      const selectionEnd = this.options.textarea.selectionEnd;
+      if (this.kind !== "completion" || text !== this.completionText || selectionStart !== this.completionSelectionStart || selectionEnd !== this.completionSelectionEnd) {
         this.kind = "completion";
         this.fileItems = [];
         this.completionItems = [];
         this.completionText = text;
+        this.completionSelectionStart = selectionStart;
+        this.completionSelectionEnd = selectionEnd;
         this.completionLoading = true;
         this.activeIndex = 0;
         this.completionRequestId += 1;
+        this.completionRevision += 1;
         this.options.postMessage({
           type: "requestComposerCompletions",
           id: String(this.completionRequestId),
+          revision: this.completionRevision,
           text,
-          selectionStart: this.options.textarea.selectionStart,
-          selectionEnd: this.options.textarea.selectionEnd
+          selectionStart,
+          selectionEnd
         });
       }
       this.renderCompletionMenu();
@@ -3365,7 +3382,7 @@
       this.options.focusPromptInput();
     }
     acceptCompletion(item) {
-      this.options.postMessage({ type: "applyComposerCompletion", id: String(this.completionRequestId), itemId: item.id });
+      this.options.postMessage({ type: "applyComposerCompletion", id: String(this.completionRequestId), revision: this.completionRevision, itemId: item.id });
     }
     acceptFile(file) {
       if (!acceptFileSuggestion(this.options.textarea, file)) {
@@ -3408,18 +3425,35 @@
     }
     return source || location;
   }
-  function getComposerCompletionPrefix(textarea2) {
+  function getComposerCompletionPrefix(textarea2, triggerCharacters) {
     if (textarea2.selectionStart !== textarea2.selectionEnd) {
       return void 0;
     }
     const beforeCursor = textarea2.value.slice(0, textarea2.selectionStart);
-    return /(?:^|[\s])[@#$][^\s]*$/.test(beforeCursor) ? beforeCursor : void 0;
+    const triggerSet = new Set(triggerCharacters);
+    for (let index = beforeCursor.length - 1; index >= 0; index -= 1) {
+      const character = beforeCursor[index] ?? "";
+      if (triggerSet.has(character)) {
+        const beforeTrigger = beforeCursor[index - 1];
+        if (index === 0 || beforeTrigger === void 0 || /[\s='\"]/.test(beforeTrigger)) {
+          return beforeCursor.slice(index);
+        }
+        return void 0;
+      }
+      if (/[\s]/.test(character)) {
+        return void 0;
+      }
+    }
+    return void 0;
   }
   function isComposerCompletionsResult(value) {
-    return isRecord3(value) && value.type === "composerCompletionsResult" && typeof value.id === "string" && Array.isArray(value.items) && value.items.every((item) => isRecord3(item) && typeof item.id === "string" && typeof item.value === "string" && typeof item.label === "string" && (item.description === void 0 || typeof item.description === "string"));
+    return isRecord3(value) && value.type === "composerCompletionsResult" && typeof value.id === "string" && typeof value.revision === "number" && Number.isInteger(value.revision) && isComposerCompletionCapabilities(value.capabilities) && Array.isArray(value.items) && value.items.every((item) => isRecord3(item) && typeof item.id === "string" && typeof item.value === "string" && typeof item.label === "string" && (item.description === void 0 || typeof item.description === "string"));
+  }
+  function isComposerCompletionCapabilities(value) {
+    return isRecord3(value) && value.type === "composerCompletionCapabilities" && typeof value.generation === "number" && Number.isInteger(value.generation) && Array.isArray(value.triggerCharacters) && value.triggerCharacters.every((character) => typeof character === "string" && Array.from(character).length === 1);
   }
   function isComposerCompletionApplied(value) {
-    return isRecord3(value) && value.type === "composerCompletionApplied" && typeof value.id === "string" && typeof value.text === "string" && typeof value.selectionStart === "number" && typeof value.selectionEnd === "number" && Number.isInteger(value.selectionStart) && Number.isInteger(value.selectionEnd) && value.selectionStart >= 0 && value.selectionEnd >= 0 && value.selectionStart <= value.text.length && value.selectionEnd <= value.text.length;
+    return isRecord3(value) && value.type === "composerCompletionApplied" && typeof value.id === "string" && typeof value.revision === "number" && Number.isInteger(value.revision) && typeof value.text === "string" && typeof value.selectionStart === "number" && typeof value.selectionEnd === "number" && Number.isInteger(value.selectionStart) && Number.isInteger(value.selectionEnd) && value.selectionStart >= 0 && value.selectionEnd >= 0 && value.selectionStart <= value.text.length && value.selectionEnd <= value.text.length;
   }
   function isRecord3(value) {
     return typeof value === "object" && value !== null;
@@ -3513,9 +3547,10 @@
         });
       });
       this.options.textarea.addEventListener("click", () => this.syncSlashMenu());
+      this.options.textarea.addEventListener("select", () => this.syncSlashMenu());
       this.options.textarea.addEventListener("blur", () => this.closeSlashMenu());
       this.options.textarea.addEventListener("keyup", (event) => {
-        if (["ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key)) {
+        if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(event.key)) {
           this.syncSlashMenu();
         }
       });

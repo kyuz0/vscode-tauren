@@ -51,6 +51,11 @@ export type WebviewComposerCompletion = {
   description?: string;
 };
 
+export type WebviewComposerCompletionCapabilities = {
+  triggerCharacters: string[];
+  generation: number;
+};
+
 export type WebviewSessionItemCommand = 'rename' | 'showChanges' | 'fork' | 'clone' | 'compact' | 'export' | 'delete';
 
 export type WebviewSessionSearchStatus = 'idle' | 'indexing' | 'ready' | 'error';
@@ -186,8 +191,8 @@ export type WebviewMessage =
   | { type: 'refreshMetadata' }
   | { type: 'refreshSlashCommands' }
   | { type: 'requestFileSuggestions'; id: string; prefix: string }
-  | { type: 'requestComposerCompletions'; id: string; text: string; selectionStart: number; selectionEnd: number }
-  | { type: 'applyComposerCompletion'; id: string; itemId: string }
+  | { type: 'requestComposerCompletions'; id: string; revision: number; text: string; selectionStart: number; selectionEnd: number }
+  | { type: 'applyComposerCompletion'; id: string; revision: number; itemId: string }
   | { type: 'selectPromptImages' }
   | { type: 'dropPromptImages'; files: WebviewDroppedPromptImage[]; uris: string[]; rejections?: string[] }
   | { type: 'removePromptImage'; id: string }

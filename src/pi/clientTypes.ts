@@ -1,5 +1,5 @@
 import type { PiSettingId, SettingValue } from '../settings/settingsRegistry';
-import type { ComposerCompletionApplication, ComposerCompletionApplied, ComposerCompletionRequest, ComposerCompletionResult } from '../autocomplete/types';
+import type { ComposerCompletionApplication, ComposerCompletionApplied, ComposerCompletionCapabilities, ComposerCompletionRequest, ComposerCompletionResult } from '../autocomplete/types';
 import type { WebviewTreeItem } from '../webviewProtocol/types';
 import type {
   PiAuthActionResult,
@@ -40,6 +40,7 @@ export type PiClient = {
   getAvailableModels(): Promise<PiAvailableModels>;
   getCommands(): Promise<PiAvailableCommands>;
   getComposerCompletions?(request: ComposerCompletionRequest, signal: AbortSignal): Promise<ComposerCompletionResult>;
+  getComposerCompletionCapabilities?(): Promise<ComposerCompletionCapabilities>;
   applyComposerCompletion?(application: ComposerCompletionApplication): Promise<ComposerCompletionApplied | undefined>;
   getStartupResources?(): Promise<PiStartupResources>;
   getAuthProviders?(): Promise<PiAuthProvidersResult>;

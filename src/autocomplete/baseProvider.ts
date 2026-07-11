@@ -9,7 +9,7 @@ export type PiAutocompleteProvider = {
   shouldTriggerFileCompletion?(lines: string[], cursorLine: number, cursorCol: number): boolean;
 };
 
-export function createTaurenBaseAutocompleteProvider(cwd: string | undefined): PiAutocompleteProvider {
+export function createTaurenBaseAutocompleteProvider(cwd: string | undefined | (() => string | undefined)): PiAutocompleteProvider {
   return {
     async getSuggestions(lines, cursorLine, cursorCol, options) {
       if (options.signal.aborted) {
@@ -21,7 +21,7 @@ export function createTaurenBaseAutocompleteProvider(cwd: string | undefined): P
         return null;
       }
 
-      const items = await getAtFileSuggestions({ cwd, prefix: prefix.prefix });
+      const items = await getAtFileSuggestions({ cwd: typeof cwd === 'function' ? cwd() : cwd, prefix: prefix.prefix });
       return options.signal.aborted ? null : { prefix: prefix.prefix, items };
     },
     applyCompletion(lines, cursorLine, cursorCol, item, prefix) {

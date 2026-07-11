@@ -151,9 +151,10 @@ export class ComposerController {
     });
 
     this.options.textarea.addEventListener('click', () => this.syncSlashMenu());
+    this.options.textarea.addEventListener('select', () => this.syncSlashMenu());
     this.options.textarea.addEventListener('blur', () => this.closeSlashMenu());
     this.options.textarea.addEventListener('keyup', (event) => {
-      if (['ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) {
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) {
         this.syncSlashMenu();
       }
     });

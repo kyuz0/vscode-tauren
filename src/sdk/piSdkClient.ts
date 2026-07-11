@@ -1,7 +1,7 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { ExtensionUi } from '../extensionUi/types';
-import type { ComposerCompletionApplication, ComposerCompletionApplied, ComposerCompletionRequest, ComposerCompletionResult } from '../autocomplete/types';
+import type { ComposerCompletionApplication, ComposerCompletionApplied, ComposerCompletionCapabilities, ComposerCompletionRequest, ComposerCompletionResult } from '../autocomplete/types';
 import { PiAutocompleteRegistry } from '../autocomplete/piAutocompleteRegistry';
 import type { PiClient } from '../pi/clientTypes';
 import type {
@@ -62,7 +62,9 @@ export class PiSdkClient implements PiClient {
   private readonly eventListeners = new Set<(event: PiEvent) => void>();
   private readonly errorListeners = new Set<(message: string) => void>();
   private readonly renderer = new PiSdkRenderer(() => this.options.extensionUi?.getToolsExpanded?.() ?? false);
-  private readonly autocompleteRegistry = new PiAutocompleteRegistry();
+  private readonly autocompleteRegistry = new PiAutocompleteRegistry({
+    onDiagnostic: (message) => this.emitError(`Pi extension autocomplete: ${message}`)
+  });
 
   public constructor(private readonly options: PiSdkClientOptions = {}) {}
 
@@ -149,6 +151,11 @@ export class PiSdkClient implements PiClient {
   public async getComposerCompletions(request: ComposerCompletionRequest, signal: AbortSignal): Promise<ComposerCompletionResult> {
     await this.ensureRuntime();
     return await this.autocompleteRegistry.complete(request, this.resolveWorkspaceCwd(), signal);
+  }
+
+  public async getComposerCompletionCapabilities(): Promise<ComposerCompletionCapabilities> {
+    await this.ensureRuntime();
+    return this.autocompleteRegistry.getCapabilities();
   }
 
   public async applyComposerCompletion(application: ComposerCompletionApplication): Promise<ComposerCompletionApplied | undefined> {

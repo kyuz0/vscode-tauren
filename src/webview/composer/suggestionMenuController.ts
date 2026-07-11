@@ -5,7 +5,7 @@ import {
   webviewLocalSlashCommands
 } from '../constants';
 import type { FileSuggestion, SlashCommand, WebviewState } from '../types';
-import type { WebviewComposerCompletion } from '../../webviewProtocol/types';
+import type { WebviewComposerCompletion, WebviewComposerCompletionCapabilities } from '../../webviewProtocol/types';
 import { eventTargetElement } from '../dom';
 import {
   acceptFileSuggestion,
@@ -50,6 +50,10 @@ export class SuggestionMenuController {
   private completionRequestId = 0;
   private completionLoading = false;
   private completionText = '';
+  private completionSelectionStart = 0;
+  private completionSelectionEnd = 0;
+  private completionRevision = 0;
+  private completionCapabilities: WebviewComposerCompletionCapabilities = { triggerCharacters: ['@'], generation: 0 };
 
   public constructor(private readonly options: SuggestionMenuControllerOptions) {}
 
@@ -78,6 +82,7 @@ export class SuggestionMenuController {
     this.completionItems = [];
     this.completionLoading = false;
     this.completionText = '';
+    this.completionRevision += 1;
     this.disablePointerHover();
     this.options.slashMenuElement?.removeAttribute('open');
     this.options.slashMenuElement?.setAttribute('aria-label', 'Slash commands');
@@ -86,11 +91,18 @@ export class SuggestionMenuController {
   }
 
   public handleHostMessage(message: unknown): boolean {
+    if (isComposerCompletionCapabilities(message)) {
+      this.completionCapabilities = message;
+      this.sync();
+      return true;
+    }
+
     if (isComposerCompletionsResult(message)) {
-      if (message.id !== String(this.completionRequestId) || this.options.textarea.value !== this.completionText) {
+      if (message.id !== String(this.completionRequestId) || message.revision !== this.completionRevision || this.options.textarea.value !== this.completionText || this.options.textarea.selectionStart !== this.completionSelectionStart || this.options.textarea.selectionEnd !== this.completionSelectionEnd) {
         return true;
       }
 
+      this.completionCapabilities = message.capabilities;
       this.completionLoading = false;
       this.completionItems = message.items;
       this.activeIndex = Math.min(this.activeIndex, Math.max(0, this.completionItems.length - 1));
@@ -100,7 +112,7 @@ export class SuggestionMenuController {
     }
 
     if (isComposerCompletionApplied(message)) {
-      if (message.id !== String(this.completionRequestId)) {
+      if (message.id !== String(this.completionRequestId) || message.revision !== this.completionRevision) {
         return true;
       }
 
@@ -134,7 +146,7 @@ export class SuggestionMenuController {
   }
 
   public sync(): void {
-    const completionPrefix = getComposerCompletionPrefix(this.options.textarea);
+    const completionPrefix = getComposerCompletionPrefix(this.options.textarea, this.completionCapabilities.triggerCharacters);
     if (completionPrefix) {
       this.syncCompletionMenu();
       return;
@@ -328,20 +340,26 @@ export class SuggestionMenuController {
     this.options.closeModelMenu();
     this.options.cancelSessionNameEdit();
     const text = this.options.textarea.value;
-    if (this.kind !== 'completion' || text !== this.completionText) {
+    const selectionStart = this.options.textarea.selectionStart;
+    const selectionEnd = this.options.textarea.selectionEnd;
+    if (this.kind !== 'completion' || text !== this.completionText || selectionStart !== this.completionSelectionStart || selectionEnd !== this.completionSelectionEnd) {
       this.kind = 'completion';
       this.fileItems = [];
       this.completionItems = [];
       this.completionText = text;
+      this.completionSelectionStart = selectionStart;
+      this.completionSelectionEnd = selectionEnd;
       this.completionLoading = true;
       this.activeIndex = 0;
       this.completionRequestId += 1;
+      this.completionRevision += 1;
       this.options.postMessage({
         type: 'requestComposerCompletions',
         id: String(this.completionRequestId),
+        revision: this.completionRevision,
         text,
-        selectionStart: this.options.textarea.selectionStart,
-        selectionEnd: this.options.textarea.selectionEnd
+        selectionStart,
+        selectionEnd
       });
     }
     this.renderCompletionMenu();
@@ -903,7 +921,7 @@ export class SuggestionMenuController {
   }
 
   private acceptCompletion(item: WebviewComposerCompletion): void {
-    this.options.postMessage({ type: 'applyComposerCompletion', id: String(this.completionRequestId), itemId: item.id });
+    this.options.postMessage({ type: 'applyComposerCompletion', id: String(this.completionRequestId), revision: this.completionRevision, itemId: item.id });
   }
 
   private acceptFile(file: FileSuggestion): void {
@@ -959,20 +977,38 @@ function formatSlashCommandMeta(command: SlashCommand): string {
   return source || location;
 }
 
-function getComposerCompletionPrefix(textarea: HTMLTextAreaElement): string | undefined {
+function getComposerCompletionPrefix(textarea: HTMLTextAreaElement, triggerCharacters: string[]): string | undefined {
   if (textarea.selectionStart !== textarea.selectionEnd) {
     return undefined;
   }
   const beforeCursor = textarea.value.slice(0, textarea.selectionStart);
-  return /(?:^|[\s])[@#$][^\s]*$/.test(beforeCursor) ? beforeCursor : undefined;
+  const triggerSet = new Set(triggerCharacters);
+  for (let index = beforeCursor.length - 1; index >= 0; index -= 1) {
+    const character = beforeCursor[index] ?? '';
+    if (triggerSet.has(character)) {
+      const beforeTrigger = beforeCursor[index - 1];
+      if (index === 0 || beforeTrigger === undefined || /[\s='\"]/.test(beforeTrigger)) {
+        return beforeCursor.slice(index);
+      }
+      return undefined;
+    }
+    if (/[\s]/.test(character)) {
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
-function isComposerCompletionsResult(value: unknown): value is { type: 'composerCompletionsResult'; id: string; items: WebviewComposerCompletion[] } {
-  return isRecord(value) && value.type === 'composerCompletionsResult' && typeof value.id === 'string' && Array.isArray(value.items) && value.items.every((item) => isRecord(item) && typeof item.id === 'string' && typeof item.value === 'string' && typeof item.label === 'string' && (item.description === undefined || typeof item.description === 'string'));
+function isComposerCompletionsResult(value: unknown): value is { type: 'composerCompletionsResult'; id: string; revision: number; items: WebviewComposerCompletion[]; capabilities: WebviewComposerCompletionCapabilities } {
+  return isRecord(value) && value.type === 'composerCompletionsResult' && typeof value.id === 'string' && typeof value.revision === 'number' && Number.isInteger(value.revision) && isComposerCompletionCapabilities(value.capabilities) && Array.isArray(value.items) && value.items.every((item) => isRecord(item) && typeof item.id === 'string' && typeof item.value === 'string' && typeof item.label === 'string' && (item.description === undefined || typeof item.description === 'string'));
 }
 
-function isComposerCompletionApplied(value: unknown): value is { type: 'composerCompletionApplied'; id: string; text: string; selectionStart: number; selectionEnd: number } {
-  return isRecord(value) && value.type === 'composerCompletionApplied' && typeof value.id === 'string' && typeof value.text === 'string' && typeof value.selectionStart === 'number' && typeof value.selectionEnd === 'number' && Number.isInteger(value.selectionStart) && Number.isInteger(value.selectionEnd) && value.selectionStart >= 0 && value.selectionEnd >= 0 && value.selectionStart <= value.text.length && value.selectionEnd <= value.text.length;
+function isComposerCompletionCapabilities(value: unknown): value is WebviewComposerCompletionCapabilities & { type: 'composerCompletionCapabilities' } {
+  return isRecord(value) && value.type === 'composerCompletionCapabilities' && typeof value.generation === 'number' && Number.isInteger(value.generation) && Array.isArray(value.triggerCharacters) && value.triggerCharacters.every((character) => typeof character === 'string' && Array.from(character).length === 1);
+}
+
+function isComposerCompletionApplied(value: unknown): value is { type: 'composerCompletionApplied'; id: string; revision: number; text: string; selectionStart: number; selectionEnd: number } {
+  return isRecord(value) && value.type === 'composerCompletionApplied' && typeof value.id === 'string' && typeof value.revision === 'number' && Number.isInteger(value.revision) && typeof value.text === 'string' && typeof value.selectionStart === 'number' && typeof value.selectionEnd === 'number' && Number.isInteger(value.selectionStart) && Number.isInteger(value.selectionEnd) && value.selectionStart >= 0 && value.selectionEnd >= 0 && value.selectionStart <= value.text.length && value.selectionEnd <= value.text.length;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
