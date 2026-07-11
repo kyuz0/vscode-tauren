@@ -32,6 +32,19 @@ suite('SessionDiffTracker', () => {
     );
   });
 
+  test('bounds line diff work for very large replacements', () => {
+    const oldText = Array.from({ length: 2_001 }, (_, index) => `old ${index}`).join('\n');
+    const newText = Array.from({ length: 2_001 }, (_, index) => `new ${index}`).join('\n');
+
+    assert.deepStrictEqual(
+      getToolExecutionDiffStats({
+        toolName: 'edit',
+        args: { edits: [{ oldText, newText }] }
+      }),
+      { addedLines: 2_001, removedLines: 2_001 }
+    );
+  });
+
   test('prefers edit result unified diff stats over replacement text size', () => {
     assert.deepStrictEqual(
       getToolExecutionDiffStats({

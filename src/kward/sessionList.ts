@@ -5,11 +5,13 @@ import { join, resolve } from 'node:path';
 import type { WebviewSessionItem } from '../webviewProtocol/types';
 import type { SessionListProgressOptions } from '../controller/types';
 import type { RawSessionInfo, SessionTreeNode } from '../sessions/types';
+import { mapWithConcurrency } from '../shared/mapWithConcurrency';
 import { isRecord } from '../shared/typeGuards';
 import { KwardCapabilityResolver } from './capabilities';
 import { KwardRpcTransport } from './rpcTransport';
 
 const maxCachedKwardSessionItems = 5000;
+const maxConcurrentKwardSessionFileReads = 8;
 const kwardSessionItemCache = new Map<string, { size: number; mtimeMs: number; item: WebviewSessionItem | undefined }>();
 
 export async function listKwardSessions(options: {
@@ -30,7 +32,8 @@ export async function listKwardSessions(options: {
 
   const names = await readdir(sessionDir).catch(() => []);
   const files = names.filter((name) => name.endsWith('.jsonl')).map((name) => join(sessionDir, name));
-  const sessions = (await Promise.all(files.map(readKwardSessionItem))).filter(isVisibleKwardSessionItem);
+  const sessions = (await mapWithConcurrency(files, maxConcurrentKwardSessionFileReads, readKwardSessionItem))
+    .filter(isVisibleKwardSessionItem);
 
   sessions.sort((a, b) => Date.parse(b.modified || '') - Date.parse(a.modified || ''));
   return decorateSessions(sessions, options.currentSessionFile);

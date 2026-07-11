@@ -24,6 +24,7 @@ const ignoredTrackedPathSegments = new Set([
   'node_modules',
   'out'
 ]);
+const maxExactLineDiffCells = 4_000_000;
 const ignoredTrackedPathPrefixes = [
   'resources/pi-sdk-runtime/',
   'resources/vendor/',
@@ -808,6 +809,14 @@ function parseUnifiedDiffStats(diff: string): SessionDiffStats {
 function getLineDiffStats(oldText: string, newText: string): SessionDiffStats {
   const oldLines = splitLinesForDiff(oldText);
   const newLines = splitLinesForDiff(newText);
+
+  if (oldLines.length * newLines.length > maxExactLineDiffCells) {
+    return {
+      addedLines: newLines.length,
+      removedLines: oldLines.length
+    };
+  }
+
   const commonLines = getLongestCommonSubsequenceLength(oldLines, newLines);
 
   return {

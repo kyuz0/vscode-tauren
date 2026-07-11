@@ -9,6 +9,7 @@
 
 ### Fixed
 
+- Reduced repeated filesystem and diff work during workspace changes and session listing.
 - Reduced repeated filesystem scanning while typing `@` file completions.
 - Restored stable transcript rendering by removing browser content skipping from message elements.
 

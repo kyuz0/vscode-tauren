@@ -6,6 +6,7 @@ import { readSessionJsonlHeader } from '../pi/sessionJsonl';
 import { readSessionMetadataCache, writeSessionMetadataCache, type CachedSessionInfo } from './sessionMetadataCache';
 import { readSessionSummary } from './sessionSummaryParser';
 import type { ListPiSessionsOptions, PiSessionCandidate, PiSessionListItem, RawSessionInfo, SessionTreeNode } from './types';
+import { mapWithConcurrency } from '../shared/mapWithConcurrency';
 import { isRecord } from '../shared/typeGuards';
 export type { ListPiSessionsOptions, PiSessionCandidate, PiSessionListItem } from './types';
 
@@ -426,32 +427,6 @@ function rememberSessionInfo(filePath: string, stats: Stats, session: RawSession
   if (typeof oldestKey === 'string') {
     sessionInfoCache.delete(oldestKey);
   }
-}
-
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  task: (item: T) => Promise<R>
-): Promise<R[]> {
-  const results: R[] = new Array<R>(items.length);
-  let nextIndex = 0;
-
-  async function worker(): Promise<void> {
-    for (;;) {
-      const index = nextIndex;
-      nextIndex += 1;
-
-      if (index >= items.length) {
-        return;
-      }
-
-      results[index] = await task(items[index]);
-    }
-  }
-
-  const workerCount = Math.min(Math.max(limit, 1), items.length);
-  await Promise.all(Array.from({ length: workerCount }, worker));
-  return results;
 }
 
 function buildSessionTree(sessions: RawSessionInfo[]): SessionTreeNode[] {
