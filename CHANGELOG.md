@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-07-11
+
 ### Fixed
 
 - Refreshed the Session List Lane in the background when opened so newly created sessions appear without delaying cached results.
