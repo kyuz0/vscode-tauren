@@ -5268,6 +5268,9 @@ ${after}`;
     renderMessageAtIndex(index, message, showRole) {
       const state2 = this.options.getState();
       const existingView = this.renderedMessageViews[index];
+      if (existingView && existingView.message === message && existingView.showRole === showRole && existingView.allowRemoteImages === state2.allowRemoteImages && existingView.outputColors === state2.outputColors && existingView.animationsEnabled === state2.animationsEnabled) {
+        return existingView;
+      }
       const imagesSignature = this.getImagesSignature(message);
       const copyable = canCopyAssistantMessage2(message);
       const hasBody = shouldRenderMessageBody(message);
@@ -5288,6 +5291,8 @@ ${after}`;
         existingView.showRole = showRole;
         existingView.imagesSignature = imagesSignature;
         existingView.allowRemoteImages = state2.allowRemoteImages;
+        existingView.outputColors = state2.outputColors;
+        existingView.animationsEnabled = state2.animationsEnabled;
         existingView.copyable = copyable;
         existingView.hasBody = hasBody;
         return existingView;
@@ -5308,6 +5313,8 @@ ${after}`;
         showRole,
         imagesSignature,
         allowRemoteImages: state2.allowRemoteImages,
+        outputColors: state2.outputColors,
+        animationsEnabled: state2.animationsEnabled,
         copyable,
         hasBody
       };
@@ -5339,6 +5346,8 @@ ${after}`;
         showRole,
         imagesSignature: this.getImagesSignature(state2.messages[index]),
         allowRemoteImages: state2.allowRemoteImages,
+        outputColors: state2.outputColors,
+        animationsEnabled: state2.animationsEnabled,
         copyable: canCopyAssistantMessage2(state2.messages[index]),
         hasBody: shouldRenderMessageBody(state2.messages[index])
       };

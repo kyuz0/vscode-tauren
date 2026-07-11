@@ -30,6 +30,8 @@ type RenderedMessageView = {
   showRole: boolean;
   imagesSignature: string;
   allowRemoteImages: boolean;
+  outputColors: boolean;
+  animationsEnabled: boolean;
   copyable: boolean;
   hasBody: boolean;
 };
@@ -395,6 +397,16 @@ export class MessageListController {
   private renderMessageAtIndex(index: number, message: ChatMessage, showRole: boolean): RenderedMessageView {
     const state = this.options.getState();
     const existingView = this.renderedMessageViews[index];
+
+    if (existingView
+      && existingView.message === message
+      && existingView.showRole === showRole
+      && existingView.allowRemoteImages === state.allowRemoteImages
+      && existingView.outputColors === state.outputColors
+      && existingView.animationsEnabled === state.animationsEnabled) {
+      return existingView;
+    }
+
     const imagesSignature = this.getImagesSignature(message);
     const copyable = canCopyAssistantMessage(message);
     const hasBody = shouldRenderMessageBody(message);
@@ -418,6 +430,8 @@ export class MessageListController {
       existingView.showRole = showRole;
       existingView.imagesSignature = imagesSignature;
       existingView.allowRemoteImages = state.allowRemoteImages;
+      existingView.outputColors = state.outputColors;
+      existingView.animationsEnabled = state.animationsEnabled;
       existingView.copyable = copyable;
       existingView.hasBody = hasBody;
       return existingView;
@@ -439,6 +453,8 @@ export class MessageListController {
       showRole,
       imagesSignature,
       allowRemoteImages: state.allowRemoteImages,
+      outputColors: state.outputColors,
+      animationsEnabled: state.animationsEnabled,
       copyable,
       hasBody
     };
@@ -476,6 +492,8 @@ export class MessageListController {
       showRole,
       imagesSignature: this.getImagesSignature(state.messages[index]),
       allowRemoteImages: state.allowRemoteImages,
+      outputColors: state.outputColors,
+      animationsEnabled: state.animationsEnabled,
       copyable: canCopyAssistantMessage(state.messages[index]),
       hasBody: shouldRenderMessageBody(state.messages[index])
     };
