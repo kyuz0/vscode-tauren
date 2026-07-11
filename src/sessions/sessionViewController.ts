@@ -64,7 +64,6 @@ type SessionViewControllerOptions = Pick<
   setCurrentSessionName: (name: string, options: { announce: boolean }) => Promise<void>;
   setSessionHistoryLoading: (value: boolean) => void;
   hasStartedCurrentSession: () => boolean;
-  shouldRefreshSessionsOnShow?: () => boolean;
   navigation: NavigationController;
   startNewSession: (options?: { lane?: 'chat' | 'sessions' }) => void;
 };
@@ -147,16 +146,12 @@ export class SessionViewController {
   }
 
   public showSessions(): void {
-    const hasCachedSessions = this.sessions.length > 0;
     this.options.navigation.showLane('sessions', { post: false });
     this.sessionsError = '';
     this.refreshSessionSearchState({ post: false });
     this.options.postState();
     this.scheduleSessionSearchIndexing();
-
-    if (!hasCachedSessions || this.options.shouldRefreshSessionsOnShow?.()) {
-      void this.refreshSessions('showSessions');
-    }
+    void this.refreshSessions('showSessions');
   }
 
   public showTree(): void {

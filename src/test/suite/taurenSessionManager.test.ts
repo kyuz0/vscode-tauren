@@ -880,7 +880,7 @@ suite('TaurenSessionManager', () => {
     harness.manager.dispose();
   });
 
-  test('does not refresh cached session list when opening it from an empty unnamed Pi session', async () => {
+  test('refreshes cached session list when opening it from an empty unnamed Pi session', async () => {
     let listCalls = 0;
     const harness = createManagerHarness([new FakePiClient()], {
       listSessions: async (_cwd, currentSessionFile) => {
@@ -897,7 +897,7 @@ suite('TaurenSessionManager', () => {
     await harness.manager.handleWebviewMessage({ type: 'showLane', lane: 'sessions' });
     await flushPromises();
 
-    assert.strictEqual(listCalls, 1);
+    assert.strictEqual(listCalls, 2);
     harness.manager.dispose();
   });
 

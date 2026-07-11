@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Refreshed the Session List Lane in the background when opened so newly created sessions appear without delaying cached results.
 - Made streamed agent messages become readable faster by shortening their fade-in effect.
 
 ## [1.9.0] - 2026-07-11
