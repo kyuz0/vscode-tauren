@@ -1,6 +1,8 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { ExtensionUi } from '../extensionUi/types';
+import type { ComposerCompletionApplication, ComposerCompletionApplied, ComposerCompletionRequest, ComposerCompletionResult } from '../autocomplete/types';
+import { PiAutocompleteRegistry } from '../autocomplete/piAutocompleteRegistry';
 import type { PiClient } from '../pi/clientTypes';
 import type {
   PiAuthActionResult,
@@ -60,6 +62,7 @@ export class PiSdkClient implements PiClient {
   private readonly eventListeners = new Set<(event: PiEvent) => void>();
   private readonly errorListeners = new Set<(message: string) => void>();
   private readonly renderer = new PiSdkRenderer(() => this.options.extensionUi?.getToolsExpanded?.() ?? false);
+  private readonly autocompleteRegistry = new PiAutocompleteRegistry();
 
   public constructor(private readonly options: PiSdkClientOptions = {}) {}
 
@@ -141,6 +144,15 @@ export class PiSdkClient implements PiClient {
   public async reload(): Promise<void> {
     const runtime = await this.ensureRuntime();
     await this.reloadRuntime(runtime);
+  }
+
+  public async getComposerCompletions(request: ComposerCompletionRequest, signal: AbortSignal): Promise<ComposerCompletionResult> {
+    await this.ensureRuntime();
+    return await this.autocompleteRegistry.complete(request, this.resolveWorkspaceCwd(), signal);
+  }
+
+  public async applyComposerCompletion(application: ComposerCompletionApplication): Promise<ComposerCompletionApplied | undefined> {
+    return this.autocompleteRegistry.apply(application);
   }
 
   public async getState(): Promise<PiSessionState> {
@@ -610,6 +622,7 @@ export class PiSdkClient implements PiClient {
     }
 
     this.disposed = true;
+    this.autocompleteRegistry.reset();
     const runtime = this.runtime;
     this.unsubscribeSession?.();
     this.unsubscribeSession = undefined;
@@ -809,8 +822,9 @@ export class PiSdkClient implements PiClient {
   private async bindRuntime(runtime: AgentSessionRuntime): Promise<void> {
     const { session } = runtime;
 
+    this.autocompleteRegistry.reset();
     await session.bindExtensions({
-      uiContext: createSdkExtensionUiContext(this.options.extensionUi),
+      uiContext: createSdkExtensionUiContext(this.options.extensionUi, { autocompleteRegistry: this.autocompleteRegistry }),
       commandContextActions: {
         waitForIdle: () => session.agent.waitForIdle(),
         newSession: (options) => runtime.newSession(options),

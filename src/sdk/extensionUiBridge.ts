@@ -4,7 +4,11 @@ import { createCancellingExtensionUi, type ExtensionCustomUiFactory, type Extens
 
 const emptyTheme = {} as Theme;
 
-export function createSdkExtensionUiContext(ui?: ExtensionUi): ExtensionUIContext {
+export type SdkExtensionUiOptions = {
+  autocompleteRegistry?: { add(factory: Parameters<ExtensionUIContext['addAutocompleteProvider']>[0]): void };
+};
+
+export function createSdkExtensionUiContext(ui?: ExtensionUi, options: SdkExtensionUiOptions = {}): ExtensionUIContext {
   const resolvedUi = ui ?? createCancellingExtensionUi(() => undefined);
 
   return {
@@ -55,7 +59,9 @@ export function createSdkExtensionUiContext(ui?: ExtensionUi): ExtensionUIContex
     editor(title, prefill) {
       return withDialogFallback(undefined, undefined, () => resolvedUi.editor?.(title, prefill));
     },
-    addAutocompleteProvider() {},
+    addAutocompleteProvider(factory) {
+      options.autocompleteRegistry?.add(factory);
+    },
     setEditorComponent() {},
     getEditorComponent() {
       return undefined;

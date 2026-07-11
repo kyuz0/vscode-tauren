@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added Pi extension autocomplete providers to the composer, including stacked delegation and provider-controlled completion application.
 - Added Kward-only MCP and tool discovery via `/mcp` and `/tools`, including MCP server status and MCP tool labels.
 
 ## [1.8.0] - 2026-07-05

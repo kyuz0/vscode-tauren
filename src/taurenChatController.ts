@@ -12,6 +12,7 @@ import { createWebviewMessageSyncPlan, type PostedWebviewChatSync, type WebviewM
 import { StatePublisher } from './controller/statePublisher';
 import type { KwardMemoryAction } from './kward/memoryActions';
 import type { AgentClient } from './agent/clientTypes';
+import type { ComposerCompletionApplication, ComposerCompletionApplied, ComposerCompletionRequest, ComposerCompletionResult } from './autocomplete/types';
 import type { TaurenChatControllerOptions } from './controller/types';
 import type {
   PiImageContent,
@@ -618,6 +619,16 @@ export class TaurenChatController {
 
   public postState(): void {
     this.statePublisher.flush();
+  }
+
+  public async getComposerCompletions(request: ComposerCompletionRequest, signal: AbortSignal): Promise<ComposerCompletionResult | undefined> {
+    const client = this.getClient();
+    return client.getComposerCompletions ? await client.getComposerCompletions(request, signal) : undefined;
+  }
+
+  public async applyComposerCompletion(application: ComposerCompletionApplication): Promise<ComposerCompletionApplied | undefined> {
+    const client = this.getClient();
+    return client.applyComposerCompletion ? await client.applyComposerCompletion(application) : undefined;
   }
 
   public addPromptContext(context: PiPromptContextInput | PiPromptContextInput[]): void {

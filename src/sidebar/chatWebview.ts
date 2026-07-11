@@ -166,6 +166,16 @@ export function parseWebviewMessage(value: unknown): WebviewMessage {
       return typeof value.id === 'string' && value.id && typeof value.prefix === 'string' && value.prefix.startsWith('@')
         ? { type: 'requestFileSuggestions', id: value.id, prefix: value.prefix }
         : { type: 'unknown' };
+    case 'requestComposerCompletions':
+      return typeof value.id === 'string' && value.id && typeof value.text === 'string'
+        && isNonNegativeFiniteNumber(value.selectionStart) && isNonNegativeFiniteNumber(value.selectionEnd)
+        && value.selectionStart <= value.text.length && value.selectionEnd <= value.text.length
+        ? { type: 'requestComposerCompletions', id: value.id, text: value.text, selectionStart: value.selectionStart, selectionEnd: value.selectionEnd }
+        : { type: 'unknown' };
+    case 'applyComposerCompletion':
+      return typeof value.id === 'string' && value.id && typeof value.itemId === 'string' && value.itemId
+        ? { type: 'applyComposerCompletion', id: value.id, itemId: value.itemId }
+        : { type: 'unknown' };
     case 'selectPromptImages':
       return { type: 'selectPromptImages' };
     case 'dropPromptImages': {

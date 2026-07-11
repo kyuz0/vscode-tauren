@@ -2689,6 +2689,10 @@
     filePrefix = "";
     fileRequestId = 0;
     fileLoading = false;
+    completionItems = [];
+    completionRequestId = 0;
+    completionLoading = false;
+    completionText = "";
     isOpen() {
       return this.open;
     }
@@ -2709,6 +2713,9 @@
       this.fileItems = [];
       this.filePrefix = "";
       this.fileLoading = false;
+      this.completionItems = [];
+      this.completionLoading = false;
+      this.completionText = "";
       this.disablePointerHover();
       this.options.slashMenuElement?.removeAttribute("open");
       this.options.slashMenuElement?.setAttribute("aria-label", "Slash commands");
@@ -2716,6 +2723,28 @@
       this.options.textarea.removeAttribute("aria-activedescendant");
     }
     handleHostMessage(message) {
+      if (isComposerCompletionsResult(message)) {
+        if (message.id !== String(this.completionRequestId) || this.options.textarea.value !== this.completionText) {
+          return true;
+        }
+        this.completionLoading = false;
+        this.completionItems = message.items;
+        this.activeIndex = Math.min(this.activeIndex, Math.max(0, this.completionItems.length - 1));
+        this.renderCompletionMenu();
+        this.openMenu();
+        return true;
+      }
+      if (isComposerCompletionApplied(message)) {
+        if (message.id !== String(this.completionRequestId)) {
+          return true;
+        }
+        this.options.textarea.value = message.text;
+        this.options.textarea.setSelectionRange(message.selectionStart, message.selectionEnd);
+        this.close();
+        this.options.syncComposer({ preserveBottom: true });
+        this.options.focusPromptInput();
+        return true;
+      }
       if (!isFileSuggestionsResult(message)) {
         return false;
       }
@@ -2734,6 +2763,11 @@
       return true;
     }
     sync() {
+      const completionPrefix = getComposerCompletionPrefix(this.options.textarea);
+      if (completionPrefix) {
+        this.syncCompletionMenu();
+        return;
+      }
       const filePrefix = getFileSuggestionPrefixInfo(this.options.textarea)?.prefix;
       if (filePrefix) {
         this.syncFileMenu(filePrefix);
@@ -2844,6 +2878,13 @@
         return;
       }
       const index = Number(item.getAttribute("data-index"));
+      if (this.kind === "completion") {
+        const item2 = this.completionItems[index];
+        if (item2) {
+          this.acceptCompletion(item2);
+        }
+        return;
+      }
       if (this.kind === "file") {
         const file = this.fileItems[index];
         if (file) {
@@ -2862,6 +2903,33 @@
       if (command) {
         this.acceptSlashCommand(command);
       }
+    }
+    syncCompletionMenu() {
+      if (document.activeElement !== this.options.textarea) {
+        this.close();
+        return;
+      }
+      this.options.closeModelMenu();
+      this.options.cancelSessionNameEdit();
+      const text = this.options.textarea.value;
+      if (this.kind !== "completion" || text !== this.completionText) {
+        this.kind = "completion";
+        this.fileItems = [];
+        this.completionItems = [];
+        this.completionText = text;
+        this.completionLoading = true;
+        this.activeIndex = 0;
+        this.completionRequestId += 1;
+        this.options.postMessage({
+          type: "requestComposerCompletions",
+          id: String(this.completionRequestId),
+          text,
+          selectionStart: this.options.textarea.selectionStart,
+          selectionEnd: this.options.textarea.selectionEnd
+        });
+      }
+      this.renderCompletionMenu();
+      this.openMenu();
     }
     syncFileMenu(prefix) {
       if (document.activeElement !== this.options.textarea) {
@@ -3061,6 +3129,37 @@
       }
       this.syncActiveDescendant();
     }
+    renderCompletionMenu() {
+      const menu = this.options.slashMenuElement;
+      if (!menu) {
+        return;
+      }
+      menu.replaceChildren();
+      if (this.completionLoading) {
+        menu.append(createSlashMenuEmptyElement("Finding suggestions..."));
+        return;
+      }
+      if (this.completionItems.length === 0) {
+        menu.append(createSlashMenuEmptyElement("No matching suggestions"));
+        return;
+      }
+      for (let index = 0; index < this.completionItems.length; index += 1) {
+        const completion = this.completionItems[index];
+        const item = this.createSuggestionBaseElement(index);
+        const label = document.createElement("span");
+        label.className = "composer__slash-label";
+        label.textContent = completion.label;
+        item.append(label);
+        if (completion.description) {
+          const description = document.createElement("span");
+          description.className = "composer__slash-description";
+          description.textContent = completion.description;
+          item.append(description);
+        }
+        menu.append(item);
+      }
+      this.syncActiveDescendant();
+    }
     renderFileMenu(prefix) {
       const slashMenuElement2 = this.options.slashMenuElement;
       if (!slashMenuElement2) {
@@ -3151,7 +3250,7 @@
       }
       this.open = true;
       this.options.slashMenuElement.setAttribute("open", "");
-      this.options.slashMenuElement.setAttribute("aria-label", this.kind === "file" ? "File suggestions" : this.kind === "commandOption" ? "Slash command options" : "Slash commands");
+      this.options.slashMenuElement.setAttribute("aria-label", this.kind === "completion" ? "Suggestions" : this.kind === "file" ? "File suggestions" : this.kind === "commandOption" ? "Slash command options" : "Slash commands");
       this.options.textarea.setAttribute("aria-expanded", "true");
       this.syncActiveDescendant();
     }
@@ -3161,7 +3260,9 @@
         return;
       }
       this.activeIndex = (this.activeIndex + delta + itemCount) % itemCount;
-      if (this.kind === "file") {
+      if (this.kind === "completion") {
+        this.renderCompletionMenu();
+      } else if (this.kind === "file") {
         this.renderFileMenu(this.filePrefix);
       } else if (this.kind === "commandOption" && this.commandOptionProvider) {
         this.renderCommandOptionMenu({ provider: this.commandOptionProvider, query: this.commandOptionQuery });
@@ -3207,6 +3308,13 @@
       }
     }
     acceptActiveSuggestion() {
+      if (this.kind === "completion") {
+        const item = this.completionItems[this.activeIndex];
+        if (item) {
+          this.acceptCompletion(item);
+        }
+        return;
+      }
       if (this.kind === "file") {
         const file = this.fileItems[this.activeIndex];
         if (file) {
@@ -3227,7 +3335,7 @@
       }
     }
     getActiveSuggestionCount() {
-      return this.kind === "file" ? this.fileItems.length : this.kind === "commandOption" ? this.commandOptionItems.length : this.slashItems.length;
+      return this.kind === "completion" ? this.completionItems.length : this.kind === "file" ? this.fileItems.length : this.kind === "commandOption" ? this.commandOptionItems.length : this.slashItems.length;
     }
     acceptSlashCommand(command) {
       const cursor = this.options.textarea.selectionStart;
@@ -3255,6 +3363,9 @@
       this.close();
       this.options.syncComposer({ preserveBottom: true });
       this.options.focusPromptInput();
+    }
+    acceptCompletion(item) {
+      this.options.postMessage({ type: "applyComposerCompletion", id: String(this.completionRequestId), itemId: item.id });
     }
     acceptFile(file) {
       if (!acceptFileSuggestion(this.options.textarea, file)) {
@@ -3296,6 +3407,22 @@
       return source + " \xB7 " + location;
     }
     return source || location;
+  }
+  function getComposerCompletionPrefix(textarea2) {
+    if (textarea2.selectionStart !== textarea2.selectionEnd) {
+      return void 0;
+    }
+    const beforeCursor = textarea2.value.slice(0, textarea2.selectionStart);
+    return /(?:^|[\s])[@#$][^\s]*$/.test(beforeCursor) ? beforeCursor : void 0;
+  }
+  function isComposerCompletionsResult(value) {
+    return isRecord3(value) && value.type === "composerCompletionsResult" && typeof value.id === "string" && Array.isArray(value.items) && value.items.every((item) => isRecord3(item) && typeof item.id === "string" && typeof item.value === "string" && typeof item.label === "string" && (item.description === void 0 || typeof item.description === "string"));
+  }
+  function isComposerCompletionApplied(value) {
+    return isRecord3(value) && value.type === "composerCompletionApplied" && typeof value.id === "string" && typeof value.text === "string" && typeof value.selectionStart === "number" && typeof value.selectionEnd === "number" && Number.isInteger(value.selectionStart) && Number.isInteger(value.selectionEnd) && value.selectionStart >= 0 && value.selectionEnd >= 0 && value.selectionStart <= value.text.length && value.selectionEnd <= value.text.length;
+  }
+  function isRecord3(value) {
+    return typeof value === "object" && value !== null;
   }
 
   // src/webview/composer/composer.ts

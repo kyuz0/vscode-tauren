@@ -13,6 +13,7 @@ import type { SettingValue, TaurenSettingId } from '../settings/settingsRegistry
 import { getErrorMessage } from '../controller/errors';
 import { resolveWebviewStateMessageMessages } from '../webviewProtocol/messagePatch';
 import type { WebviewMessage, WebviewSessionItem, WebviewStateMessage } from '../webviewProtocol/types';
+import type { ComposerCompletionApplication, ComposerCompletionApplied, ComposerCompletionRequest, ComposerCompletionResult } from '../autocomplete/types';
 
 export type TaurenSessionManagerOptions = TaurenChatControllerOptions & {
   customUi?: {
@@ -117,6 +118,14 @@ export class TaurenSessionManager {
       session.extensionWidgetHost.dispose();
       session.controller.dispose();
     }
+  }
+
+  public async getComposerCompletions(request: ComposerCompletionRequest, signal: AbortSignal): Promise<ComposerCompletionResult | undefined> {
+    return await this.active().controller.getComposerCompletions(request, signal);
+  }
+
+  public async applyComposerCompletion(application: ComposerCompletionApplication): Promise<ComposerCompletionApplied | undefined> {
+    return await this.active().controller.applyComposerCompletion(application);
   }
 
   public async handleWebviewMessage(message: WebviewMessage): Promise<void> {

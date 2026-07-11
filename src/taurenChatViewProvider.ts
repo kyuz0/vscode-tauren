@@ -46,6 +46,7 @@ import {
   resolveWorkspaceImageUri
 } from './workspace/workspaceUris';
 import { getAtFileSuggestions } from './fileSuggestions/fileSuggestionProvider';
+import type { ComposerCompletionApplication, ComposerCompletionRequest } from './autocomplete/types';
 import { buildTaurenHotkeysMarkdown } from './hotkeys/vscodeKeybindings';
 import { TaurenPerfRecorder, type TaurenPerfTimer } from './perf/taurenPerf';
 import {
@@ -680,6 +681,30 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
     }
   }
 
+  private async requestComposerCompletions(message: Extract<WebviewMessage, { type: 'requestComposerCompletions' }>): Promise<void> {
+    const request: ComposerCompletionRequest = {
+      id: message.id,
+      text: message.text,
+      selectionStart: message.selectionStart,
+      selectionEnd: message.selectionEnd
+    };
+    const abort = new AbortController();
+    const result = await this.controller.getComposerCompletions(request, abort.signal);
+    if (!result) {
+      return;
+    }
+
+    void this.webviewView?.webview.postMessage({ type: 'composerCompletionsResult', ...result });
+  }
+
+  private async applyComposerCompletion(message: Extract<WebviewMessage, { type: 'applyComposerCompletion' }>): Promise<void> {
+    const application: ComposerCompletionApplication = { id: message.id, itemId: message.itemId };
+    const result = await this.controller.applyComposerCompletion(application);
+    if (result) {
+      void this.webviewView?.webview.postMessage({ type: 'composerCompletionApplied', ...result });
+    }
+  }
+
   private async requestFileSuggestions(message: Extract<WebviewMessage, { type: 'requestFileSuggestions' }>): Promise<void> {
     const startupState = getPiStartupCwdState(this.workspaceCwdProvider(), getRejectEditWriteOutsideWorkspaceSetting());
     const items = await getAtFileSuggestions({
@@ -875,6 +900,16 @@ export class TaurenChatViewProvider implements vscode.WebviewViewProvider, vscod
 
     if (message.type === 'selectPromptImages') {
       await this.selectPromptImages();
+      return;
+    }
+
+    if (message.type === 'requestComposerCompletions') {
+      await this.requestComposerCompletions(message);
+      return;
+    }
+
+    if (message.type === 'applyComposerCompletion') {
+      await this.applyComposerCompletion(message);
       return;
     }
 
