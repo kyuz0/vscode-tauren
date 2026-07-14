@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Rendered Pi extension choices, confirmations, and text questions as inline Transcript Entries instead of native VS Code prompts.
+
 ## [1.9.1] - 2026-07-11
 
 ### Fixed
