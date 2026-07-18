@@ -7,6 +7,7 @@
 - Restored the complete Tauren sidebar state after reopening a retained hidden view, including active extension UI.
 - Kept standard Pi extension peer imports working while substantially reducing the packaged SDK dependency payload.
 - Excluded development documentation and analysis caches from the VSIX.
+- Excluded runtime-unneeded dependency source maps and TypeScript declarations from the VSIX.
 
 ## [1.9.1] - 2026-07-11
 

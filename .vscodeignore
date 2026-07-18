@@ -23,8 +23,12 @@ docs/**
 .vscodeignore
 *.vsix
 
-# Build metadata
+# Build metadata and development-only dependency metadata
 out/**/*.map
+node_modules/**/*.map
+node_modules/**/*.d.ts
+node_modules/**/*.d.mts
+node_modules/**/*.d.cts
 
 # SDK source dependency is bundled into out/sdk/piSdkBundle.mjs.
 # Generated peer shims under out/sdk/node_modules are required at runtime.
