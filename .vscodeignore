@@ -23,9 +23,9 @@ plan/**
 # Build metadata
 out/**/*.map
 
-# SDK source dependency is bundled into out/sdk/piSdkBundle.mjs
+# SDK source dependency is bundled into out/sdk/piSdkBundle.mjs.
+# Generated peer shims under out/sdk/node_modules are required at runtime.
 node_modules/@earendil-works/pi-coding-agent/**
-out/sdk/node_modules/**
 
 # Documentation/demo captures are not needed at runtime
 resources/*.gif
